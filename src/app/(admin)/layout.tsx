@@ -63,7 +63,11 @@ export default function AdminLayout({
     );
 
     socket.on("connect", () => {
-      console.log("Connected to notification service");
+      console.log("Connected to notification service:", socket.id);
+    });
+
+    socket.on("connect_error", (error) => {
+      console.error("Socket connection error:", error);
     });
 
     socket.on("new-restaurant-verification", (data: { message: string }) => {
