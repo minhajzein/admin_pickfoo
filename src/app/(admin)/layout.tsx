@@ -104,7 +104,7 @@ export default function AdminLayout({
   ];
 
   return (
-    <div className="h-dvh bg-[#013644] text-white flex overflow-hidden">
+    <div className="h-dvh bg-[#013644] text-white flex overflow-hidden dark">
       <Toaster position="top-right" richColors />
       {/* Mobile Sidebar Overlay */}
       {isMobileMenuOpen && (
