@@ -79,6 +79,11 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+  --scrollbar-track: oklch(0.96 0 0);
+  --scrollbar-thumb: oklch(0.62 0.02 250);
+  --scrollbar-thumb-hover: oklch(0.48 0.03 250);
+  --scrollbar-thumb-active: oklch(0.38 0.03 250);
+  --scrollbar-corner: oklch(0.96 0 0);
 }
 
 .dark {
@@ -113,6 +118,12 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+  /* Pickfoo admin: deep teal track, lime thumb */
+  --scrollbar-track: #001a21;
+  --scrollbar-thumb: rgba(152, 227, 47, 0.38);
+  --scrollbar-thumb-hover: rgba(152, 227, 47, 0.58);
+  --scrollbar-thumb-active: rgba(152, 227, 47, 0.82);
+  --scrollbar-corner: #001a21;
 }
 
 @layer base {
@@ -127,5 +138,39 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+
+  /* Themed scrollbars: page, sidebars, dialogs ([data-slot=dialog-content]), overflow panels */
+  html {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  }
+
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+    border-radius: 9999px;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 9999px;
+    border: 2px solid var(--scrollbar-track);
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover);
+  }
+
+  *::-webkit-scrollbar-thumb:active {
+    background: var(--scrollbar-thumb-active);
+  }
+
+  *::-webkit-scrollbar-corner {
+    background: var(--scrollbar-corner);
   }
 }

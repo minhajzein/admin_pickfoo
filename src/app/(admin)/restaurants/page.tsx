@@ -43,6 +43,8 @@ import { useState } from "react";
 import { toast } from "sonner";
 import Link from "next/link";
 import { ShieldCheck } from "lucide-react";
+import { fetchZones } from "@/lib/api/zones";
+import { updateRestaurantZone } from "@/lib/api/restaurants";
 
 interface Restaurant {
   _id: string;
@@ -54,6 +56,7 @@ interface Restaurant {
     city: string;
     state: string;
     zipCode: string;
+    coordinates?: { lat: number; lng: number };
   };
   owner: {
     name: string;
@@ -65,6 +68,7 @@ interface Restaurant {
     gstNumber?: string;
   };
   verificationNotes?: string;
+  zone?: { _id: string; name: string; code: string } | null;
 }
 
 export default function RestaurantsPage() {
@@ -80,6 +84,29 @@ export default function RestaurantsPage() {
       const response = await api.get(`/restaurants?search=${search}`);
       return response.data.data;
     },
+  });
+
+  const { data: zoneOptions = [] } = useQuery({
+    queryKey: ["zones", "wayanad"],
+    queryFn: () =>
+      fetchZones({ district: "Wayanad", includeInactive: false }),
+  });
+
+  const updateZoneMutation = useMutation({
+    mutationFn: async ({
+      id,
+      zoneId,
+    }: {
+      id: string;
+      zoneId: string | null;
+    }) => {
+      return updateRestaurantZone(id, zoneId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["restaurants"] });
+      toast.success("Delivery zone updated");
+    },
+    onError: () => toast.error("Failed to update zone"),
   });
 
   const updateStatusMutation = useMutation({
@@ -151,6 +178,7 @@ export default function RestaurantsPage() {
                 <TableHead className="text-white/60">Restaurant</TableHead>
                 <TableHead className="text-white/60">Owner</TableHead>
                 <TableHead className="text-white/60">Location</TableHead>
+                <TableHead className="text-white/60">Zone</TableHead>
                 <TableHead className="text-white/60">Status</TableHead>
                 <TableHead className="text-white/60">Joined</TableHead>
                 <TableHead className="text-right text-white/60">
@@ -161,7 +189,7 @@ export default function RestaurantsPage() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8">
+                  <TableCell colSpan={7} className="text-center py-8">
                     <div className="flex items-center justify-center gap-2">
                       <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-[#98E32F]"></div>
                       <span className="text-white/40">
@@ -173,7 +201,7 @@ export default function RestaurantsPage() {
               ) : restaurants?.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={6}
+                    colSpan={7}
                     className="text-center py-8 text-white/40"
                   >
                     No restaurants found
@@ -200,6 +228,38 @@ export default function RestaurantsPage() {
                     </TableCell>
                     <TableCell>{restaurant.owner?.name || "Unknown"}</TableCell>
                     <TableCell>{restaurant.address.city}</TableCell>
+                    <TableCell
+                      className="max-w-[160px]"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="flex flex-col gap-1">
+                        <select
+                          value={restaurant.zone?._id ?? ""}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            updateZoneMutation.mutate({
+                              id: restaurant._id,
+                              zoneId: v ? v : null,
+                            });
+                          }}
+                          disabled={updateZoneMutation.isPending}
+                          className="w-full rounded-md border border-white/10 bg-[#013644] px-2 py-1.5 text-xs text-white focus:border-[#98E32F]/50 focus:outline-none"
+                        >
+                          <option value="">None</option>
+                          {zoneOptions.map((z) => (
+                            <option key={z._id} value={z._id}>
+                              {z.name} ({z.code})
+                            </option>
+                          ))}
+                        </select>
+                        {restaurant.address.coordinates &&
+                          !restaurant.zone && (
+                            <span className="text-[10px] text-amber-400/90">
+                              Has map pin — pick a zone
+                            </span>
+                          )}
+                      </div>
+                    </TableCell>
                     <TableCell>{getStatusBadge(restaurant.status)}</TableCell>
                     <TableCell className="text-white/40 font-mono text-xs">
                       {new Date(restaurant.createdAt).toLocaleDateString()}

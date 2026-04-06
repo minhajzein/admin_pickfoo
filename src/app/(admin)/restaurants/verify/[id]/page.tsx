@@ -28,9 +28,21 @@ import {
   AlertCircle,
   Loader2,
 } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import NextImage from "next/image";
+import { fetchZones, suggestZoneForPoint } from "@/lib/api/zones";
+import { updateRestaurantZone } from "@/lib/api/restaurants";
+
+function zoneIdFromRestaurant(restaurant: { zone?: unknown } | null | undefined) {
+  if (!restaurant) return "";
+  const z = restaurant.zone;
+  if (z && typeof z === "object" && z !== null && "_id" in z) {
+    return String((z as { _id: string })._id);
+  }
+  if (typeof z === "string") return z;
+  return "";
+}
 
 const DocumentCard = ({
   title,
@@ -121,6 +133,32 @@ export default function VerifyRestaurantPage() {
     queryFn: async () => {
       const response = await api.get(`/restaurants/${id}`);
       return response.data.data;
+    },
+  });
+
+  const { data: zoneOptions = [] } = useQuery({
+    queryKey: ["zones", "wayanad"],
+    queryFn: () =>
+      fetchZones({ district: "Wayanad", includeInactive: false }),
+  });
+
+  const zoneId = useMemo(
+    () => zoneIdFromRestaurant(restaurant),
+    [restaurant],
+  );
+
+  const updateZoneMutation = useMutation({
+    mutationFn: async (nextZoneId: string | null) => {
+      return updateRestaurantZone(String(id), nextZoneId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["restaurant", id] });
+      queryClient.invalidateQueries({ queryKey: ["restaurants"] });
+      toast.success("Zone saved");
+    },
+    onError: () => {
+      queryClient.invalidateQueries({ queryKey: ["restaurant", id] });
+      toast.error("Failed to update zone");
     },
   });
 
@@ -281,6 +319,77 @@ export default function VerifyRestaurantPage() {
                   </p>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-[#002833] border-white/5 text-white">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <MapPin size={20} className="text-[#98E32F]" />
+                Delivery zone (Wayanad)
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase tracking-widest text-white/40">
+                  Assigned zone
+                </label>
+                <select
+                  value={zoneId}
+                  onChange={(e) => {
+                    updateZoneMutation.mutate(e.target.value || null);
+                  }}
+                  disabled={updateZoneMutation.isPending}
+                  className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white focus:border-[#98E32F]/50 focus:outline-none"
+                >
+                  <option value="">None</option>
+                  {zoneOptions.map((z) => (
+                    <option key={z._id} value={z._id}>
+                      {z.name} ({z.code})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {restaurant.address?.coordinates && !zoneId && (
+                <p className="text-xs text-amber-400/90">
+                  Coordinates are set — assign a zone for delivery routing.
+                </p>
+              )}
+              {restaurant.address?.coordinates && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full border-white/10 text-white hover:bg-white/5"
+                  disabled={updateZoneMutation.isPending}
+                  onClick={async () => {
+                    const c = restaurant.address.coordinates;
+                    if (!c) return;
+                    try {
+                      const { primary } = await suggestZoneForPoint({
+                        lat: c.lat,
+                        lng: c.lng,
+                        district: "Wayanad",
+                      });
+                      if (primary) {
+                        updateZoneMutation.mutate(primary._id);
+                        toast.message("Suggested zone", {
+                          description: primary.name,
+                        });
+                      } else {
+                        toast.message("No matching zone", {
+                          description:
+                            "Draw or import polygons under Zones, then try again.",
+                        });
+                      }
+                    } catch {
+                      toast.error("Could not suggest a zone");
+                    }
+                  }}
+                >
+                  Suggest from map pin
+                </Button>
+              )}
             </CardContent>
           </Card>
 

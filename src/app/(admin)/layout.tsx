@@ -16,6 +16,8 @@ import {
   Menu as MenuIcon,
   X,
   CheckCircle2,
+  MapPinned,
+  Bike,
 } from "lucide-react";
 import { io } from "socket.io-client";
 import { toast } from "sonner";
@@ -101,6 +103,8 @@ export default function AdminLayout({
   const navItems = [
     { name: "Dashboard", icon: LayoutDashboard, href: "/" },
     { name: "Restaurants", icon: Store, href: "/restaurants" },
+    { name: "Zones", icon: MapPinned, href: "/zones" },
+    { name: "Partners", icon: Bike, href: "/partners" },
     { name: "Users", icon: Users, href: "/users" },
     { name: "Orders", icon: ClipboardList, href: "/orders" },
     { name: "Revenue", icon: Wallet, href: "/revenue" },
