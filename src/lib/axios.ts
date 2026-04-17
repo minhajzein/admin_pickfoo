@@ -1,7 +1,12 @@
 import axios from 'axios';
 
+const defaultBase =
+  process.env.NODE_ENV === 'production'
+    ? 'https://api.pickfoo.in/admin/api/v1'
+    : 'http://localhost:5001/api/v1';
+
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api/v1',
+  baseURL: process.env.NEXT_PUBLIC_API_URL || defaultBase,
   withCredentials: true,
   timeout: 10000,
   headers: {
