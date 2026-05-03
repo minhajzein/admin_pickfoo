@@ -56,7 +56,7 @@ export default function AdminDashboard() {
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
       <div className="flex flex-col gap-2">
         <h2 className="text-3xl font-bold tracking-tight">Dashboard Overview</h2>
-        <p className="text-white/50">Welcome back, Super Admin. Here's what's happening today.</p>
+        <p className="text-white/50">Welcome back, Super Admin. Live activity for today is shown below.</p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

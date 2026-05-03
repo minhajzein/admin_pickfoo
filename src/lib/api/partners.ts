@@ -20,3 +20,13 @@ export async function updatePartnerZones(
   const { data } = await api.patch(`/partners/${partnerId}/zones`, { zoneIds });
   return data.data;
 }
+
+export async function updatePartnerPriorityLevel(
+  partnerId: string,
+  priorityLevel: number,
+): Promise<Partner> {
+  const { data } = await api.patch(`/partners/${partnerId}/priority-level`, {
+    priorityLevel,
+  });
+  return data.data;
+}

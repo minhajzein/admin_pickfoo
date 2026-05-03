@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,7 +23,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { fetchPartners, updatePartnerZones } from "@/lib/api/partners";
+import {
+  fetchPartners,
+  updatePartnerPriorityLevel,
+  updatePartnerZones,
+} from "@/lib/api/partners";
 import { fetchZones } from "@/lib/api/zones";
 import type { Partner } from "@/types/models";
 import { Loader2, MapPin, Search } from "lucide-react";
@@ -33,6 +37,7 @@ export default function PartnersPage() {
   const [search, setSearch] = useState("");
   const [editPartner, setEditPartner] = useState<Partner | null>(null);
   const [selectedZoneIds, setSelectedZoneIds] = useState<string[]>([]);
+  const [levelDraft, setLevelDraft] = useState<Record<string, number>>({});
 
   const { data: partners = [], isLoading } = useQuery({
     queryKey: ["partners", search],
@@ -60,6 +65,31 @@ export default function PartnersPage() {
     },
     onError: () => toast.error("Failed to update zones"),
   });
+
+  const priorityMutation = useMutation({
+    mutationFn: ({
+      partnerId,
+      priorityLevel,
+    }: {
+      partnerId: string;
+      priorityLevel: number;
+    }) => updatePartnerPriorityLevel(partnerId, priorityLevel),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["partners"] });
+      toast.success("Priority level updated");
+    },
+    onError: () => toast.error("Failed to update priority level"),
+  });
+
+  useEffect(() => {
+    const onDispatchUpdate = () => {
+      queryClient.invalidateQueries({ queryKey: ["partners"] });
+    };
+    window.addEventListener("admin:dispatch-updated", onDispatchUpdate);
+    return () => {
+      window.removeEventListener("admin:dispatch-updated", onDispatchUpdate);
+    };
+  }, [queryClient]);
 
   const openZonesDialog = (p: Partner) => {
     setEditPartner(p);
@@ -102,6 +132,8 @@ export default function PartnersPage() {
                 <TableHead className="text-white/60">Partner</TableHead>
                 <TableHead className="text-white/60">Phone</TableHead>
                 <TableHead className="text-white/60">Status</TableHead>
+                <TableHead className="text-white/60">Live</TableHead>
+                <TableHead className="text-white/60">Level</TableHead>
                 <TableHead className="text-white/60">Zones</TableHead>
                 <TableHead className="text-right text-white/60">
                   Actions
@@ -111,14 +143,14 @@ export default function PartnersPage() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="py-10 text-center">
+                  <TableCell colSpan={7} className="py-10 text-center">
                     <Loader2 className="mx-auto h-6 w-6 animate-spin text-[#98E32F]" />
                   </TableCell>
                 </TableRow>
               ) : partners.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={5}
+                    colSpan={7}
                     className="py-10 text-center text-white/40"
                   >
                     No partners found
@@ -144,6 +176,73 @@ export default function PartnersPage() {
                       >
                         {p.status}
                       </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-col gap-1 text-xs">
+                        <span
+                          className={
+                            p.isOnline
+                              ? "text-[#98E32F]"
+                              : "text-white/40"
+                          }
+                        >
+                          {p.isOnline ? "online" : "offline"}
+                        </span>
+                        <span
+                          className={
+                            p.onDuty
+                              ? "text-cyan-300"
+                              : "text-white/40"
+                          }
+                        >
+                          {p.onDuty ? "on duty" : "off duty"}
+                        </span>
+                        <span className="text-[10px] text-white/40">
+                          {p.currentAssignmentOrderId ? "busy" : "free"}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="number"
+                          min={1}
+                          max={10}
+                          value={levelDraft[p._id ?? ""] ?? p.priorityLevel ?? 5}
+                          onChange={(e) => {
+                            const pid = p._id ?? "";
+                            const next = Number(e.target.value);
+                            if (!pid || Number.isNaN(next)) return;
+                            setLevelDraft((prev) => ({
+                              ...prev,
+                              [pid]: Math.max(1, Math.min(10, next)),
+                            }));
+                          }}
+                          className="h-8 w-16 border-white/10 bg-[#013644] text-white"
+                        />
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="border-[#98E32F]/40 text-[#98E32F] hover:bg-[#98E32F]/10"
+                          disabled={!p._id || priorityMutation.isPending}
+                          onClick={() => {
+                            if (!p._id) return;
+                            const level = Math.max(
+                              1,
+                              Math.min(
+                                10,
+                                levelDraft[p._id] ?? p.priorityLevel ?? 5,
+                              ),
+                            );
+                            priorityMutation.mutate({
+                              partnerId: p._id,
+                              priorityLevel: level,
+                            });
+                          }}
+                        >
+                          Save
+                        </Button>
+                      </div>
                     </TableCell>
                     <TableCell className="max-w-[200px]">
                       <div className="flex flex-wrap gap-1">

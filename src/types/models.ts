@@ -154,10 +154,21 @@ export interface Partner {
   vehicle?: PartnerVehicle;
   status: PartnerStatusType;
   rejectionReason?: string;
+  priorityLevel?: number;
   isOnline: boolean;
   onDuty: boolean;
+  currentAssignmentOrderId?: string | null;
+  lastAssignedAt?: string;
   location?: { type?: string; coordinates?: number[] };
   zones?: DeliveryZoneSummary[];
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface AdminMonitorEvent {
+  id: string;
+  event: string;
+  source?: string;
+  payload?: unknown;
+  createdAt: string;
 }

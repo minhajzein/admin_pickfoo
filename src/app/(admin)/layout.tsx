@@ -18,6 +18,7 @@ import {
   CheckCircle2,
   MapPinned,
   Bike,
+  Activity,
 } from "lucide-react";
 import { io } from "socket.io-client";
 import { toast } from "sonner";
@@ -88,6 +89,107 @@ export default function AdminLayout({
       audio.play().catch(() => {});
     });
 
+    socket.on(
+      "dispatch:partner-assigned",
+      (data: {
+        orderId?: string;
+        pickfooId?: string | null;
+        partnerName?: string;
+      }) => {
+        const orderRef = data.pickfooId || data.orderId || "order";
+        const partner = data.partnerName || "Partner";
+        toast.success("Partner assigned live", {
+          description: `${partner} assigned to ${orderRef}`,
+          duration: 6000,
+          action: {
+            label: "Partners",
+            onClick: () => router.push("/partners"),
+          },
+        });
+        window.dispatchEvent(
+          new CustomEvent("admin:dispatch-updated", {
+            detail: { type: "assigned", payload: data },
+          }),
+        );
+      },
+    );
+
+    socket.on(
+      "dispatch:no-partner-available",
+      (data: { orderRef?: string; reason?: string }) => {
+        toast.warning("No partner available", {
+          description: `${data.orderRef || "Order"}: ${data.reason || "Try again shortly."}`,
+          duration: 7000,
+        });
+        window.dispatchEvent(
+          new CustomEvent("admin:dispatch-updated", {
+            detail: { type: "no-partner", payload: data },
+          }),
+        );
+      },
+    );
+
+    socket.on(
+      "dispatch:partner-lock-released",
+      (data: { orderRef?: string }) => {
+        window.dispatchEvent(
+          new CustomEvent("admin:dispatch-updated", {
+            detail: { type: "released", payload: data },
+          }),
+        );
+      },
+    );
+
+    socket.on(
+      "order:live:new-request",
+      (data: { orderId?: string; totalAmount?: number; orderType?: string }) => {
+        toast.message("New live order request", {
+          description: `${data.orderId || "Order"} (${data.orderType || "delivery"}) ₹${data.totalAmount ?? 0}`,
+          duration: 6000,
+          action: {
+            label: "Orders",
+            onClick: () => router.push("/orders"),
+          },
+        });
+      },
+    );
+
+    socket.on(
+      "order:live:status-updated",
+      (data: { orderId?: string; status?: string }) => {
+        toast.message("Order status live update", {
+          description: `${data.orderId || "Order"} -> ${data.status || "updated"}`,
+          duration: 5000,
+          action: {
+            label: "Orders",
+            onClick: () => router.push("/orders"),
+          },
+        });
+      },
+    );
+
+    socket.on(
+      "order:live:customer-cancelled",
+      (data: { orderId?: string; reason?: string }) => {
+        toast.warning("Customer cancelled order", {
+          description: `${data.orderId || "Order"}: ${data.reason || "cancelled"}`,
+          duration: 7000,
+          action: {
+            label: "Orders",
+            onClick: () => router.push("/orders"),
+          },
+        });
+      },
+    );
+
+    socket.on("monitor:event", (data: unknown) => {
+      window.dispatchEvent(
+        new CustomEvent("admin:monitor-event", {
+          detail: data,
+        }),
+      );
+    });
+
     return () => {
       socket.disconnect();
     };
@@ -106,6 +208,7 @@ export default function AdminLayout({
     { name: "Restaurants", icon: Store, href: "/restaurants" },
     { name: "Zones", icon: MapPinned, href: "/zones" },
     { name: "Partners", icon: Bike, href: "/partners" },
+    { name: "Monitor", icon: Activity, href: "/monitor" },
     { name: "Users", icon: Users, href: "/users" },
     { name: "Orders", icon: ClipboardList, href: "/orders" },
     { name: "Revenue", icon: Wallet, href: "/revenue" },
