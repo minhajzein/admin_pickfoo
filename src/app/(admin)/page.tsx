@@ -48,7 +48,7 @@ export default function AdminDashboard() {
     {
       title: "Total Orders",
       value: data?.totalOrders ?? 0,
-      helper: "Live order requests tracked",
+      helper: "Orders available in database",
       icon: ClipboardList,
       color: "text-[#98E32F]",
       bg: "bg-[#98E32F]/10",

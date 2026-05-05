@@ -5,6 +5,23 @@ interface ApiListResponse<T> {
   data?: T[];
 }
 
+interface DispatchOrdersResponse {
+  summary?: {
+    total?: number;
+    active?: number;
+    delivered?: number;
+    cancelled?: number;
+  };
+  data?: Array<{
+    id: string;
+    pickfooId?: string | null;
+    status: string;
+    orderType: "pickup" | "delivery" | string;
+    totalAmount?: number | null;
+    createdAt: string;
+  }>;
+}
+
 export interface DashboardActivity {
   id: string;
   event: string;
@@ -32,17 +49,20 @@ export interface DashboardOverview {
 }
 
 export async function fetchDashboardOverview(): Promise<DashboardOverview> {
-  const [restaurantsRes, usersRes, partnersRes, monitorRes] = await Promise.all([
+  const [restaurantsRes, usersRes, partnersRes, monitorRes, ordersRes] = await Promise.all([
     api.get<ApiListResponse<Restaurant>>("/restaurants"),
     api.get<ApiListResponse<User>>("/users"),
     api.get<ApiListResponse<Partner>>("/partners"),
     api.get<ApiListResponse<AdminMonitorEvent>>("/monitor/events?limit=120"),
+    api.get<DispatchOrdersResponse>("/dispatch/orders?limit=300"),
   ]);
 
   const restaurants = restaurantsRes.data?.data ?? [];
   const users = usersRes.data?.data ?? [];
   const partners = partnersRes.data?.data ?? [];
   const events = monitorRes.data?.data ?? [];
+  const orders = ordersRes.data?.data ?? [];
+  const orderSummary = ordersRes.data?.summary;
 
   const pendingRestaurants = restaurants.filter((restaurant) => {
     return restaurant.status === "pending";
@@ -52,20 +72,16 @@ export async function fetchDashboardOverview(): Promise<DashboardOverview> {
   }).length;
   const onlinePartners = partners.filter((partner) => partner.isOnline).length;
 
-  const orderCreatedEvents = events.filter(
-    (event) => event.event === "order:live:new-request",
-  );
-  const grossRevenue = orderCreatedEvents.reduce((sum, event) => {
-    const payload = asObject(event.payload);
-    const amount = asNumber(payload.totalAmount);
-    return sum + (amount ?? 0);
+  const grossRevenue = orders.reduce((sum, order) => {
+    const amount = asNumber(order.totalAmount);
+    return sum + (amount || 0);
   }, 0);
 
   return {
     totalRestaurants: restaurants.length,
     pendingRestaurantVerifications: pendingRestaurants.length,
     activeUsers,
-    totalOrders: orderCreatedEvents.length,
+    totalOrders: orderSummary?.total ?? orders.length,
     grossRevenue,
     onlinePartners,
     recentActivity: events.slice(0, 6).map((event) => ({
