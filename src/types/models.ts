@@ -172,3 +172,35 @@ export interface AdminMonitorEvent {
   payload?: unknown;
   createdAt: string;
 }
+
+export type AdminGigStatus = 'open' | 'booked' | 'completed' | 'cancelled';
+
+export interface AdminGig {
+  id: string;
+  title: string;
+  subtitle: string;
+  dayKey: string;
+  startMinute: number;
+  endMinute: number;
+  timeLabel: string;
+  payoutPerOrder: number;
+  maxOrders: number;
+  status: AdminGigStatus;
+  bookingCutoffAt?: string | null;
+  bookedCount: number;
+  slotsLeft: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface AdminGigBooking {
+  partnerId: string;
+  partnerName: string;
+  phone: string;
+  partnerStatus: string;
+  status: 'booked' | 'completed' | 'cancelled';
+  bookedAt?: string | null;
+  completedTrips: number;
+  earnings: number;
+  activeMinutes: number;
+}

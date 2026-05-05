@@ -208,6 +208,7 @@ export default function AdminLayout({
     { name: "Restaurants", icon: Store, href: "/restaurants" },
     { name: "Zones", icon: MapPinned, href: "/zones" },
     { name: "Partners", icon: Bike, href: "/partners" },
+    { name: "Gigs", icon: ClipboardList, href: "/gigs" },
     { name: "Monitor", icon: Activity, href: "/monitor" },
     { name: "Users", icon: Users, href: "/users" },
     { name: "Orders", icon: ClipboardList, href: "/orders" },
