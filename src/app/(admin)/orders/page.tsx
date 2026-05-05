@@ -12,8 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { fetchMonitorEvents } from "@/lib/api/monitor";
-import type { AdminMonitorEvent } from "@/types/models";
+import { fetchDispatchOrders } from "@/lib/api/orders";
 import { Loader2 } from "lucide-react";
 
 const money = new Intl.NumberFormat("en-IN", {
@@ -22,28 +21,19 @@ const money = new Intl.NumberFormat("en-IN", {
   maximumFractionDigits: 0,
 });
 
-type OrderRow = {
-  id: string;
-  event: string;
-  orderRef: string;
-  status: string;
-  amount: number | null;
-  source: string;
-  createdAt: string;
-};
-
 export default function OrdersPage() {
-  const { data: events = [], isLoading } = useQuery({
-    queryKey: ["orders", "monitor-events"],
-    queryFn: () => fetchMonitorEvents({ limit: 300 }),
+  const { data, isLoading } = useQuery({
+    queryKey: ["orders", "dispatch-orders"],
+    queryFn: () => fetchDispatchOrders({ limit: 300 }),
     refetchInterval: 15000,
   });
-
-  const rows = useMemo(() => toOrderRows(events), [events]);
-  const liveUpdates = rows.filter((row) => row.event.startsWith("order:live:"));
-  const cancellationCount = rows.filter((row) =>
-    row.event.includes("cancel"),
-  ).length;
+  const rows = useMemo(() => data?.data ?? [], [data]);
+  const summary = data?.summary ?? {
+    total: 0,
+    active: 0,
+    delivered: 0,
+    cancelled: 0,
+  };
 
   return (
     <div className="space-y-6">
@@ -57,47 +47,43 @@ export default function OrdersPage() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card className="border-white/5 bg-[#002833] text-white">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-white/60">Tracked events</CardTitle>
+            <CardTitle className="text-sm text-white/60">Total orders</CardTitle>
           </CardHeader>
-          <CardContent className="text-2xl font-bold">{rows.length}</CardContent>
+          <CardContent className="text-2xl font-bold">{summary.total}</CardContent>
         </Card>
         <Card className="border-white/5 bg-[#002833] text-white">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-white/60">Live updates</CardTitle>
+            <CardTitle className="text-sm text-white/60">Active</CardTitle>
           </CardHeader>
-          <CardContent className="text-2xl font-bold">{liveUpdates.length}</CardContent>
+          <CardContent className="text-2xl font-bold">{summary.active}</CardContent>
         </Card>
         <Card className="border-white/5 bg-[#002833] text-white">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm text-white/60">Cancellations</CardTitle>
           </CardHeader>
-          <CardContent className="text-2xl font-bold">{cancellationCount}</CardContent>
+          <CardContent className="text-2xl font-bold">{summary.cancelled}</CardContent>
         </Card>
         <Card className="border-white/5 bg-[#002833] text-white">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-white/60">Last event</CardTitle>
+            <CardTitle className="text-sm text-white/60">Delivered</CardTitle>
           </CardHeader>
-          <CardContent className="text-sm font-medium">
-            {rows[0]?.createdAt
-              ? new Date(rows[0].createdAt).toLocaleString()
-              : "No activity yet"}
-          </CardContent>
+          <CardContent className="text-2xl font-bold">{summary.delivered}</CardContent>
         </Card>
       </div>
 
       <Card className="overflow-hidden border-white/5 bg-[#002833] text-white">
         <CardHeader>
-          <CardTitle className="text-base">Recent order timeline</CardTitle>
+          <CardTitle className="text-base">Recent orders</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
             <TableHeader className="bg-white/5">
               <TableRow className="border-white/5 hover:bg-transparent">
                 <TableHead className="text-white/60">Order</TableHead>
-                <TableHead className="text-white/60">Event</TableHead>
+                <TableHead className="text-white/60">Type</TableHead>
                 <TableHead className="text-white/60">Status</TableHead>
                 <TableHead className="text-white/60">Amount</TableHead>
-                <TableHead className="text-white/60">Source</TableHead>
+                <TableHead className="text-white/60">Assigned partner</TableHead>
                 <TableHead className="text-right text-white/60">Time</TableHead>
               </TableRow>
             </TableHeader>
@@ -120,20 +106,21 @@ export default function OrdersPage() {
                     key={row.id}
                     className="border-white/5 hover:bg-white/5"
                   >
-                    <TableCell className="font-medium">{row.orderRef}</TableCell>
+                    <TableCell className="font-medium">
+                      {row.pickfooId || row.id}
+                    </TableCell>
                     <TableCell>
-                      <Badge
-                        variant="outline"
-                        className="border-white/10 text-white/80"
-                      >
-                        {row.event}
+                      <Badge variant="outline" className="border-white/10 text-white/80">
+                        {row.orderType}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-white/80">{row.status}</TableCell>
                     <TableCell className="font-medium">
-                      {row.amount === null ? "—" : money.format(row.amount)}
+                      {row.totalAmount == null ? "—" : money.format(row.totalAmount)}
                     </TableCell>
-                    <TableCell className="text-white/50">{row.source}</TableCell>
+                    <TableCell className="text-white/50">
+                      {row.assignedPartner || "Unassigned"}
+                    </TableCell>
                     <TableCell className="text-right text-xs text-white/50">
                       {new Date(row.createdAt).toLocaleString()}
                     </TableCell>
@@ -146,55 +133,4 @@ export default function OrdersPage() {
       </Card>
     </div>
   );
-}
-
-function toOrderRows(events: AdminMonitorEvent[]): OrderRow[] {
-  return events
-    .filter(
-      (event) =>
-        event.event.startsWith("order:") || event.event.startsWith("dispatch:"),
-    )
-    .slice(0, 120)
-    .map((event) => {
-      const payload = asObject(event.payload);
-      const orderRef =
-        asString(payload.orderId) ||
-        asString(payload.pickfooId) ||
-        asString(payload.orderRef) ||
-        "Unknown";
-      const status = asString(payload.status) || normalizeStatus(event.event);
-      const amount = asNumber(payload.totalAmount);
-      return {
-        id: event.id,
-        event: event.event,
-        orderRef,
-        status,
-        amount,
-        source: event.source || "system",
-        createdAt: event.createdAt,
-      };
-    });
-}
-
-function asObject(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== "object") return {};
-  return value as Record<string, unknown>;
-}
-
-function asString(value: unknown): string {
-  return typeof value === "string" && value.trim() ? value.trim() : "";
-}
-
-function asNumber(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string") {
-    const parsed = Number(value);
-    if (Number.isFinite(parsed)) return parsed;
-  }
-  return null;
-}
-
-function normalizeStatus(eventName: string): string {
-  const raw = eventName.replace(/^order:/, "").replace(/^dispatch:/, "");
-  return raw.replace(/-/g, " ");
 }
