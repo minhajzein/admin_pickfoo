@@ -30,3 +30,23 @@ export async function updatePartnerPriorityLevel(
   });
   return data.data;
 }
+
+export async function fetchPartnerVerifications(params?: {
+  status?: string;
+  search?: string;
+}): Promise<Partner[]> {
+  const sp = new URLSearchParams();
+  if (params?.status) sp.set("status", params.status);
+  if (params?.search) sp.set("search", params.search);
+  const q = sp.toString();
+  const { data } = await api.get(`/partners/verifications${q ? `?${q}` : ""}`);
+  return data.data;
+}
+
+export async function verifyPartner(
+  partnerId: string,
+  payload: { action: "approve" | "reject"; reason?: string },
+): Promise<Partner> {
+  const { data } = await api.patch(`/partners/${partnerId}/verify`, payload);
+  return data.data;
+}

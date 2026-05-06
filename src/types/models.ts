@@ -143,14 +143,32 @@ export interface PartnerVehicle {
   document?: string;
 }
 
+export type PartnerLicenceVerificationMethod = 'manual' | 'digilocker';
+
+export type PartnerLicenceVerificationStatus =
+  | 'not_submitted'
+  | 'pending_admin_review'
+  | 'verified'
+  | 'rejected';
+
+export interface PartnerLicenceVerification {
+  method?: PartnerLicenceVerificationMethod;
+  status: PartnerLicenceVerificationStatus;
+  digilockerReference?: string;
+  verifiedAt?: string;
+  rejectionReason?: string;
+}
+
 export interface Partner {
   _id?: string;
   fullName: string;
   email: string;
   phone: string;
+  phoneVerifiedAt?: string;
   age?: number;
   address?: PartnerAddress;
   licence?: PartnerLicence;
+  licenceVerification?: PartnerLicenceVerification;
   vehicle?: PartnerVehicle;
   status: PartnerStatusType;
   rejectionReason?: string;
