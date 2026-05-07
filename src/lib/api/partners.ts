@@ -13,6 +13,11 @@ export async function fetchPartners(params?: {
   return data.data;
 }
 
+export async function fetchPartner(partnerId: string): Promise<Partner> {
+  const { data } = await api.get(`/partners/${partnerId}`);
+  return data.data;
+}
+
 export async function updatePartnerZones(
   partnerId: string,
   zoneIds: string[],

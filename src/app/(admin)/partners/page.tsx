@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,7 +16,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Table,
   TableBody,
@@ -26,30 +26,36 @@ import {
 } from "@/components/ui/table";
 import {
   fetchPartners,
-  fetchPartnerVerifications,
-  verifyPartner,
   updatePartnerPriorityLevel,
   updatePartnerZones,
 } from "@/lib/api/partners";
 import { fetchZones } from "@/lib/api/zones";
-import type { Partner } from "@/types/models";
-import { Loader2, MapPin, Search } from "lucide-react";
+import type { Partner, PartnerStatusType } from "@/types/models";
+import { Eye, Loader2, MapPin, Search } from "lucide-react";
+
+const statusFilterOptions: Array<{ label: string; value: "ALL" | PartnerStatusType }> = [
+  { label: "All", value: "ALL" },
+  { label: "Onboarding", value: "ONBOARDING" },
+  { label: "Pending", value: "PENDING" },
+  { label: "Verified", value: "VERIFIED" },
+  { label: "Rejected", value: "REJECTED" },
+];
 
 export default function PartnersPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"ALL" | PartnerStatusType>("ALL");
   const [editPartner, setEditPartner] = useState<Partner | null>(null);
-  const [verificationPartner, setVerificationPartner] = useState<Partner | null>(
-    null,
-  );
-  const [verifyRejectReason, setVerifyRejectReason] = useState("");
-  const [verificationStatus, setVerificationStatus] = useState("PENDING");
   const [selectedZoneIds, setSelectedZoneIds] = useState<string[]>([]);
   const [levelDraft, setLevelDraft] = useState<Record<string, number>>({});
 
   const { data: partners = [], isLoading } = useQuery({
-    queryKey: ["partners", search],
-    queryFn: () => fetchPartners({ search: search || undefined }),
+    queryKey: ["partners", statusFilter, search],
+    queryFn: () =>
+      fetchPartners({
+        status: statusFilter === "ALL" ? undefined : statusFilter,
+        search: search || undefined,
+      }),
   });
 
   const { data: zoneOptions = [] } = useQuery({
@@ -57,16 +63,6 @@ export default function PartnersPage() {
     queryFn: () =>
       fetchZones({ district: "Wayanad", includeInactive: false }),
   });
-
-  const { data: verificationPartners = [], isLoading: verificationLoading } =
-    useQuery({
-      queryKey: ["partner-verifications", verificationStatus, search],
-      queryFn: () =>
-        fetchPartnerVerifications({
-          status: verificationStatus,
-          search: search || undefined,
-        }),
-    });
 
   const zonesMutation = useMutation({
     mutationFn: ({
@@ -99,36 +95,6 @@ export default function PartnersPage() {
     onError: () => toast.error("Failed to update priority level"),
   });
 
-  const verificationMutation = useMutation({
-    mutationFn: ({
-      partnerId,
-      action,
-      reason,
-    }: {
-      partnerId: string;
-      action: "approve" | "reject";
-      reason?: string;
-    }) => verifyPartner(partnerId, { action, reason }),
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["partners"] });
-      queryClient.invalidateQueries({ queryKey: ["partner-verifications"] });
-      toast.success(
-        variables.action === "approve"
-          ? "Partner verified"
-          : "Partner rejected",
-      );
-      setVerificationPartner(null);
-      setVerifyRejectReason("");
-    },
-    onError: (error: unknown) => {
-      const msg =
-        error && typeof error === "object" && "message" in error
-          ? String((error as { message: string }).message)
-          : "Failed to review partner";
-      toast.error(msg);
-    },
-  });
-
   useEffect(() => {
     const onDispatchUpdate = () => {
       queryClient.invalidateQueries({ queryKey: ["partners"] });
@@ -158,7 +124,7 @@ export default function PartnersPage() {
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Partners</h2>
           <p className="text-sm text-white/50">
-            Delivery partners and their Wayanad zones
+            Delivery partners with status filtering and profile access
           </p>
         </div>
         <div className="relative w-full sm:w-72">
@@ -172,6 +138,24 @@ export default function PartnersPage() {
         </div>
       </div>
 
+      <div className="flex flex-wrap gap-2">
+        {statusFilterOptions.map((option) => (
+          <Button
+            key={option.value}
+            size="sm"
+            variant={statusFilter === option.value ? "default" : "outline"}
+            className={
+              statusFilter === option.value
+                ? "bg-[#98E32F] text-[#013644] hover:bg-[#86c926]"
+                : "border-white/10 text-white hover:bg-white/5"
+            }
+            onClick={() => setStatusFilter(option.value)}
+          >
+            {option.label}
+          </Button>
+        ))}
+      </div>
+
       <Card className="overflow-hidden border-white/5 bg-[#002833] text-white">
         <CardContent className="p-0">
           <Table>
@@ -180,6 +164,7 @@ export default function PartnersPage() {
                 <TableHead className="text-white/60">Partner</TableHead>
                 <TableHead className="text-white/60">Phone</TableHead>
                 <TableHead className="text-white/60">Status</TableHead>
+                <TableHead className="text-white/60">Licence</TableHead>
                 <TableHead className="text-white/60">Live</TableHead>
                 <TableHead className="text-white/60">Level</TableHead>
                 <TableHead className="text-white/60">Zones</TableHead>
@@ -191,14 +176,14 @@ export default function PartnersPage() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="py-10 text-center">
+                  <TableCell colSpan={8} className="py-10 text-center">
                     <Loader2 className="mx-auto h-6 w-6 animate-spin text-[#98E32F]" />
                   </TableCell>
                 </TableRow>
               ) : partners.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={7}
+                    colSpan={8}
                     className="py-10 text-center text-white/40"
                   >
                     No partners found
@@ -224,6 +209,16 @@ export default function PartnersPage() {
                       >
                         {p.status}
                       </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-col text-[11px] text-white/70">
+                        <span className="uppercase">
+                          {p.licenceVerification?.method || "n/a"}
+                        </span>
+                        <span className="uppercase text-white/50">
+                          {p.licenceVerification?.status || "not_submitted"}
+                        </span>
+                      </div>
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-col gap-1 text-xs">
@@ -309,139 +304,28 @@ export default function PartnersPage() {
                       </div>
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="border-[#98E32F]/40 text-[#98E32F] hover:bg-[#98E32F]/10"
-                        onClick={() => openZonesDialog(p)}
-                      >
-                        <MapPin className="mr-1 h-3.5 w-3.5" />
-                        Zones
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      <Card className="overflow-hidden border-white/5 bg-[#002833] text-white">
-        <CardContent className="p-0">
-          <div className="flex items-center justify-between border-b border-white/5 bg-white/5 px-4 py-3">
-            <div>
-              <h3 className="text-base font-semibold">Partner verification queue</h3>
-              <p className="text-xs text-white/50">
-                Approve or reject pending delivery partner verification
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                variant={verificationStatus === "PENDING" ? "default" : "outline"}
-                className={
-                  verificationStatus === "PENDING"
-                    ? "bg-[#98E32F] text-[#013644] hover:bg-[#86c926]"
-                    : "border-white/10 text-white hover:bg-white/5"
-                }
-                onClick={() => setVerificationStatus("PENDING")}
-              >
-                Pending
-              </Button>
-              <Button
-                size="sm"
-                variant={verificationStatus === "ALL" ? "default" : "outline"}
-                className={
-                  verificationStatus === "ALL"
-                    ? "bg-[#98E32F] text-[#013644] hover:bg-[#86c926]"
-                    : "border-white/10 text-white hover:bg-white/5"
-                }
-                onClick={() => setVerificationStatus("ALL")}
-              >
-                All
-              </Button>
-            </div>
-          </div>
-          <Table>
-            <TableHeader className="bg-white/5">
-              <TableRow className="border-white/5 hover:bg-transparent">
-                <TableHead className="text-white/60">Partner</TableHead>
-                <TableHead className="text-white/60">Partner status</TableHead>
-                <TableHead className="text-white/60">Licence method</TableHead>
-                <TableHead className="text-white/60">Licence status</TableHead>
-                <TableHead className="text-right text-white/60">Review</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {verificationLoading ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="py-8 text-center">
-                    <Loader2 className="mx-auto h-5 w-5 animate-spin text-[#98E32F]" />
-                  </TableCell>
-                </TableRow>
-              ) : verificationPartners.length === 0 ? (
-                <TableRow>
-                  <TableCell
-                    colSpan={5}
-                    className="py-8 text-center text-white/40"
-                  >
-                    No partners found in verification queue
-                  </TableCell>
-                </TableRow>
-              ) : (
-                verificationPartners.map((p) => (
-                  <TableRow
-                    key={`verify-${p._id}`}
-                    className="border-white/5 hover:bg-white/5"
-                  >
-                    <TableCell>
-                      <div className="flex flex-col">
-                        <span className="font-medium">{p.fullName}</span>
-                        <span className="text-xs text-white/50">{p.phone}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant="outline"
-                        className="border-white/10 text-white/80"
-                      >
-                        {p.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="uppercase text-white/70">
-                      {p.licenceVerification?.method || "N/A"}
-                    </TableCell>
-                    <TableCell className="uppercase text-white/70">
-                      {p.licenceVerification?.status || "not_submitted"}
-                    </TableCell>
-                    <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
-                        <Button
-                          size="sm"
-                          className="bg-[#98E32F] text-[#013644] hover:bg-[#86c926]"
-                          disabled={!p._id || verificationMutation.isPending}
-                          onClick={() => {
-                            if (!p._id) return;
-                            verificationMutation.mutate({
-                              partnerId: p._id,
-                              action: "approve",
-                            });
-                          }}
-                        >
-                          Approve
-                        </Button>
+                        {p._id ? (
+                          <Button
+                            asChild
+                            size="sm"
+                            variant="outline"
+                            className="border-white/10 text-white hover:bg-white/5"
+                          >
+                            <Link href={`/partners/${p._id}`}>
+                              <Eye className="mr-1 h-3.5 w-3.5" />
+                              Details
+                            </Link>
+                          </Button>
+                        ) : null}
                         <Button
                           size="sm"
                           variant="outline"
-                          className="border-red-400/40 text-red-300 hover:bg-red-500/10"
-                          disabled={!p._id || verificationMutation.isPending}
-                          onClick={() => {
-                            setVerificationPartner(p);
-                            setVerifyRejectReason("");
-                          }}
+                          className="border-[#98E32F]/40 text-[#98E32F] hover:bg-[#98E32F]/10"
+                          onClick={() => openZonesDialog(p)}
                         >
-                          Reject
+                          <MapPin className="mr-1 h-3.5 w-3.5" />
+                          Zones
                         </Button>
                       </div>
                     </TableCell>
@@ -509,65 +393,6 @@ export default function PartnersPage() {
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               )}
               Save zones
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        open={!!verificationPartner}
-        onOpenChange={(open) => {
-          if (!open) {
-            setVerificationPartner(null);
-            setVerifyRejectReason("");
-          }
-        }}
-      >
-        <DialogContent className="border-white/5 bg-[#002833] text-white">
-          <DialogHeader>
-            <DialogTitle>Reject partner verification</DialogTitle>
-            <DialogDescription className="text-white/50">
-              Add a rejection reason for{" "}
-              {verificationPartner?.fullName ?? "this partner"}.
-            </DialogDescription>
-          </DialogHeader>
-          <Textarea
-            value={verifyRejectReason}
-            onChange={(e) => setVerifyRejectReason(e.target.value)}
-            placeholder="Reason for rejection..."
-            className="min-h-24 border-white/10 bg-[#013644] text-white"
-          />
-          <DialogFooter className="gap-2">
-            <Button
-              variant="outline"
-              className="border-white/10 text-white hover:bg-white/5"
-              onClick={() => {
-                setVerificationPartner(null);
-                setVerifyRejectReason("");
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              className="bg-red-500 text-white hover:bg-red-600"
-              disabled={
-                !verificationPartner?._id ||
-                verificationMutation.isPending ||
-                verifyRejectReason.trim().length < 5
-              }
-              onClick={() => {
-                if (!verificationPartner?._id) return;
-                verificationMutation.mutate({
-                  partnerId: verificationPartner._id,
-                  action: "reject",
-                  reason: verifyRejectReason.trim(),
-                });
-              }}
-            >
-              {verificationMutation.isPending && (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              )}
-              Reject partner
             </Button>
           </DialogFooter>
         </DialogContent>
