@@ -131,6 +131,7 @@ export interface PartnerLicence {
   number?: string;
   expiry?: string;
   document?: string;
+  documentUrl?: string;
 }
 
 export type PartnerVehicleType = 'bike' | 'scooter' | 'car';
@@ -140,7 +141,16 @@ export interface PartnerVehicle {
   plateNumber?: string;
   model?: string;
   color?: string;
+  image?: string;
+  imageUrl?: string;
   document?: string;
+}
+
+export interface PartnerLivenessCheck {
+  isLiveConfirmed: boolean;
+  selfieImage?: string;
+  selfieImageUrl?: string;
+  checkedAt?: string;
 }
 
 export type PartnerLicenceVerificationMethod = 'manual' | 'digilocker';
@@ -170,6 +180,9 @@ export interface Partner {
   licence?: PartnerLicence;
   licenceVerification?: PartnerLicenceVerification;
   vehicle?: PartnerVehicle;
+  profilePhoto?: string;
+  profilePhotoUrl?: string;
+  livenessCheck?: PartnerLivenessCheck;
   status: PartnerStatusType;
   rejectionReason?: string;
   priorityLevel?: number;

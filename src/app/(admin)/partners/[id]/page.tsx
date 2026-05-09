@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams, useRouter } from "next/navigation";
+import Image from "next/image";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -22,7 +23,97 @@ import {
   verifyPartner,
 } from "@/lib/api/partners";
 import { fetchZones } from "@/lib/api/zones";
-import { Loader2, ArrowLeft, MapPin, Phone, Mail, Calendar } from "lucide-react";
+import {
+  Loader2,
+  ArrowLeft,
+  MapPin,
+  Phone,
+  Mail,
+  Calendar,
+  ExternalLink,
+} from "lucide-react";
+
+function urlPathLower(url: string): string {
+  try {
+    const u = new URL(url);
+    return u.pathname.toLowerCase();
+  } catch {
+    return url.toLowerCase().split("?")[0];
+  }
+}
+
+function isImageAsset(url: string): boolean {
+  const path = urlPathLower(url);
+  return (
+    path.endsWith(".jpg") ||
+    path.endsWith(".jpeg") ||
+    path.endsWith(".png") ||
+    path.endsWith(".webp") ||
+    path.endsWith(".gif") ||
+    path.endsWith(".heic") ||
+    path.endsWith(".heif")
+  );
+}
+
+function isPdfAsset(url: string): boolean {
+  return urlPathLower(url).endsWith(".pdf");
+}
+
+function UploadedAssetCard({
+  title,
+  url,
+}: {
+  title: string;
+  url?: string;
+}) {
+  if (!url) {
+    return (
+      <div className="rounded-lg border border-dashed border-white/10 bg-black/20 p-4 text-sm text-white/40">
+        {title}: not uploaded
+      </div>
+    );
+  }
+
+  const imageAsset = isImageAsset(url);
+  return (
+    <div className="rounded-lg border border-white/10 bg-black/20 p-3">
+      <div className="mb-2 flex items-center justify-between">
+        <p className="text-xs font-semibold uppercase tracking-wider text-white/60">
+          {title}
+        </p>
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 text-xs text-[#98E32F]"
+        >
+          Open <ExternalLink className="h-3.5 w-3.5" />
+        </a>
+      </div>
+      {imageAsset ? (
+        <Image
+          src={url}
+          alt={title}
+          width={480}
+          height={240}
+          unoptimized
+          className="h-40 w-full rounded-md border border-white/10 object-cover"
+        />
+      ) : isPdfAsset(url) ? (
+        <iframe
+          title={`${title} preview`}
+          src={url}
+          className="h-96 w-full rounded-md border border-white/10 bg-black/40"
+        />
+      ) : (
+        <div className="space-y-2 rounded-md border border-white/10 px-3 py-8 text-center text-sm text-white/60">
+          <p>Preview is not available for this file type in the app.</p>
+          <p className="text-xs text-white/45">Use Open to view the original file.</p>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function PartnerDetailsPage() {
   const params = useParams();
@@ -146,6 +237,13 @@ export default function PartnerDetailsPage() {
     );
   }
 
+  const partnerPhotoUrl = partner.profilePhotoUrl ?? partner.profilePhoto;
+  const licenceDocumentUrl = partner.licence?.documentUrl ?? partner.licence?.document;
+  const vehicleImageUrl =
+    partner.vehicle?.imageUrl ?? partner.vehicle?.image ?? partner.vehicle?.document;
+  const livenessSelfieUrl =
+    partner.livenessCheck?.selfieImageUrl ?? partner.livenessCheck?.selfieImage;
+
   return (
     <div className="space-y-6 pb-12">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -253,6 +351,21 @@ export default function PartnerDetailsPage() {
         <div className="space-y-6 lg:col-span-2">
           <Card className="border-white/5 bg-[#002833] text-white">
             <CardHeader>
+              <CardTitle>Uploaded files and images</CardTitle>
+              <CardDescription className="text-white/50">
+                Partner media submitted during application and KYC
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-3 md:grid-cols-2">
+              <UploadedAssetCard title="Partner photo" url={partnerPhotoUrl} />
+              <UploadedAssetCard title="Liveness selfie" url={livenessSelfieUrl} />
+              <UploadedAssetCard title="Licence file" url={licenceDocumentUrl} />
+              <UploadedAssetCard title="Vehicle image" url={vehicleImageUrl} />
+            </CardContent>
+          </Card>
+
+          <Card className="border-white/5 bg-[#002833] text-white">
+            <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <MapPin className="h-4 w-4 text-[#98E32F]" />
                 Delivery zones
@@ -328,19 +441,40 @@ export default function PartnerDetailsPage() {
                   <p>{partner.licence?.expiry || "N/A"}</p>
                 </div>
                 <div className="sm:col-span-2">
-                  <p className="text-[10px] uppercase tracking-widest text-white/40">Document</p>
-                  {partner.licence?.document ? (
-                    <a
-                      href={partner.licence.document}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-[#98E32F] underline"
-                    >
-                      Open licence document
-                    </a>
-                  ) : (
-                    <p>N/A</p>
-                  )}
+                  <p className="text-[10px] uppercase tracking-widest text-white/40">
+                    Liveness check
+                  </p>
+                  <p>
+                    {partner.livenessCheck?.isLiveConfirmed
+                      ? "confirmed"
+                      : "not confirmed"}
+                  </p>
+                </div>
+                <div className="sm:col-span-2">
+                  <p className="text-[10px] uppercase tracking-widest text-white/40">
+                    Liveness checked at
+                  </p>
+                  <p>
+                    {partner.livenessCheck?.checkedAt
+                      ? new Date(partner.livenessCheck.checkedAt).toLocaleString()
+                      : "N/A"}
+                  </p>
+                </div>
+                <div className="sm:col-span-2 space-y-2">
+                  <p className="text-[10px] uppercase tracking-widest text-white/40">
+                    Licence document
+                  </p>
+                  <UploadedAssetCard title="Licence document" url={licenceDocumentUrl} />
+                </div>
+                <div className="sm:col-span-2 space-y-2">
+                  <p className="text-[10px] uppercase tracking-widest text-white/40">
+                    Other verification media
+                  </p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <UploadedAssetCard title="Partner photo" url={partnerPhotoUrl} />
+                    <UploadedAssetCard title="Liveness selfie" url={livenessSelfieUrl} />
+                    <UploadedAssetCard title="Vehicle image / doc" url={vehicleImageUrl} />
+                  </div>
                 </div>
               </div>
 
