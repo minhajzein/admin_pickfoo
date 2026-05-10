@@ -27,12 +27,16 @@ import {
   Calendar,
   AlertCircle,
   Loader2,
+  Percent,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import NextImage from "next/image";
 import { fetchZones, suggestZoneForPoint } from "@/lib/api/zones";
-import { updateRestaurantZone } from "@/lib/api/restaurants";
+import {
+  updateRestaurantCommission,
+  updateRestaurantZone,
+} from "@/lib/api/restaurants";
 
 function zoneIdFromRestaurant(restaurant: { zone?: unknown } | null | undefined) {
   if (!restaurant) return "";
@@ -127,6 +131,7 @@ export default function VerifyRestaurantPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [notes, setNotes] = useState("");
+  const [commissionInput, setCommissionInput] = useState("0");
 
   const { data: restaurant, isLoading } = useQuery({
     queryKey: ["restaurant", id],
@@ -135,6 +140,15 @@ export default function VerifyRestaurantPage() {
       return response.data.data;
     },
   });
+
+  useEffect(() => {
+    if (!restaurant) return;
+    const v =
+      typeof restaurant.commissionPercent === "number"
+        ? restaurant.commissionPercent
+        : 0;
+    setCommissionInput(String(v));
+  }, [restaurant]);
 
   const { data: zoneOptions = [] } = useQuery({
     queryKey: ["zones", "wayanad"],
@@ -146,6 +160,20 @@ export default function VerifyRestaurantPage() {
     () => zoneIdFromRestaurant(restaurant),
     [restaurant],
   );
+
+  const updateCommissionMutation = useMutation({
+    mutationFn: async (commissionPercent: number) => {
+      return updateRestaurantCommission(String(id), commissionPercent);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["restaurant", id] });
+      queryClient.invalidateQueries({ queryKey: ["restaurants"] });
+      toast.success("Commission updated");
+    },
+    onError: () => {
+      toast.error("Failed to update commission");
+    },
+  });
 
   const updateZoneMutation = useMutation({
     mutationFn: async (nextZoneId: string | null) => {
@@ -390,6 +418,55 @@ export default function VerifyRestaurantPage() {
                   Suggest from map pin
                 </Button>
               )}
+            </CardContent>
+          </Card>
+
+          <Card className="bg-[#002833] border-white/5 text-white">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Percent size={20} className="text-[#98E32F]" />
+                Platform commission
+              </CardTitle>
+              <CardDescription className="text-white/40">
+                Order fee percentage for this restaurant. Owners cannot edit this in
+                their app.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase tracking-widest text-white/40">
+                  Commission (%)
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={0.5}
+                  value={commissionInput}
+                  onChange={(e) => setCommissionInput(e.target.value)}
+                  disabled={updateCommissionMutation.isPending}
+                  className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white focus:border-[#98E32F]/50 focus:outline-none"
+                />
+              </div>
+              <Button
+                type="button"
+                className="w-full bg-[#98E32F] text-[#013644] hover:bg-[#86c926] font-bold"
+                disabled={updateCommissionMutation.isPending}
+                onClick={() => {
+                  const n = Number(commissionInput);
+                  if (!Number.isFinite(n) || n < 0 || n > 100) {
+                    toast.error("Enter a number between 0 and 100");
+                    return;
+                  }
+                  updateCommissionMutation.mutate(n);
+                }}
+              >
+                {updateCommissionMutation.isPending ? (
+                  <Loader2 className="animate-spin mx-auto" size={20} />
+                ) : (
+                  "Save commission"
+                )}
+              </Button>
             </CardContent>
           </Card>
 

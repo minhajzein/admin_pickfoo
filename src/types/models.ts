@@ -106,6 +106,8 @@ export interface Restaurant {
   isManualOverride: boolean;
   openingHours: OpeningHour[];
   zone?: string | DeliveryZoneSummary | null;
+  /** Platform commission on orders (%). Set via admin only. */
+  commissionPercent?: number;
   createdAt?: string;
   updatedAt?: string;
 }

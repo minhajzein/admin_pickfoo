@@ -10,3 +10,13 @@ export async function updateRestaurantZone(
   });
   return data.data;
 }
+
+export async function updateRestaurantCommission(
+  restaurantId: string,
+  commissionPercent: number,
+): Promise<Restaurant> {
+  const { data } = await api.patch(`/restaurants/${restaurantId}/commission`, {
+    commissionPercent,
+  });
+  return data.data;
+}
