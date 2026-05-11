@@ -22,6 +22,14 @@ export interface LiveMapRestaurantMarker {
   zone?: { id: string; name: string; code: string; color?: string } | null;
 }
 
+export interface LiveMapPartnerWithoutLocation {
+  id: string;
+  fullName: string;
+  phone: string;
+  isOnline: boolean;
+  onDuty: boolean;
+}
+
 export interface LiveMapFeed {
   refreshedAt: string;
   summary: {
@@ -33,6 +41,7 @@ export interface LiveMapFeed {
     restaurantsMissingLocation: number;
   };
   partners: LiveMapPartnerMarker[];
+  partnersWithoutLocation: LiveMapPartnerWithoutLocation[];
   restaurants: LiveMapRestaurantMarker[];
 }
 
@@ -51,6 +60,7 @@ export async function fetchLiveMapFeed(params?: {
     refreshedAt: data.refreshedAt,
     summary: data.summary,
     partners: data.partners,
+    partnersWithoutLocation: data.partnersWithoutLocation ?? [],
     restaurants: data.restaurants,
   };
 }

@@ -6,7 +6,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bike, Loader2, MapPinned, RefreshCw, Store } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { fetchLiveMapFeed } from "@/lib/api/map";
+import { fetchLiveMapFeed, type LiveMapPartnerWithoutLocation } from "@/lib/api/map";
 
 const LiveOperationsMap = dynamic(
   () => import("@/components/map/LiveOperationsMap"),
@@ -35,7 +35,7 @@ export default function LiveMapPage() {
         onlineOnly,
         activeRestaurantsOnly,
       }),
-    refetchInterval: 30_000,
+    refetchInterval: 15_000,
   });
 
   useEffect(() => {
@@ -156,6 +156,10 @@ export default function LiveMapPage() {
             <LegendSwatch color="#98E32F" label="Partner online" />
             <LegendSwatch color="#38bdf8" label="Partner on delivery" />
           </div>
+
+          {(data?.partnersWithoutLocation?.length ?? 0) > 0 ? (
+            <PartnersWaitingGpsPanel partners={data?.partnersWithoutLocation ?? []} />
+          ) : null}
         </CardContent>
       </Card>
     </div>
@@ -220,6 +224,30 @@ function LegendSwatch({ color, label }: { color: string; label: string }) {
     <div className="flex items-center gap-2">
       <span className="h-3 w-3 rounded-full" style={{ backgroundColor: color }} />
       <span>{label}</span>
+    </div>
+  );
+}
+
+function PartnersWaitingGpsPanel({
+  partners,
+}: {
+  partners: LiveMapPartnerWithoutLocation[];
+}) {
+  return (
+    <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-50">
+      <p className="font-medium">Online partners waiting for GPS</p>
+      <p className="mt-1 text-xs text-amber-100/80">
+        These partners are online but have not sent a location yet, so they cannot be plotted on
+        the map.
+      </p>
+      <ul className="mt-3 space-y-1 text-xs">
+        {partners.map((partner) => (
+          <li key={partner.id}>
+            {partner.fullName} · {partner.phone}
+            {partner.onDuty ? " · on delivery" : ""}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
