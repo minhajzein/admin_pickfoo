@@ -13,7 +13,7 @@ import Map, {
   NavigationControl,
   Popup,
   Source,
-  type MapLayerMouseEvent,
+  type MapMouseEvent,
   type MapRef,
 } from "react-map-gl/mapbox";
 import type { FeatureCollection, Point } from "geojson";
@@ -135,7 +135,7 @@ export default function LiveOperationsMap({
   }, [partners, restaurants]);
 
   const handleMapClick = useCallback(
-    (event: MapLayerMouseEvent) => {
+    (event: MapMouseEvent) => {
       const map = mapRef.current?.getMap();
       if (!map) return;
 
