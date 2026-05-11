@@ -17,6 +17,7 @@ import {
   X,
   CheckCircle2,
   MapPinned,
+  Map,
   Bike,
   Activity,
 } from "lucide-react";
@@ -207,6 +208,7 @@ export default function AdminLayout({
     { name: "Dashboard", icon: LayoutDashboard, href: "/" },
     { name: "Restaurants", icon: Store, href: "/restaurants" },
     { name: "Zones", icon: MapPinned, href: "/zones" },
+    { name: "Live map", icon: Map, href: "/map" },
     { name: "Partners", icon: Bike, href: "/partners" },
     { name: "Gigs", icon: ClipboardList, href: "/gigs" },
     { name: "Monitor", icon: Activity, href: "/monitor" },
