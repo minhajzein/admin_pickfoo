@@ -8,6 +8,11 @@ export interface AdminOrderRow {
   totalAmount?: number | null;
   assignedPartner?: string | null;
   partnerAssignedAt?: string | null;
+  partnerDeliveryProgress?: string | null;
+  deliveryAddress?: string | null;
+  deliveryPartnerName?: string | null;
+  deliveryPartnerPhone?: string | null;
+  assignmentVersion?: number | null;
   createdAt: string;
 }
 

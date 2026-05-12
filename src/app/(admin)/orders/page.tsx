@@ -84,13 +84,14 @@ export default function OrdersPage() {
                 <TableHead className="text-white/60">Status</TableHead>
                 <TableHead className="text-white/60">Amount</TableHead>
                 <TableHead className="text-white/60">Assigned partner</TableHead>
+                <TableHead className="text-white/60">Partner progress</TableHead>
                 <TableHead className="text-right text-white/60">Time</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="py-10 text-center">
+                  <TableCell colSpan={7} className="py-10 text-center">
                     <Loader2 className="mx-auto h-6 w-6 animate-spin text-[#98E32F]" />
                   </TableCell>
                 </TableRow>
@@ -119,7 +120,10 @@ export default function OrdersPage() {
                       {row.totalAmount == null ? "—" : money.format(row.totalAmount)}
                     </TableCell>
                     <TableCell className="text-white/50">
-                      {row.assignedPartner || "Unassigned"}
+                      {row.deliveryPartnerName || row.assignedPartner || "Unassigned"}
+                    </TableCell>
+                    <TableCell className="text-white/50">
+                      {row.partnerDeliveryProgress || "—"}
                     </TableCell>
                     <TableCell className="text-right text-xs text-white/50">
                       {new Date(row.createdAt).toLocaleString()}
