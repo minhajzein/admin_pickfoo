@@ -198,10 +198,16 @@ export default function VerifyRestaurantPage() {
       status: string;
       verificationNotes: string;
     }) => {
-      const response = await api.put(`/restaurants/${id}/status`, {
-        status,
-        verificationNotes,
-      });
+      const body: Record<string, unknown> = { status, verificationNotes };
+      // Persist commission together with approval (same DB write as status).
+      if (status === "active") {
+        const n = Number(commissionInput);
+        if (!Number.isFinite(n) || n < 0 || n > 100) {
+          throw new Error("INVALID_COMMISSION");
+        }
+        body.commissionPercent = n;
+      }
+      const response = await api.put(`/restaurants/${id}/status`, body);
       return response.data;
     },
     onSuccess: (_, variables) => {
@@ -212,7 +218,11 @@ export default function VerifyRestaurantPage() {
       );
       router.push("/restaurants");
     },
-    onError: () => {
+    onError: (err) => {
+      if (err instanceof Error && err.message === "INVALID_COMMISSION") {
+        toast.error("Enter a valid platform commission (0–100) before approving");
+        return;
+      }
       toast.error("Failed to update restaurant status");
     },
   });
@@ -429,7 +439,8 @@ export default function VerifyRestaurantPage() {
               </CardTitle>
               <CardDescription className="text-white/40">
                 Order fee percentage for this restaurant. Owners cannot edit this in
-                their app.
+                their app. It is saved when you click &quot;Save commission&quot; or
+                when you approve the business.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
