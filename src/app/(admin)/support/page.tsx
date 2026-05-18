@@ -8,6 +8,7 @@ import {
   fetchSupportThread,
   fetchSupportThreads,
   markSupportThreadRead,
+  dispatchAdminSupportMessage,
   sendSupportMessage,
   type SupportMessage,
   type SupportMessagePayload,
@@ -133,6 +134,7 @@ export default function SupportPage() {
     setDraft("");
     try {
       const payload = await sendSupportMessage(selectedPartnerId, text);
+      dispatchAdminSupportMessage(payload);
       setMessages((prev) => {
         if (prev.some((m) => m.id === payload.message.id)) return prev;
         return [...prev, payload.message];
@@ -142,8 +144,9 @@ export default function SupportPage() {
           t.partnerId === selectedPartnerId ? payload.thread : t,
         ),
       );
-    } catch {
-      toast.error("Failed to send message");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to send message";
+      toast.error(msg);
       setDraft(text);
     } finally {
       setSending(false);
