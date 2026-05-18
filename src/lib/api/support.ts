@@ -1,6 +1,8 @@
 import api from '../axios';
 import type { AxiosError } from 'axios';
 
+export type SupportMessageType = 'text' | 'image' | 'video' | 'pdf' | 'audio';
+
 export interface SupportThread {
   id: string;
   partnerId: string;
@@ -20,13 +22,28 @@ export interface SupportMessage {
   senderType: 'partner' | 'admin';
   senderId?: string | null;
   senderLabel?: string | null;
+  messageType: SupportMessageType;
   body: string;
+  mediaUrl?: string | null;
+  mediaFileName?: string | null;
+  mediaMimeType?: string | null;
+  mediaSize?: number | null;
+  mediaDurationMs?: number | null;
   createdAt: string;
 }
 
 export interface SupportMessagePayload {
   thread: SupportThread;
   message: SupportMessage;
+}
+
+export interface SupportMediaUpload {
+  staticUrl: string;
+  fileUrl: string;
+  messageType: SupportMessageType;
+  fileName?: string;
+  fileSize?: number;
+  fileType?: string;
 }
 
 function apiErrorMessage(err: unknown, fallback: string): string {
@@ -59,16 +76,50 @@ export async function fetchSupportThread(partnerId: string): Promise<{
   return data.data;
 }
 
+export async function uploadSupportMedia(file: File): Promise<SupportMediaUpload> {
+  const form = new FormData();
+  form.append('file', file);
+  const { data } = await api.post<{
+    success: boolean;
+    data?: SupportMediaUpload & { fileType?: string };
+    message?: string;
+  }>('/support/upload', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 120000,
+  });
+  if (!data.success || !data.data?.staticUrl) {
+    throw new Error(data.message || 'Failed to upload file');
+  }
+  return {
+    staticUrl: data.data.staticUrl,
+    fileUrl: data.data.fileUrl,
+    messageType: (data.data.messageType as SupportMessageType) || 'image',
+    fileName: data.data.fileName,
+    fileSize: data.data.fileSize,
+    fileType: data.data.fileType,
+  };
+}
+
+export interface SendSupportMessageInput {
+  body?: string;
+  messageType: SupportMessageType;
+  mediaStaticUrl?: string;
+  mediaFileName?: string;
+  mediaMimeType?: string;
+  mediaSize?: number;
+  mediaDurationMs?: number;
+}
+
 export async function sendSupportMessage(
   partnerId: string,
-  body: string,
+  input: SendSupportMessageInput,
 ): Promise<SupportMessagePayload> {
   try {
     const { data } = await api.post<{
       success: boolean;
       data?: SupportMessagePayload;
       message?: string;
-    }>(`/support/threads/${encodeURIComponent(partnerId)}/messages`, { body });
+    }>(`/support/threads/${encodeURIComponent(partnerId)}/messages`, input);
     if (!data.success || !data.data?.message) {
       throw new Error(data.message || 'Failed to send message');
     }
@@ -82,7 +133,6 @@ export async function markSupportThreadRead(partnerId: string): Promise<void> {
   await api.post(`/support/threads/${encodeURIComponent(partnerId)}/read`, {});
 }
 
-/** Notify support page listeners (same shape as socket `support:message`). */
 export function dispatchAdminSupportMessage(payload: SupportMessagePayload): void {
   if (typeof window === 'undefined') return;
   window.dispatchEvent(

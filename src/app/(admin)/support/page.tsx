@@ -2,14 +2,16 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Headset, Send } from "lucide-react";
+import { Headset, Mic, Paperclip, Send } from "lucide-react";
 import { toast } from "sonner";
+import { SupportMessageBubble } from "@/components/support/SupportMessageBubble";
 import {
   fetchSupportThread,
   fetchSupportThreads,
   markSupportThreadRead,
   dispatchAdminSupportMessage,
   sendSupportMessage,
+  uploadSupportMedia,
   type SupportMessage,
   type SupportMessagePayload,
   type SupportThread,
@@ -26,7 +28,12 @@ export default function SupportPage() {
   const [loadingChat, setLoadingChat] = useState(false);
   const [sending, setSending] = useState(false);
   const [draft, setDraft] = useState("");
+  const [recording, setRecording] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const voiceChunksRef = useRef<Blob[]>([]);
+  const recordStartedRef = useRef<number | null>(null);
 
   const loadThreads = useCallback(async () => {
     setLoadingThreads(true);
@@ -127,13 +134,8 @@ export default function SupportPage() {
     };
   }, [selectedPartnerId]);
 
-  const handleSend = async () => {
-    const text = draft.trim();
-    if (!text || !selectedPartnerId || sending) return;
-    setSending(true);
-    setDraft("");
-    try {
-      const payload = await sendSupportMessage(selectedPartnerId, text);
+  const applyPayload = useCallback(
+    (payload: SupportMessagePayload) => {
       dispatchAdminSupportMessage(payload);
       setMessages((prev) => {
         if (prev.some((m) => m.id === payload.message.id)) return prev;
@@ -144,12 +146,113 @@ export default function SupportPage() {
           t.partnerId === selectedPartnerId ? payload.thread : t,
         ),
       );
+    },
+    [selectedPartnerId],
+  );
+
+  const handleSendText = async () => {
+    const text = draft.trim();
+    if (!text || !selectedPartnerId || sending) return;
+    setSending(true);
+    setDraft("");
+    try {
+      const payload = await sendSupportMessage(selectedPartnerId, {
+        body: text,
+        messageType: "text",
+      });
+      applyPayload(payload);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to send message";
       toast.error(msg);
       setDraft(text);
     } finally {
       setSending(false);
+    }
+  };
+
+  const handleSendFile = async (file: File, caption?: string) => {
+    if (!selectedPartnerId || sending) return;
+    setSending(true);
+    try {
+      const upload = await uploadSupportMedia(file);
+      const payload = await sendSupportMessage(selectedPartnerId, {
+        body: caption,
+        messageType: upload.messageType,
+        mediaStaticUrl: upload.staticUrl,
+        mediaFileName: upload.fileName || file.name,
+        mediaMimeType: upload.fileType || file.type,
+        mediaSize: upload.fileSize ?? file.size,
+      });
+      applyPayload(payload);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to send attachment";
+      toast.error(msg);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const onFilePicked = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    const caption = draft.trim() || undefined;
+    if (caption) setDraft("");
+    void handleSendFile(file, caption);
+  };
+
+  const toggleVoice = async () => {
+    if (!selectedPartnerId || sending) return;
+    if (recording && mediaRecorderRef.current) {
+      mediaRecorderRef.current.stop();
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      voiceChunksRef.current = [];
+      recordStartedRef.current = Date.now();
+      recorder.ondataavailable = (ev) => {
+        if (ev.data.size > 0) voiceChunksRef.current.push(ev.data);
+      };
+      recorder.onstop = () => {
+        stream.getTracks().forEach((t) => t.stop());
+        setRecording(false);
+        const blob = new Blob(voiceChunksRef.current, { type: "audio/webm" });
+        const durationMs = recordStartedRef.current
+          ? Date.now() - recordStartedRef.current
+          : undefined;
+        recordStartedRef.current = null;
+        const file = new File([blob], `voice-${Date.now()}.webm`, {
+          type: "audio/webm",
+        });
+        void (async () => {
+          setSending(true);
+          try {
+            const upload = await uploadSupportMedia(file);
+            const payload = await sendSupportMessage(selectedPartnerId, {
+              messageType: "audio",
+              mediaStaticUrl: upload.staticUrl,
+              mediaFileName: file.name,
+              mediaMimeType: file.type,
+              mediaSize: file.size,
+              mediaDurationMs: durationMs,
+            });
+            applyPayload(payload);
+          } catch (err) {
+            toast.error(
+              err instanceof Error ? err.message : "Failed to send voice message",
+            );
+          } finally {
+            setSending(false);
+          }
+        })();
+      };
+      mediaRecorderRef.current = recorder;
+      recorder.start();
+      setRecording(true);
+    } catch {
+      toast.error("Microphone access is required for voice messages.");
     }
   };
 
@@ -237,55 +340,70 @@ export default function SupportPage() {
                 ) : messages.length === 0 ? (
                   <p className="text-white/50 text-sm">No messages yet.</p>
                 ) : (
-                  messages.map((m) => {
-                    const fromAdmin = m.senderType === "admin";
-                    return (
-                      <div
-                        key={m.id}
-                        className={`flex ${fromAdmin ? "justify-end" : "justify-start"}`}
-                      >
-                        <div
-                          className={`max-w-[80%] rounded-2xl px-4 py-2 text-sm ${
-                            fromAdmin
-                              ? "bg-[#98E32F]/25 text-white"
-                              : "bg-white/10 text-white"
-                          }`}
-                        >
-                          {!fromAdmin && m.senderLabel ? (
-                            <p className="text-[10px] text-[#98E32F] font-semibold mb-1">
-                              {m.senderLabel}
-                            </p>
-                          ) : null}
-                          <p className="whitespace-pre-wrap">{m.body}</p>
-                        </div>
-                      </div>
-                    );
-                  })
+                  messages.map((m) => (
+                    <SupportMessageBubble key={m.id} message={m} />
+                  ))
                 )}
                 <div ref={bottomRef} />
               </div>
-              <div className="p-3 border-t border-white/10 flex gap-2">
-                <input
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      void handleSend();
-                    }
-                  }}
-                  placeholder="Reply to partner…"
-                  className="flex-1 rounded-xl bg-white/5 border border-white/10 px-4 py-2 text-white text-sm outline-none focus:border-[#98E32F]/50"
-                />
-                <button
-                  type="button"
-                  disabled={sending || !draft.trim()}
-                  onClick={() => void handleSend()}
-                  className="rounded-xl bg-[#98E32F] text-[#013644] px-4 py-2 font-semibold disabled:opacity-50 flex items-center gap-2"
-                >
-                  <Send className="h-4 w-4" />
-                  Send
-                </button>
+              <div className="p-3 border-t border-white/10 flex flex-col gap-2">
+                {recording ? (
+                  <p className="text-xs text-red-400 text-center font-medium">
+                    Recording… tap mic to send
+                  </p>
+                ) : null}
+                <div className="flex gap-2 items-center">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*,video/*,application/pdf"
+                    className="hidden"
+                    onChange={onFilePicked}
+                  />
+                  <button
+                    type="button"
+                    disabled={sending}
+                    onClick={() => fileInputRef.current?.click()}
+                    className="rounded-xl border border-white/10 p-2 text-white/70 hover:bg-white/5"
+                    title="Attach image, video, or PDF"
+                  >
+                    <Paperclip className="h-5 w-5" />
+                  </button>
+                  <button
+                    type="button"
+                    disabled={sending}
+                    onClick={() => void toggleVoice()}
+                    className={`rounded-xl border p-2 ${
+                      recording
+                        ? "border-red-400 text-red-400 bg-red-400/10"
+                        : "border-white/10 text-white/70 hover:bg-white/5"
+                    }`}
+                    title="Voice message"
+                  >
+                    <Mic className="h-5 w-5" />
+                  </button>
+                  <input
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        void handleSendText();
+                      }
+                    }}
+                    placeholder="Reply to partner…"
+                    className="flex-1 rounded-xl bg-white/5 border border-white/10 px-4 py-2 text-white text-sm outline-none focus:border-[#98E32F]/50"
+                  />
+                  <button
+                    type="button"
+                    disabled={sending || !draft.trim()}
+                    onClick={() => void handleSendText()}
+                    className="rounded-xl bg-[#98E32F] text-[#013644] px-4 py-2 font-semibold disabled:opacity-50 flex items-center gap-2"
+                  >
+                    <Send className="h-4 w-4" />
+                    Send
+                  </button>
+                </div>
               </div>
             </>
           )}
