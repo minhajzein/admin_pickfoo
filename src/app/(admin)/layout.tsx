@@ -20,6 +20,7 @@ import {
   Map,
   Bike,
   Activity,
+  Headset,
 } from "lucide-react";
 import { io } from "socket.io-client";
 import { toast } from "sonner";
@@ -183,6 +184,18 @@ export default function AdminLayout({
       },
     );
 
+    socket.on("support:message", (data: unknown) => {
+      window.dispatchEvent(
+        new CustomEvent("admin:support-message", { detail: data }),
+      );
+    });
+
+    socket.on("support:thread:updated", (data: unknown) => {
+      window.dispatchEvent(
+        new CustomEvent("admin:support-thread-updated", { detail: data }),
+      );
+    });
+
     socket.on("monitor:event", (data: unknown) => {
       window.dispatchEvent(
         new CustomEvent("admin:monitor-event", {
@@ -210,6 +223,7 @@ export default function AdminLayout({
     { name: "Zones", icon: MapPinned, href: "/zones" },
     { name: "Live map", icon: Map, href: "/map" },
     { name: "Partners", icon: Bike, href: "/partners" },
+    { name: "Support", icon: Headset, href: "/support" },
     { name: "Gigs", icon: ClipboardList, href: "/gigs" },
     { name: "Monitor", icon: Activity, href: "/monitor" },
     { name: "Users", icon: Users, href: "/users" },
