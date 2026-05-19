@@ -38,17 +38,28 @@ export default function AdminLayout({
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  useEffect(() => {
-    if (!isInitialized) {
-      initialize();
-    }
-  }, [isInitialized, initialize]);
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    if (isInitialized && (!isAuthenticated || user?.role !== "admin")) {
-      router.push("/login");
+    const finish = () => setHydrated(true);
+    if (useAuthStore.persist.hasHydrated()) {
+      finish();
+      return;
     }
-  }, [isInitialized, isAuthenticated, user, router]);
+    return useAuthStore.persist.onFinishHydration(finish);
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated || isInitialized) return;
+    void initialize();
+  }, [hydrated, isInitialized, initialize]);
+
+  useEffect(() => {
+    if (!hydrated || !isInitialized) return;
+    if (!isAuthenticated || user?.role !== "admin") {
+      router.replace("/login");
+    }
+  }, [hydrated, isInitialized, isAuthenticated, user, router]);
 
   useEffect(() => {
     const timer = setTimeout(() => setIsMobileMenuOpen(false), 0);
@@ -209,7 +220,7 @@ export default function AdminLayout({
     };
   }, [isAuthenticated, router]);
 
-  if (!isInitialized) {
+  if (!hydrated || !isInitialized) {
     return (
       <div className="min-h-screen bg-[#013644] flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#98E32F]" />
@@ -218,7 +229,17 @@ export default function AdminLayout({
   }
 
   if (!isAuthenticated || !user || user.role !== "admin") {
-    return null;
+    return (
+      <div className="min-h-screen bg-[#013644] flex flex-col items-center justify-center gap-4 px-6 text-center">
+        <p className="text-white/80 text-sm">Session expired or sign-in required.</p>
+        <Link
+          href="/login"
+          className="rounded-xl bg-[#98E32F] text-[#013644] px-6 py-2.5 font-semibold text-sm hover:opacity-90"
+        >
+          Go to login
+        </Link>
+      </div>
+    );
   }
 
   const navItems = [
