@@ -38,28 +38,18 @@ export default function AdminLayout({
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  const [hydrated, setHydrated] = useState(false);
-
   useEffect(() => {
-    const finish = () => setHydrated(true);
-    if (useAuthStore.persist.hasHydrated()) {
-      finish();
-      return;
+    if (!isInitialized) {
+      void initialize();
     }
-    return useAuthStore.persist.onFinishHydration(finish);
-  }, []);
+  }, [isInitialized, initialize]);
 
   useEffect(() => {
-    if (!hydrated || isInitialized) return;
-    void initialize();
-  }, [hydrated, isInitialized, initialize]);
-
-  useEffect(() => {
-    if (!hydrated || !isInitialized) return;
+    if (!isInitialized) return;
     if (!isAuthenticated || user?.role !== "admin") {
       router.replace("/login");
     }
-  }, [hydrated, isInitialized, isAuthenticated, user, router]);
+  }, [isInitialized, isAuthenticated, user, router]);
 
   useEffect(() => {
     const timer = setTimeout(() => setIsMobileMenuOpen(false), 0);
@@ -220,7 +210,7 @@ export default function AdminLayout({
     };
   }, [isAuthenticated, router]);
 
-  if (!hydrated || !isInitialized) {
+  if (!isInitialized) {
     return (
       <div className="min-h-screen bg-[#013644] flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#98E32F]" />

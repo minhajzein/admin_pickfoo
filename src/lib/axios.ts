@@ -14,18 +14,36 @@ const api = axios.create({
   },
 });
 
-// Add a request interceptor to add token from localStorage if cookie is not used/blocked
 api.interceptors.request.use(
   (config) => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('admin_token') : null;
+    const token =
+      typeof window !== 'undefined'
+        ? localStorage.getItem('admin_token')
+        : null;
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
   },
+  (error) => Promise.reject(error),
+);
+
+api.interceptors.response.use(
+  (response) => response,
   (error) => {
+    const status = error.response?.status;
+    if (
+      typeof window !== 'undefined' &&
+      (status === 401 || status === 403) &&
+      !window.location.pathname.startsWith('/login')
+    ) {
+      void import('@/store/useAuthStore').then(({ useAuthStore }) => {
+        useAuthStore.getState().clearSession();
+        window.location.replace('/login');
+      });
+    }
     return Promise.reject(error);
-  }
+  },
 );
 
 export default api;
