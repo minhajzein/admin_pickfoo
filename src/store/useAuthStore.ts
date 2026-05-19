@@ -45,7 +45,7 @@ export const useAuthStore = create<AuthState>()(
       },
       initialize: async () => {
         try {
-          const response = await api.get('/auth/me');
+          const response = await api.get('/auth/me', { timeout: 8000 });
           if (response.data.success) {
             set({ user: response.data.user, isAuthenticated: true, isInitialized: true });
           } else {

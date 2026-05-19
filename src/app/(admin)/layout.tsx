@@ -209,12 +209,16 @@ export default function AdminLayout({
     };
   }, [isAuthenticated, router]);
 
-  if (!isInitialized || !user || user.role !== "admin") {
+  if (!isInitialized) {
     return (
       <div className="min-h-screen bg-[#013644] flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#98E32F]"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#98E32F]" />
       </div>
     );
+  }
+
+  if (!isAuthenticated || !user || user.role !== "admin") {
+    return null;
   }
 
   const navItems = [
