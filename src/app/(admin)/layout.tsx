@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import Image from "next/image";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuthStore } from "@/store/useAuthStore";
@@ -44,7 +44,7 @@ export default function AdminLayout({
     }
   }, [isInitialized, initialize]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!isInitialized) return;
     if (!isAuthenticated || user?.role !== "admin") {
       router.replace("/login");
@@ -219,17 +219,7 @@ export default function AdminLayout({
   }
 
   if (!isAuthenticated || !user || user.role !== "admin") {
-    return (
-      <div className="min-h-screen bg-[#013644] flex flex-col items-center justify-center gap-4 px-6 text-center">
-        <p className="text-white/80 text-sm">Session expired or sign-in required.</p>
-        <Link
-          href="/login"
-          className="rounded-xl bg-[#98E32F] text-[#013644] px-6 py-2.5 font-semibold text-sm hover:opacity-90"
-        >
-          Go to login
-        </Link>
-      </div>
-    );
+    return null;
   }
 
   const navItems = [
