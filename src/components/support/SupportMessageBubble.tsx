@@ -1,6 +1,6 @@
 "use client";
 
-import { FileText, Mic, Play, Video } from "lucide-react";
+import { FileText, Video } from "lucide-react";
 import type { SupportMessage } from "@/lib/api/support";
 
 export function SupportMessageBubble({ message }: { message: SupportMessage }) {
@@ -50,25 +50,15 @@ export function SupportMessageBubble({ message }: { message: SupportMessage }) {
             {message.mediaFileName || "PDF document"}
           </a>
         );
-      case "audio": {
-        const secs = Math.floor((message.mediaDurationMs ?? 0) / 1000);
-        const label =
-          secs > 0
-            ? `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`
-            : "Voice message";
+      case "audio":
         return (
-          <a
-            href={url}
-            target="_blank"
-            rel="noreferrer"
-            className="mt-1 flex items-center gap-2 rounded-lg bg-black/30 px-3 py-2 text-sm"
-          >
-            <Mic className="h-5 w-5 text-[#98E32F]" />
-            {label}
-            <Play className="h-4 w-4" />
-          </a>
+          <audio
+            controls
+            preload="metadata"
+            src={url}
+            className="mt-1 block max-w-[260px] h-9"
+          />
         );
-      }
       default:
         return null;
     }
