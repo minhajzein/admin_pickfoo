@@ -136,7 +136,7 @@ export interface PartnerLicence {
   documentUrl?: string;
 }
 
-export type PartnerVehicleType = 'bike' | 'scooter' | 'car';
+export type PartnerVehicleType = 'bike' | 'scooter';
 
 export interface PartnerVehicle {
   type?: PartnerVehicleType;
