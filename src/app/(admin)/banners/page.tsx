@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import axios from "axios";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ImageIcon, Loader2, Pencil, Trash2 } from "lucide-react";
+import { ImageIcon, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -55,6 +55,7 @@ const emptyForm = () => ({
 export default function BannersPage() {
   const queryClient = useQueryClient();
   const [form, setForm] = useState(emptyForm());
+  const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [restaurantSearch, setRestaurantSearch] = useState("");
   const [dishSearch, setDishSearch] = useState("");
@@ -95,19 +96,28 @@ export default function BannersPage() {
       toast.success(editingId ? "Banner updated" : "Banner created");
       resetForm();
     },
-    onError: (error: { response?: { data?: { message?: string } } }) => {
-      toast.error(error?.response?.data?.message || "Failed to save banner");
+    onError: (error: unknown) => {
+      const message =
+        axios.isAxiosError(error) && typeof error.response?.data?.message === "string"
+          ? error.response.data.message
+          : "Failed to save banner";
+      toast.error(message);
     },
   });
 
   const deleteMutation = useMutation({
     mutationFn: deleteBanner,
-    onSuccess: () => {
+    onSuccess: (_data, deletedId) => {
       queryClient.invalidateQueries({ queryKey: ["admin-banners"] });
       toast.success("Banner deleted");
+      if (editingId === deletedId) resetForm();
     },
-    onError: (error: { response?: { data?: { message?: string } } }) => {
-      toast.error(error?.response?.data?.message || "Failed to delete banner");
+    onError: (error: unknown) => {
+      const message =
+        axios.isAxiosError(error) && typeof error.response?.data?.message === "string"
+          ? error.response.data.message
+          : "Failed to delete banner";
+      toast.error(message);
     },
   });
 
@@ -119,10 +129,21 @@ export default function BannersPage() {
   const resetForm = () => {
     setForm(emptyForm());
     setEditingId(null);
+    setShowForm(false);
     setRestaurantOptions([]);
     setDishOptions([]);
     setRestaurantSearch("");
     setDishSearch("");
+  };
+
+  const openCreate = () => {
+    setForm(emptyForm());
+    setEditingId(null);
+    setRestaurantOptions([]);
+    setDishOptions([]);
+    setRestaurantSearch("");
+    setDishSearch("");
+    setShowForm(true);
   };
 
   const loadRestaurants = async () => {
@@ -169,6 +190,7 @@ export default function BannersPage() {
   };
 
   const startEdit = (banner: AdminHomeBanner) => {
+    setShowForm(true);
     setEditingId(banner.id);
     setForm({
       title: banner.title,
@@ -202,11 +224,19 @@ export default function BannersPage() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight">Home banners</h2>
-        <p className="text-white/60 text-sm mt-1">
-          Manage promo carousel on the customer app home screen. Link to a restaurant or dish(es).
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">Home banners</h2>
+          <p className="text-white/60 text-sm mt-1">
+            Manage promo carousel on the customer app home screen. Link to a restaurant or dish(es).
+          </p>
+        </div>
+        {!showForm && (
+          <Button onClick={openCreate} className="shrink-0">
+            <Plus className="mr-2 h-4 w-4" />
+            Add banner
+          </Button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -224,9 +254,13 @@ export default function BannersPage() {
         </Card>
       </div>
 
+      {showForm && (
       <Card className="bg-[#002833] border-white/10">
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0">
           <CardTitle>{editingId ? "Edit banner" : "Create banner"}</CardTitle>
+          <Button type="button" variant="outline" size="sm" onClick={resetForm}>
+            Cancel
+          </Button>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -416,27 +450,33 @@ export default function BannersPage() {
               )}
               {editingId ? "Update banner" : "Create banner"}
             </Button>
-            {editingId && (
-              <Button type="button" variant="outline" onClick={resetForm}>
-                Cancel edit
-              </Button>
-            )}
           </div>
         </CardContent>
       </Card>
+      )}
 
       <Card className="bg-[#002833] border-white/10">
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0">
           <CardTitle className="flex items-center gap-2">
             <ImageIcon className="h-5 w-5" />
             All banners
           </CardTitle>
+          {!showForm && (
+            <Button onClick={openCreate} size="sm">
+              <Plus className="mr-2 h-4 w-4" />
+              Add banner
+            </Button>
+          )}
         </CardHeader>
         <CardContent>
           {isLoading ? (
             <div className="flex justify-center py-8">
               <Loader2 className="h-8 w-8 animate-spin text-[#98E32F]" />
             </div>
+          ) : banners.length === 0 ? (
+            <p className="text-center text-white/50 py-8 text-sm">
+              No banners yet. Click <strong className="text-white/80">Add banner</strong> to create one.
+            </p>
           ) : (
             <Table>
               <TableHeader>
@@ -473,25 +513,33 @@ export default function BannersPage() {
                         {banner.isActive ? "Active" : "Inactive"}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-right space-x-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => startEdit(banner)}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          if (confirm("Delete this banner?")) {
-                            deleteMutation.mutate(banner.id);
-                          }
-                        }}
-                      >
-                        <Trash2 className="h-4 w-4 text-red-400" />
-                      </Button>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => startEdit(banner)}
+                          aria-label={`Edit ${banner.title}`}
+                        >
+                          <Pencil className="h-4 w-4 mr-1" />
+                          Edit
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-red-400 hover:text-red-300"
+                          disabled={deleteMutation.isPending}
+                          onClick={() => {
+                            if (confirm(`Delete banner "${banner.title}"?`)) {
+                              deleteMutation.mutate(banner.id);
+                            }
+                          }}
+                          aria-label={`Delete ${banner.title}`}
+                        >
+                          <Trash2 className="h-4 w-4 mr-1" />
+                          Delete
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
