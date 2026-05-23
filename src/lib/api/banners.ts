@@ -55,8 +55,15 @@ export async function createBanner(input: {
   startsAt?: string | null;
   endsAt?: string | null;
 }): Promise<AdminHomeBanner> {
-  const { data } = await api.post("/banners", input);
-  return data.data as AdminHomeBanner;
+  const { data } = await api.post<{
+    success: boolean;
+    data?: AdminHomeBanner;
+    message?: string;
+  }>("/banners", input);
+  if (!data.success || !data.data) {
+    throw new Error(data.message || "Failed to create banner");
+  }
+  return data.data;
 }
 
 export async function updateBanner(
@@ -75,8 +82,15 @@ export async function updateBanner(
     endsAt: string | null;
   }>,
 ): Promise<AdminHomeBanner> {
-  const { data } = await api.patch(`/banners/${id}`, patch);
-  return data.data as AdminHomeBanner;
+  const { data } = await api.patch<{
+    success: boolean;
+    data?: AdminHomeBanner;
+    message?: string;
+  }>(`/banners/${id}`, patch);
+  if (!data.success || !data.data) {
+    throw new Error(data.message || "Failed to update banner");
+  }
+  return data.data;
 }
 
 export async function deleteBanner(id: string): Promise<void> {

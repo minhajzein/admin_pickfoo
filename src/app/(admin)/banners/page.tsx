@@ -68,12 +68,42 @@ export default function BannersPage() {
     queryFn: fetchBanners,
   });
 
+  const resolveImageUrl = () =>
+    form.imageStaticUrl.trim() || form.imagePreview.trim();
+
+  const validateForm = (): string | null => {
+    if (!form.title.trim()) return "Title is required";
+    if (!form.subtitle.trim()) return "Subtitle is required";
+    if (!resolveImageUrl()) return "Please upload a banner image first";
+    if (form.linkType === "restaurant" && !form.restaurantId) {
+      return "Select a restaurant for this link type";
+    }
+    if (form.linkType === "dish" && !form.menuItemId) {
+      return "Select a dish for this link type";
+    }
+    if (form.linkType === "dishes" && form.menuItemIds.length === 0) {
+      return "Select at least one dish for this link type";
+    }
+    return null;
+  };
+
+  const handleSubmit = (e?: React.FormEvent) => {
+    e?.preventDefault();
+    const error = validateForm();
+    if (error) {
+      toast.error(error);
+      return;
+    }
+    saveMutation.mutate();
+  };
+
   const saveMutation = useMutation({
     mutationFn: async () => {
+      const imageStaticUrl = resolveImageUrl();
       const payload = {
         title: form.title.trim(),
         subtitle: form.subtitle.trim(),
-        imageStaticUrl: form.imageStaticUrl,
+        imageStaticUrl,
         linkType: form.linkType,
         restaurantId:
           form.linkType === "restaurant" ||
@@ -97,11 +127,7 @@ export default function BannersPage() {
       resetForm();
     },
     onError: (error: unknown) => {
-      const message =
-        axios.isAxiosError(error) && typeof error.response?.data?.message === "string"
-          ? error.response.data.message
-          : "Failed to save banner";
-      toast.error(message);
+      toast.error(apiErrorMessage(error, "Failed to save banner"));
     },
   });
 
@@ -277,6 +303,7 @@ export default function BannersPage() {
           </Button>
         </CardHeader>
         <CardContent className="space-y-4">
+          <form className="space-y-4" onSubmit={handleSubmit} noValidate>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Title</Label>
@@ -345,6 +372,11 @@ export default function BannersPage() {
                 alt="Preview"
                 className="mt-2 h-32 w-full max-w-md rounded-lg object-cover border border-white/10"
               />
+            )}
+            {!resolveImageUrl() && (
+              <p className="text-xs text-amber-400/90">
+                Upload an image before saving — the create button needs a successful upload.
+              </p>
             )}
           </div>
 
@@ -455,16 +487,14 @@ export default function BannersPage() {
           </label>
 
           <div className="flex gap-2">
-            <Button
-              onClick={() => saveMutation.mutate()}
-              disabled={saveMutation.isPending || !form.imageStaticUrl}
-            >
+            <Button type="submit" disabled={saveMutation.isPending || uploading}>
               {saveMutation.isPending && (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               )}
               {editingId ? "Update banner" : "Create banner"}
             </Button>
           </div>
+          </form>
         </CardContent>
       </Card>
       )}
