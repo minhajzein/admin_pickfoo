@@ -43,8 +43,8 @@ export async function fetchBanners(): Promise<AdminHomeBanner[]> {
 }
 
 export async function createBanner(input: {
-  title: string;
-  subtitle: string;
+  title?: string;
+  subtitle?: string;
   imageStaticUrl: string;
   linkType: HomeBannerLinkType;
   restaurantId?: string | null;
@@ -69,8 +69,8 @@ export async function createBanner(input: {
 export async function updateBanner(
   id: string,
   patch: Partial<{
-    title: string;
-    subtitle: string;
+    title?: string;
+    subtitle?: string;
     imageStaticUrl: string;
     linkType: HomeBannerLinkType;
     restaurantId: string | null;

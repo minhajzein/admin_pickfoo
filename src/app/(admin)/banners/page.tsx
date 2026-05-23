@@ -72,8 +72,6 @@ export default function BannersPage() {
     form.imageStaticUrl.trim() || form.imagePreview.trim();
 
   const validateForm = (): string | null => {
-    if (!form.title.trim()) return "Title is required";
-    if (!form.subtitle.trim()) return "Subtitle is required";
     if (!resolveImageUrl()) return "Please upload a banner image first";
     if (form.linkType === "restaurant" && !form.restaurantId) {
       return "Select a restaurant for this link type";
@@ -306,7 +304,7 @@ export default function BannersPage() {
           <form className="space-y-4" onSubmit={handleSubmit} noValidate>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>Title</Label>
+              <Label>Title (optional)</Label>
               <Input
                 value={form.title}
                 onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
@@ -314,7 +312,7 @@ export default function BannersPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label>Subtitle</Label>
+              <Label>Subtitle (optional)</Label>
               <Input
                 value={form.subtitle}
                 onChange={(e) => setForm((f) => ({ ...f, subtitle: e.target.value }))}
@@ -544,8 +542,14 @@ export default function BannersPage() {
                       />
                     </TableCell>
                     <TableCell>
-                      <div className="font-medium">{banner.title}</div>
-                      <div className="text-xs text-white/50">{banner.subtitle}</div>
+                      <div className="font-medium">
+                        {banner.title?.trim() || (
+                          <span className="text-white/40 italic">No title</span>
+                        )}
+                      </div>
+                      {banner.subtitle?.trim() ? (
+                        <div className="text-xs text-white/50">{banner.subtitle}</div>
+                      ) : null}
                     </TableCell>
                     <TableCell className="text-xs">
                       <div>{linkTypeLabels[banner.linkType]}</div>
@@ -563,7 +567,7 @@ export default function BannersPage() {
                           size="sm"
                           variant="outline"
                           onClick={() => startEdit(banner)}
-                          aria-label={`Edit ${banner.title}`}
+                          aria-label={`Edit ${banner.title?.trim() || "banner"}`}
                         >
                           <Pencil className="h-4 w-4 mr-1" />
                           Edit
@@ -574,11 +578,15 @@ export default function BannersPage() {
                           className="text-red-400 hover:text-red-300"
                           disabled={deleteMutation.isPending}
                           onClick={() => {
-                            if (confirm(`Delete banner "${banner.title}"?`)) {
+                            if (
+                              confirm(
+                                `Delete banner "${banner.title?.trim() || "this banner"}"?`,
+                              )
+                            ) {
                               deleteMutation.mutate(banner.id);
                             }
                           }}
-                          aria-label={`Delete ${banner.title}`}
+                          aria-label={`Delete ${banner.title?.trim() || "banner"}`}
                         >
                           <Trash2 className="h-4 w-4 mr-1" />
                           Delete
