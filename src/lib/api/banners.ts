@@ -101,9 +101,20 @@ export async function searchBannerRestaurants(
 ): Promise<BannerRestaurantOption[]> {
   const sp = new URLSearchParams();
   if (search.trim()) sp.set("search", search.trim());
-  sp.set("limit", "25");
-  const { data } = await api.get(`/banners/link-options/restaurants?${sp}`);
-  return data.data as BannerRestaurantOption[];
+  // Use main restaurants API (same as Restaurants page) — reliable in all deployments.
+  const { data } = await api.get(`/restaurants?${sp}`);
+  const rows = (data.data ?? []) as Array<{
+    _id: string;
+    name: string;
+    image?: string;
+    address?: { city?: string };
+  }>;
+  return rows.slice(0, 25).map((r) => ({
+    id: r._id,
+    name: r.name,
+    city: r.address?.city ?? "",
+    image: r.image ?? "",
+  }));
 }
 
 export async function searchBannerMenuItems(params: {

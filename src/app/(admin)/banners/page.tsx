@@ -146,12 +146,24 @@ export default function BannersPage() {
     setShowForm(true);
   };
 
+  const apiErrorMessage = (error: unknown, fallback: string) => {
+    if (axios.isAxiosError(error) && typeof error.response?.data?.message === "string") {
+      return error.response.data.message;
+    }
+    return fallback;
+  };
+
   const loadRestaurants = async () => {
     try {
       const rows = await searchBannerRestaurants(restaurantSearch);
       setRestaurantOptions(rows);
-    } catch {
-      toast.error("Failed to search restaurants");
+      if (rows.length === 0) {
+        toast.message("No restaurants found", {
+          description: "Try a different name or check status on the Restaurants page.",
+        });
+      }
+    } catch (error: unknown) {
+      toast.error(apiErrorMessage(error, "Failed to search restaurants"));
     }
   };
 
@@ -162,8 +174,13 @@ export default function BannersPage() {
         restaurantId: form.restaurantId || undefined,
       });
       setDishOptions(rows);
-    } catch {
-      toast.error("Failed to search dishes");
+      if (rows.length === 0) {
+        toast.message("No dishes found", {
+          description: "Try another name or pick a restaurant filter first.",
+        });
+      }
+    } catch (error: unknown) {
+      toast.error(apiErrorMessage(error, "Failed to search dishes"));
     }
   };
 
