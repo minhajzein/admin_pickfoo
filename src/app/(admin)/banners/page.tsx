@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -62,6 +62,13 @@ export default function BannersPage() {
   const [restaurantOptions, setRestaurantOptions] = useState<BannerRestaurantOption[]>([]);
   const [dishOptions, setDishOptions] = useState<BannerMenuItemOption[]>([]);
   const [uploading, setUploading] = useState(false);
+  const formCardRef = useRef<HTMLDivElement>(null);
+
+  const scrollToForm = useCallback(() => {
+    requestAnimationFrame(() => {
+      formCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, []);
 
   const { data: banners = [], isLoading } = useQuery({
     queryKey: ["admin-banners"],
@@ -85,43 +92,43 @@ export default function BannersPage() {
     return null;
   };
 
-  const handleSubmit = (e?: React.FormEvent) => {
-    e?.preventDefault();
-    const error = validateForm();
-    if (error) {
-      toast.error(error);
-      return;
-    }
-    saveMutation.mutate();
+  type SaveBannerInput = {
+    editingId: string | null;
+    form: ReturnType<typeof emptyForm>;
+  };
+
+  const buildPayload = (draft: ReturnType<typeof emptyForm>) => {
+    const imageStaticUrl =
+      draft.imageStaticUrl.trim() || draft.imagePreview.trim();
+    return {
+      title: draft.title.trim(),
+      subtitle: draft.subtitle.trim(),
+      imageStaticUrl,
+      linkType: draft.linkType,
+      restaurantId:
+        draft.linkType === "restaurant" ||
+        draft.linkType === "dish" ||
+        draft.linkType === "dishes"
+          ? draft.restaurantId || null
+          : null,
+      menuItemId: draft.linkType === "dish" ? draft.menuItemId || null : null,
+      menuItemIds: draft.linkType === "dishes" ? draft.menuItemIds : [],
+      sortOrder: Number(draft.sortOrder) || 0,
+      isActive: draft.isActive,
+    };
   };
 
   const saveMutation = useMutation({
-    mutationFn: async () => {
-      const imageStaticUrl = resolveImageUrl();
-      const payload = {
-        title: form.title.trim(),
-        subtitle: form.subtitle.trim(),
-        imageStaticUrl,
-        linkType: form.linkType,
-        restaurantId:
-          form.linkType === "restaurant" ||
-          form.linkType === "dish" ||
-          form.linkType === "dishes"
-            ? form.restaurantId || null
-            : null,
-        menuItemId: form.linkType === "dish" ? form.menuItemId || null : null,
-        menuItemIds: form.linkType === "dishes" ? form.menuItemIds : [],
-        sortOrder: Number(form.sortOrder) || 0,
-        isActive: form.isActive,
-      };
-      if (editingId) {
-        return updateBanner(editingId, payload);
+    mutationFn: async ({ editingId: bannerId, form: draft }: SaveBannerInput) => {
+      const payload = buildPayload(draft);
+      if (bannerId) {
+        return updateBanner(bannerId, payload);
       }
       return createBanner(payload);
     },
-    onSuccess: () => {
+    onSuccess: (_data, { editingId: bannerId }) => {
       queryClient.invalidateQueries({ queryKey: ["admin-banners"] });
-      toast.success(editingId ? "Banner updated" : "Banner created");
+      toast.success(bannerId ? "Banner updated" : "Banner created");
       resetForm();
     },
     onError: (error: unknown) => {
@@ -160,6 +167,16 @@ export default function BannersPage() {
     setDishSearch("");
   };
 
+  const handleSubmit = (e?: React.FormEvent) => {
+    e?.preventDefault();
+    const error = validateForm();
+    if (error) {
+      toast.error(error);
+      return;
+    }
+    saveMutation.mutate({ editingId, form });
+  };
+
   const openCreate = () => {
     setForm(emptyForm());
     setEditingId(null);
@@ -168,6 +185,7 @@ export default function BannersPage() {
     setRestaurantSearch("");
     setDishSearch("");
     setShowForm(true);
+    scrollToForm();
   };
 
   const apiErrorMessage = (error: unknown, fallback: string) => {
@@ -227,22 +245,35 @@ export default function BannersPage() {
     }
   };
 
-  const startEdit = (banner: AdminHomeBanner) => {
-    setShowForm(true);
-    setEditingId(banner.id);
-    setForm({
-      title: banner.title,
-      subtitle: banner.subtitle,
-      imageStaticUrl: banner.imageStaticUrl,
-      imagePreview: banner.imageUrl,
-      linkType: banner.linkType,
-      restaurantId: banner.restaurantId ?? "",
-      menuItemId: banner.menuItemId ?? "",
-      menuItemIds: banner.menuItemIds ?? [],
-      sortOrder: banner.sortOrder,
-      isActive: banner.isActive,
-    });
-  };
+  const startEdit = useCallback(
+    (banner: AdminHomeBanner) => {
+      const id = String(banner.id ?? "").trim();
+      if (!id) {
+        toast.error("This banner has no id — refresh the list and try again.");
+        return;
+      }
+      setRestaurantOptions([]);
+      setDishOptions([]);
+      setRestaurantSearch("");
+      setDishSearch("");
+      setEditingId(id);
+      setForm({
+        title: banner.title ?? "",
+        subtitle: banner.subtitle ?? "",
+        imageStaticUrl: banner.imageStaticUrl || banner.imageUrl || "",
+        imagePreview: banner.imageUrl || banner.imageStaticUrl || "",
+        linkType: banner.linkType ?? "none",
+        restaurantId: banner.restaurantId ?? "",
+        menuItemId: banner.menuItemId ?? "",
+        menuItemIds: banner.menuItemIds ?? [],
+        sortOrder: banner.sortOrder ?? 0,
+        isActive: banner.isActive ?? true,
+      });
+      setShowForm(true);
+      scrollToForm();
+    },
+    [scrollToForm],
+  );
 
   const toggleDishSelection = (id: string) => {
     setForm((f) => {
@@ -270,7 +301,7 @@ export default function BannersPage() {
           </p>
         </div>
         {!showForm && (
-          <Button onClick={openCreate} className="shrink-0">
+          <Button type="button" onClick={openCreate} className="shrink-0">
             <Plus className="mr-2 h-4 w-4" />
             Add banner
           </Button>
@@ -293,7 +324,7 @@ export default function BannersPage() {
       </div>
 
       {showForm && (
-      <Card className="bg-[#002833] border-white/10">
+      <Card ref={formCardRef} className="bg-[#002833] border-white/10 ring-1 ring-[#98E32F]/30">
         <CardHeader className="flex flex-row items-center justify-between space-y-0">
           <CardTitle>{editingId ? "Edit banner" : "Create banner"}</CardTitle>
           <Button type="button" variant="outline" size="sm" onClick={resetForm}>
@@ -504,7 +535,7 @@ export default function BannersPage() {
             All banners
           </CardTitle>
           {!showForm && (
-            <Button onClick={openCreate} size="sm">
+            <Button type="button" onClick={openCreate} size="sm">
               <Plus className="mr-2 h-4 w-4" />
               Add banner
             </Button>
@@ -533,7 +564,14 @@ export default function BannersPage() {
               </TableHeader>
               <TableBody>
                 {banners.map((banner) => (
-                  <TableRow key={banner.id}>
+                  <TableRow
+                    key={banner.id}
+                    className={
+                      editingId === banner.id
+                        ? "bg-[#98E32F]/10 ring-1 ring-inset ring-[#98E32F]/40"
+                        : undefined
+                    }
+                  >
                     <TableCell>
                       <img
                         src={banner.imageUrl}
@@ -564,20 +602,28 @@ export default function BannersPage() {
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
                         <Button
+                          type="button"
                           size="sm"
                           variant="outline"
-                          onClick={() => startEdit(banner)}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            startEdit(banner);
+                          }}
                           aria-label={`Edit ${banner.title?.trim() || "banner"}`}
                         >
                           <Pencil className="h-4 w-4 mr-1" />
                           Edit
                         </Button>
                         <Button
+                          type="button"
                           size="sm"
                           variant="outline"
                           className="text-red-400 hover:text-red-300"
                           disabled={deleteMutation.isPending}
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
                             if (
                               confirm(
                                 `Delete banner "${banner.title?.trim() || "this banner"}"?`,

@@ -39,7 +39,14 @@ export interface BannerMenuItemOption {
 
 export async function fetchBanners(): Promise<AdminHomeBanner[]> {
   const { data } = await api.get("/banners");
-  return data.data as AdminHomeBanner[];
+  const rows = (data.data ?? []) as Array<AdminHomeBanner & { _id?: string }>;
+  return rows
+    .map((row) => ({
+      ...row,
+      id: String(row.id ?? row._id ?? "").trim(),
+      menuItemIds: row.menuItemIds ?? [],
+    }))
+    .filter((row) => row.id.length > 0);
 }
 
 export async function createBanner(input: {
@@ -144,6 +151,11 @@ export async function uploadBannerImage(file: File): Promise<UploadPayload> {
       throw new Error("Only image files are allowed for banners");
     }
     if (axios.isAxiosError(error)) {
+      if (error.response?.status === 413) {
+        throw new Error(
+          "Image file is too large for the server (max 50 MB). Ask ops to set nginx client_max_body_size to 50m and redeploy admin-api.",
+        );
+      }
       const msg =
         typeof error.response?.data?.message === "string"
           ? error.response.data.message
