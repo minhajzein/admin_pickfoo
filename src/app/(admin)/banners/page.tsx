@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import axios from "axios";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ImageIcon, Loader2, Pencil, Trash2 } from "lucide-react";
@@ -156,8 +157,12 @@ export default function BannersPage() {
         imagePreview: uploaded.fileUrl,
       }));
       toast.success("Image uploaded");
-    } catch (error: { response?: { data?: { message?: string } } }) {
-      toast.error(error?.response?.data?.message || "Upload failed");
+    } catch (error: unknown) {
+      const message =
+        axios.isAxiosError(error) && typeof error.response?.data?.message === "string"
+          ? error.response.data.message
+          : "Upload failed";
+      toast.error(message);
     } finally {
       setUploading(false);
     }
