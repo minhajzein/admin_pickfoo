@@ -21,6 +21,7 @@ import {
   Bike,
   Activity,
   Headset,
+  ImageIcon,
 } from "lucide-react";
 import { io } from "socket.io-client";
 import { toast } from "sonner";
@@ -225,6 +226,7 @@ export default function AdminLayout({
   const navItems = [
     { name: "Dashboard", icon: LayoutDashboard, href: "/" },
     { name: "Restaurants", icon: Store, href: "/restaurants" },
+    { name: "Banners", icon: ImageIcon, href: "/banners" },
     { name: "Zones", icon: MapPinned, href: "/zones" },
     { name: "Live map", icon: Map, href: "/map" },
     { name: "Partners", icon: Bike, href: "/partners" },
