@@ -84,8 +84,15 @@ export async function uploadSupportMedia(file: File): Promise<SupportMediaUpload
     data?: SupportMediaUpload & { fileType?: string };
     message?: string;
   }>('/support/upload', form, {
-    headers: { 'Content-Type': 'multipart/form-data' },
     timeout: 120000,
+    transformRequest: [
+      (body, headers) => {
+        if (body instanceof FormData) {
+          delete headers['Content-Type'];
+        }
+        return body;
+      },
+    ],
   });
   if (!data.success || !data.data?.staticUrl) {
     throw new Error(data.message || 'Failed to upload file');

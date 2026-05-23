@@ -150,6 +150,7 @@ export default function BannersPage() {
     if (axios.isAxiosError(error) && typeof error.response?.data?.message === "string") {
       return error.response.data.message;
     }
+    if (error instanceof Error && error.message) return error.message;
     return fallback;
   };
 
@@ -196,11 +197,7 @@ export default function BannersPage() {
       }));
       toast.success("Image uploaded");
     } catch (error: unknown) {
-      const message =
-        axios.isAxiosError(error) && typeof error.response?.data?.message === "string"
-          ? error.response.data.message
-          : "Upload failed";
-      toast.error(message);
+      toast.error(apiErrorMessage(error, "Upload failed"));
     } finally {
       setUploading(false);
     }

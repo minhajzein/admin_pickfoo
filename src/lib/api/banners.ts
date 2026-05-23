@@ -1,4 +1,6 @@
+import axios from "axios";
 import api from "@/lib/axios";
+import { uploadSupportMedia } from "@/lib/api/support";
 
 export type HomeBannerLinkType = "none" | "restaurant" | "dish" | "dishes";
 
@@ -81,19 +83,62 @@ export async function deleteBanner(id: string): Promise<void> {
   await api.delete(`/banners/${id}`);
 }
 
-export async function uploadBannerImage(file: File): Promise<{
-  fileUrl: string;
-  staticUrl: string;
-}> {
+type UploadPayload = { fileUrl: string; staticUrl: string };
+
+async function postMultipartUpload(url: string, file: File): Promise<UploadPayload> {
   const form = new FormData();
   form.append("file", file);
-  const { data } = await api.post("/banners/upload", form, {
-    headers: { "Content-Type": "multipart/form-data" },
+  const { data } = await api.post<{
+    success: boolean;
+    data?: { fileUrl?: string; staticUrl?: string };
+    message?: string;
+  }>(url, form, {
+    timeout: 120_000,
+    // Let axios set multipart boundary — manual Content-Type breaks multer parsing.
+    transformRequest: [
+      (body, headers) => {
+        if (body instanceof FormData) {
+          delete headers["Content-Type"];
+        }
+        return body;
+      },
+    ],
   });
+  if (!data.success || !data.data?.staticUrl) {
+    throw new Error(data.message || "Upload failed");
+  }
+  const staticUrl = data.data.staticUrl;
   return {
-    fileUrl: data.data.fileUrl as string,
-    staticUrl: data.data.staticUrl as string,
+    staticUrl,
+    fileUrl: data.data.fileUrl || staticUrl,
   };
+}
+
+/** Upload banner image to S3 (home-banners/). Falls back to support upload if route missing. */
+export async function uploadBannerImage(file: File): Promise<UploadPayload> {
+  try {
+    return await postMultipartUpload("/banners/upload", file);
+  } catch (error: unknown) {
+    if (axios.isAxiosError(error) && error.response?.status === 404) {
+      const fallback = await uploadSupportMedia(file);
+      if (fallback.messageType === "image" || !fallback.messageType) {
+        return {
+          staticUrl: fallback.staticUrl,
+          fileUrl: fallback.fileUrl || fallback.staticUrl,
+        };
+      }
+      throw new Error("Only image files are allowed for banners");
+    }
+    if (axios.isAxiosError(error)) {
+      const msg =
+        typeof error.response?.data?.message === "string"
+          ? error.response.data.message
+          : error.message;
+      throw new Error(msg || "Upload failed");
+    }
+    if (error instanceof Error) throw error;
+    throw new Error("Upload failed");
+  }
 }
 
 export async function searchBannerRestaurants(
