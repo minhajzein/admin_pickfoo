@@ -55,3 +55,19 @@ export async function verifyPartner(
   const { data } = await api.patch(`/partners/${partnerId}/verify`, payload);
   return data.data;
 }
+
+export type SecurityDepositAction =
+  | "mark_office_paid"
+  | "mark_refund_eligible"
+  | "mark_refunded"
+  | "mark_forfeited";
+
+export async function updatePartnerSecurityDeposit(
+  partnerId: string,
+  action: SecurityDepositAction,
+): Promise<Partner> {
+  const { data } = await api.patch(`/partners/${partnerId}/security-deposit`, {
+    action,
+  });
+  return data.data;
+}

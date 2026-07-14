@@ -19,8 +19,10 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   fetchPartner,
   updatePartnerPriorityLevel,
+  updatePartnerSecurityDeposit,
   updatePartnerZones,
   verifyPartner,
+  type SecurityDepositAction,
 } from "@/lib/api/partners";
 import { fetchZones } from "@/lib/api/zones";
 import {
@@ -199,6 +201,30 @@ export default function PartnerDetailsPage() {
     },
   });
 
+  const depositMutation = useMutation({
+    mutationFn: (action: SecurityDepositAction) =>
+      updatePartnerSecurityDeposit(String(partnerId), action),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["partner", partnerId] });
+      queryClient.invalidateQueries({ queryKey: ["partners"] });
+      toast.success("Security deposit updated");
+    },
+    onError: (error: unknown) => {
+      const message =
+        error &&
+        typeof error === "object" &&
+        "response" in error &&
+        (error as { response?: { data?: { message?: string } } }).response?.data
+          ?.message
+          ? String(
+              (error as { response: { data: { message: string } } }).response
+                .data.message,
+            )
+          : "Failed to update security deposit";
+      toast.error(message);
+    },
+  });
+
   const zoneCountLabel = useMemo(() => {
     if (selectedZoneIds.length === 0) return "No zone selected";
     if (selectedZoneIds.length === 1) return "1 zone selected";
@@ -300,6 +326,33 @@ export default function PartnerDetailsPage() {
                   </p>
                 </div>
               </div>
+              <div className="flex items-start gap-3">
+                <Calendar className="mt-0.5 h-4 w-4 text-white/40" />
+                <div>
+                  <p className="text-[10px] uppercase tracking-widest text-white/40">
+                    Date of birth
+                  </p>
+                  <p>
+                    {partner.dateOfBirth || "N/A"}
+                    {partner.age != null ? ` (age ${partner.age})` : ""}
+                  </p>
+                </div>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-black/20 p-3 text-xs space-y-1">
+                <p className="text-[10px] uppercase tracking-widest text-white/40">
+                  Partner agreement
+                </p>
+                <p>
+                  {partner.partnerAgreementAcceptedAt
+                    ? `Accepted ${new Date(partner.partnerAgreementAcceptedAt).toLocaleString()}`
+                    : "Not accepted"}
+                </p>
+                {partner.partnerAgreementVersion && (
+                  <p className="text-white/50">
+                    Version: {partner.partnerAgreementVersion}
+                  </p>
+                )}
+              </div>
               <div className="rounded-lg border border-white/10 bg-black/20 p-3 text-xs">
                 <p className={partner.isOnline ? "text-[#98E32F]" : "text-white/50"}>
                   {partner.isOnline ? "Online" : "Offline"}
@@ -311,6 +364,132 @@ export default function PartnerDetailsPage() {
                   {partner.currentAssignmentOrderId ? "Currently busy" : "Currently free"}
                 </p>
               </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-white/5 bg-[#002833] text-white">
+            <CardHeader>
+              <CardTitle>Security deposit</CardTitle>
+              <CardDescription className="text-white/50">
+                Bag + jersey deposit · {partner.deliveredOrderCount ?? 0} /{" "}
+                {partner.securityDeposit?.refundAfterOrders ?? 100} deliveries
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4 text-sm">
+              {partner.securityDeposit ? (
+                <>
+                  <div className="grid gap-3 sm:grid-cols-2 rounded-lg border border-white/10 bg-black/20 p-3">
+                    <div>
+                      <p className="text-[10px] uppercase tracking-widest text-white/40">
+                        Amount
+                      </p>
+                      <p>
+                        {partner.securityDeposit.currency}{" "}
+                        {partner.securityDeposit.amount}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase tracking-widest text-white/40">
+                        Status
+                      </p>
+                      <Badge
+                        variant="outline"
+                        className="border-white/10 text-white/80 uppercase"
+                      >
+                        {partner.securityDeposit.status}
+                      </Badge>
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase tracking-widest text-white/40">
+                        Method
+                      </p>
+                      <p className="uppercase">
+                        {partner.securityDeposit.paymentMethod || "—"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase tracking-widest text-white/40">
+                        Items
+                      </p>
+                      <p>
+                        {(partner.securityDeposit.items ?? []).join(", ") || "—"}
+                      </p>
+                    </div>
+                    {partner.securityDeposit.paidAt && (
+                      <div className="sm:col-span-2">
+                        <p className="text-[10px] uppercase tracking-widest text-white/40">
+                          Paid at
+                        </p>
+                        <p>
+                          {new Date(
+                            partner.securityDeposit.paidAt,
+                          ).toLocaleString()}
+                        </p>
+                      </div>
+                    )}
+                    {partner.securityDeposit.errorDescription && (
+                      <div className="sm:col-span-2 text-amber-300/90">
+                        {partner.securityDeposit.errorCode}:{" "}
+                        {partner.securityDeposit.errorDescription}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    {(partner.securityDeposit.status === "pay_at_office" ||
+                      partner.securityDeposit.status === "pending") && (
+                      <Button
+                        className="w-full bg-[#98E32F] text-[#013644] hover:bg-[#86c926]"
+                        disabled={depositMutation.isPending}
+                        onClick={() =>
+                          depositMutation.mutate("mark_office_paid")
+                        }
+                      >
+                        {depositMutation.isPending && (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        )}
+                        Mark office payment collected
+                      </Button>
+                    )}
+                    {partner.securityDeposit.status === "paid" && (
+                      <Button
+                        variant="outline"
+                        className="w-full border-white/10 text-white hover:bg-white/5"
+                        disabled={depositMutation.isPending}
+                        onClick={() =>
+                          depositMutation.mutate("mark_refund_eligible")
+                        }
+                      >
+                        Mark refund eligible
+                      </Button>
+                    )}
+                    {(partner.securityDeposit.status === "refund_eligible" ||
+                      partner.securityDeposit.status === "paid") && (
+                      <Button
+                        variant="outline"
+                        className="w-full border-white/10 text-white hover:bg-white/5"
+                        disabled={depositMutation.isPending}
+                        onClick={() => depositMutation.mutate("mark_refunded")}
+                      >
+                        Mark refunded
+                      </Button>
+                    )}
+                    {partner.securityDeposit.status !== "refunded" &&
+                      partner.securityDeposit.status !== "forfeited" && (
+                        <Button
+                          className="w-full bg-red-500/90 text-white hover:bg-red-600"
+                          disabled={depositMutation.isPending}
+                          onClick={() =>
+                            depositMutation.mutate("mark_forfeited")
+                          }
+                        >
+                          Forfeit deposit
+                        </Button>
+                      )}
+                  </div>
+                </>
+              ) : (
+                <p className="text-white/40">No security deposit on record.</p>
+              )}
             </CardContent>
           </Card>
 
@@ -361,6 +540,22 @@ export default function PartnerDetailsPage() {
               <UploadedAssetCard title="Liveness selfie" url={livenessSelfieUrl} />
               <UploadedAssetCard title="Licence file" url={licenceDocumentUrl} />
               <UploadedAssetCard title="Vehicle image" url={vehicleImageUrl} />
+              {partner.vehicle?.averageMileage != null && (
+                <div className="rounded-lg border border-white/10 bg-black/20 p-3 text-sm md:col-span-2">
+                  <p className="text-[10px] uppercase tracking-widest text-white/40">
+                    Average mileage
+                  </p>
+                  <p>{partner.vehicle.averageMileage} km/L</p>
+                  {partner.vehicle.type && (
+                    <p className="text-white/50 capitalize mt-1">
+                      {partner.vehicle.type}
+                      {partner.vehicle.plateNumber
+                        ? ` · ${partner.vehicle.plateNumber}`
+                        : ""}
+                    </p>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
 

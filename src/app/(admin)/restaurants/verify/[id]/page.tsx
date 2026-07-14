@@ -292,7 +292,7 @@ export default function VerifyRestaurantPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Left Column: Details & Contact */}
         <div className="lg:col-span-1 space-y-8">
-          {/* Logo/Image */}
+          {/* Cover + brand logo */}
           <Card className="bg-[#002833] border-white/5 overflow-hidden text-white">
             <div className="relative h-48 bg-black/20">
               {restaurant.image ? (
@@ -308,7 +308,7 @@ export default function VerifyRestaurantPage() {
                 <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-white/10">
                   <Store size={48} />
                   <span className="text-xs font-bold uppercase tracking-widest">
-                    No Brand Image
+                    No Cover Image
                   </span>
                 </div>
               )}
@@ -317,6 +317,49 @@ export default function VerifyRestaurantPage() {
               <CardTitle className="text-lg">Contact Information</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              {restaurant.brandLogo ? (
+                <div className="flex items-center gap-3">
+                  <NextImage
+                    src={restaurant.brandLogo}
+                    alt={`${restaurant.name} brand logo`}
+                    width={56}
+                    height={56}
+                    unoptimized
+                    className="h-14 w-14 rounded-xl border border-white/10 object-cover bg-black/20"
+                  />
+                  <div>
+                    <p className="text-[10px] text-white/30 uppercase font-black tracking-widest">
+                      Brand logo
+                    </p>
+                    <a
+                      href={restaurant.brandLogo}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-[#98E32F] inline-flex items-center gap-1"
+                    >
+                      Open <ExternalLink size={12} />
+                    </a>
+                  </div>
+                </div>
+              ) : null}
+              {(restaurant.restaurantTypes?.length ?? 0) > 0 && (
+                <div>
+                  <p className="text-[10px] text-white/30 uppercase font-black tracking-widest mb-2">
+                    Restaurant types
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(restaurant.restaurantTypes as string[]).map((t) => (
+                      <Badge
+                        key={t}
+                        variant="outline"
+                        className="border-white/10 text-white/70 capitalize"
+                      >
+                        {t.replace(/_/g, " ")}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="flex items-start gap-3">
                 <div className="p-2 bg-white/5 rounded-xl text-white/40 group-hover:text-[#98E32F] transition-colors">
                   <Mail size={16} />

@@ -18,6 +18,8 @@ export interface User {
   _id?: string;
   id?: string;
   name: string;
+  /** Public Pickfoo user id (PFU-…). */
+  externalUserId?: string;
   email?: string;
   phone?: string;
   profilePicture?: string;
@@ -35,6 +37,16 @@ export type RestaurantStatus =
   | 'active'
   | 'rejected'
   | 'suspended';
+
+export const RESTAURANT_TYPES = [
+  'restaurant',
+  'bakery',
+  'coolbar',
+  'hotbar',
+  'home_made',
+] as const;
+
+export type RestaurantType = (typeof RESTAURANT_TYPES)[number];
 
 export type ZoneGeometryType = "Polygon" | "MultiPolygon";
 
@@ -93,9 +105,12 @@ export interface Restaurant {
   owner: string;
   name: string;
   description: string;
+  restaurantTypes?: RestaurantType[];
   address: RestaurantAddress;
   contactNumber: string;
   email: string;
+  /** Square brand mark for listings; cover photo is `image`. */
+  brandLogo?: string;
   image: string;
   legalDocs: RestaurantLegalDocs;
   status: RestaurantStatus;
@@ -146,6 +161,36 @@ export interface PartnerVehicle {
   image?: string;
   imageUrl?: string;
   document?: string;
+  averageMileage?: number;
+}
+
+export const SecurityDepositStatus = {
+  PENDING: 'pending',
+  PAY_AT_OFFICE: 'pay_at_office',
+  PAID: 'paid',
+  REFUND_ELIGIBLE: 'refund_eligible',
+  REFUNDED: 'refunded',
+  FORFEITED: 'forfeited',
+} as const;
+
+export type SecurityDepositStatusType =
+  (typeof SecurityDepositStatus)[keyof typeof SecurityDepositStatus];
+
+export interface PartnerSecurityDeposit {
+  amount: number;
+  currency: string;
+  status: SecurityDepositStatusType;
+  items: string[];
+  refundAfterOrders: number;
+  paymentMethod?: 'razorpay' | 'office';
+  razorpayOrderId?: string;
+  razorpayPaymentId?: string;
+  paidAt?: string;
+  officeSelectedAt?: string;
+  refundEligibleAt?: string;
+  refundedAt?: string;
+  errorCode?: string;
+  errorDescription?: string;
 }
 
 export interface PartnerLivenessCheck {
@@ -178,6 +223,8 @@ export interface Partner {
   phone: string;
   phoneVerifiedAt?: string;
   age?: number;
+  /** ISO date string YYYY-MM-DD */
+  dateOfBirth?: string;
   address?: PartnerAddress;
   licence?: PartnerLicence;
   licenceVerification?: PartnerLicenceVerification;
@@ -185,6 +232,10 @@ export interface Partner {
   profilePhoto?: string;
   profilePhotoUrl?: string;
   livenessCheck?: PartnerLivenessCheck;
+  partnerAgreementAcceptedAt?: string;
+  partnerAgreementVersion?: string;
+  securityDeposit?: PartnerSecurityDeposit;
+  deliveredOrderCount?: number;
   status: PartnerStatusType;
   rejectionReason?: string;
   priorityLevel?: number;

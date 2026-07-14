@@ -50,7 +50,26 @@ const emptyForm = () => ({
   menuItemIds: [] as string[],
   sortOrder: 0,
   isActive: true,
+  startsAt: "",
+  endsAt: "",
 });
+
+/** ISO → value for `<input type="datetime-local" />` (local timezone). */
+function toDatetimeLocalValue(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function fromDatetimeLocalValue(local: string): string | null {
+  const trimmed = local.trim();
+  if (!trimmed) return null;
+  const d = new Date(trimmed);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString();
+}
 
 export default function BannersPage() {
   const queryClient = useQueryClient();
@@ -115,6 +134,8 @@ export default function BannersPage() {
       menuItemIds: draft.linkType === "dishes" ? draft.menuItemIds : [],
       sortOrder: Number(draft.sortOrder) || 0,
       isActive: draft.isActive,
+      startsAt: fromDatetimeLocalValue(draft.startsAt),
+      endsAt: fromDatetimeLocalValue(draft.endsAt),
     };
   };
 
@@ -268,6 +289,8 @@ export default function BannersPage() {
         menuItemIds: banner.menuItemIds ?? [],
         sortOrder: banner.sortOrder ?? 0,
         isActive: banner.isActive ?? true,
+        startsAt: toDatetimeLocalValue(banner.startsAt),
+        endsAt: toDatetimeLocalValue(banner.endsAt),
       });
       setShowForm(true);
       scrollToForm();
@@ -381,6 +404,26 @@ export default function BannersPage() {
                   </option>
                 ))}
               </select>
+            </div>
+            <div className="space-y-2">
+              <Label>Starts at (optional)</Label>
+              <Input
+                type="datetime-local"
+                value={form.startsAt}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, startsAt: e.target.value }))
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Ends at (optional)</Label>
+              <Input
+                type="datetime-local"
+                value={form.endsAt}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, endsAt: e.target.value }))
+                }
+              />
             </div>
           </div>
 
@@ -557,6 +600,7 @@ export default function BannersPage() {
                   <TableHead>Preview</TableHead>
                   <TableHead>Title</TableHead>
                   <TableHead>Link</TableHead>
+                  <TableHead>Schedule</TableHead>
                   <TableHead>Order</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -592,6 +636,24 @@ export default function BannersPage() {
                     <TableCell className="text-xs">
                       <div>{linkTypeLabels[banner.linkType]}</div>
                       <div className="text-white/50">{linkSummary(banner)}</div>
+                    </TableCell>
+                    <TableCell className="text-xs text-white/60">
+                      {banner.startsAt || banner.endsAt ? (
+                        <div className="space-y-0.5">
+                          {banner.startsAt && (
+                            <div>
+                              From {new Date(banner.startsAt).toLocaleString()}
+                            </div>
+                          )}
+                          {banner.endsAt && (
+                            <div>
+                              To {new Date(banner.endsAt).toLocaleString()}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-white/40">Always</span>
+                      )}
                     </TableCell>
                     <TableCell>{banner.sortOrder}</TableCell>
                     <TableCell>

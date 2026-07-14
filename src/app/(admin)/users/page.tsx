@@ -36,7 +36,9 @@ import { toast } from 'sonner';
 interface User {
   _id: string;
   name: string;
-  email: string;
+  email?: string;
+  phone?: string;
+  externalUserId?: string;
   role: 'user' | 'owner' | 'admin';
   isVerified: boolean;
   createdAt: string;
@@ -91,7 +93,7 @@ export default function UsersPage() {
           <div className="relative w-full sm:w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
             <Input
-              placeholder="Search by name or email..."
+              placeholder="Search name, email, phone, PFU id..."
               className="pl-9 bg-[#002833] border-white/10 text-white"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -116,6 +118,7 @@ export default function UsersPage() {
             <TableHeader className="bg-white/5">
               <TableRow className="border-white/5 hover:bg-transparent">
                 <TableHead className="text-white/60">User</TableHead>
+                <TableHead className="text-white/60">Phone</TableHead>
                 <TableHead className="text-white/60">Role</TableHead>
                 <TableHead className="text-white/60">Email Status</TableHead>
                 <TableHead className="text-white/60">Joined</TableHead>
@@ -125,13 +128,13 @@ export default function UsersPage() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-white/40">
+                  <TableCell colSpan={6} className="text-center py-8 text-white/40">
                     Loading users...
                   </TableCell>
                 </TableRow>
               ) : users?.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-white/40">
+                  <TableCell colSpan={6} className="text-center py-8 text-white/40">
                     No users found
                   </TableCell>
                 </TableRow>
@@ -141,13 +144,18 @@ export default function UsersPage() {
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-3">
                         <div className="h-9 w-9 rounded-full bg-gradient-to-br from-[#98E32F]/20 to-[#98E32F]/10 flex items-center justify-center font-bold text-[#98E32F] border border-[#98E32F]/20">
-                          {user.name[0]}
+                          {(user.name || '?')[0]}
                         </div>
                         <div className="flex flex-col">
-                          <span>{user.name}</span>
-                          <span className="text-[10px] text-white/40 font-mono tracking-wider uppercase">{user._id.substring(0, 8)}...</span>
+                          <span>{user.name || '—'}</span>
+                          <span className="text-[10px] text-white/40 font-mono tracking-wider uppercase">
+                            {user.externalUserId || `${user._id.substring(0, 8)}...`}
+                          </span>
                         </div>
                       </div>
+                    </TableCell>
+                    <TableCell className="text-white/70 text-sm font-mono">
+                      {user.phone || '—'}
                     </TableCell>
                     <TableCell>{getRoleBadge(user.role)}</TableCell>
                     <TableCell>
@@ -157,7 +165,7 @@ export default function UsersPage() {
                         ) : (
                           <Badge variant="outline" className="border-red-500/20 text-red-400 bg-red-400/5">Unverified</Badge>
                         )}
-                        <span className="text-xs text-white/40 truncate max-w-[150px]">{user.email}</span>
+                        <span className="text-xs text-white/40 truncate max-w-[150px]">{user.email || '—'}</span>
                       </div>
                     </TableCell>
                     <TableCell className="text-white/40 font-mono text-xs">

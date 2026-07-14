@@ -51,6 +51,8 @@ interface Restaurant {
   name: string;
   email: string;
   contactNumber: string;
+  brandLogo?: string;
+  restaurantTypes?: string[];
   address: {
     street: string;
     city: string;
@@ -223,6 +225,13 @@ export default function RestaurantsPage() {
                           <span className="text-[10px] text-white/40">
                             {restaurant.email}
                           </span>
+                          {(restaurant.restaurantTypes?.length ?? 0) > 0 && (
+                            <span className="text-[10px] text-white/35 capitalize">
+                              {restaurant.restaurantTypes!
+                                .map((t) => t.replace(/_/g, " "))
+                                .join(" · ")}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </TableCell>
