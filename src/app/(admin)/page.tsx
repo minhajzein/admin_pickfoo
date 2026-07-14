@@ -54,8 +54,8 @@ export default function AdminDashboard() {
       bg: "bg-[#98E32F]/10",
     },
     {
-      title: "Gross Revenue",
-      value: money.format(data?.grossRevenue ?? 0),
+      title: "Platform commission",
+      value: money.format(data?.platformCommission ?? 0),
       helper: `${data?.onlinePartners ?? 0} partners online`,
       icon: Wallet,
       color: "text-orange-400",

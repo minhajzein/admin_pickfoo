@@ -150,7 +150,7 @@ export default function OrdersPage() {
                 <TableHead className="text-white/60">Order</TableHead>
                 <TableHead className="text-white/60">Type</TableHead>
                 <TableHead className="text-white/60">Status</TableHead>
-                <TableHead className="text-white/60">Amount</TableHead>
+                <TableHead className="text-white/60">Commission</TableHead>
                 <TableHead className="text-white/60">Assigned partner</TableHead>
                 <TableHead className="text-white/60">Partner progress</TableHead>
                 <TableHead className="text-white/60">Actions</TableHead>
@@ -191,7 +191,15 @@ export default function OrdersPage() {
                       </TableCell>
                       <TableCell className="text-white/80">{row.status}</TableCell>
                       <TableCell className="font-medium">
-                        {row.totalAmount == null ? "—" : money.format(row.totalAmount)}
+                        {row.platformCommission == null
+                          ? "—"
+                          : money.format(row.platformCommission)}
+                        {row.commissionPercent != null &&
+                        row.commissionPercent > 0 ? (
+                          <span className="ml-1 text-xs text-white/40">
+                            ({row.commissionPercent}%)
+                          </span>
+                        ) : null}
                       </TableCell>
                       <TableCell className="text-white/50">
                         {row.deliveryPartnerName || row.assignedPartner || "Unassigned"}

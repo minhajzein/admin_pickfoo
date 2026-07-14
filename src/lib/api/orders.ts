@@ -5,7 +5,11 @@ export interface AdminOrderRow {
   pickfooId?: string | null;
   status: string;
   orderType: "pickup" | "delivery" | string;
-  totalAmount?: number | null;
+  /** Company commission only (not restaurant item totals). */
+  platformCommission?: number | null;
+  commissionPercent?: number | null;
+  restaurantId?: string | null;
+  restaurantName?: string | null;
   assignedPartner?: string | null;
   partnerAssignedAt?: string | null;
   partnerDeliveryProgress?: string | null;
@@ -22,6 +26,8 @@ export interface AdminOrdersResponse {
     active: number;
     delivered: number;
     cancelled: number;
+    /** Sum of platform commission for non-cancelled/rejected rows in the result set. */
+    platformCommission: number;
   };
   data: AdminOrderRow[];
 }
@@ -36,11 +42,12 @@ export async function fetchDispatchOrders(params?: {
   const q = sp.toString();
   const { data } = await api.get(`/dispatch/orders${q ? `?${q}` : ""}`);
   return {
-    summary: data.summary ?? {
-      total: 0,
-      active: 0,
-      delivered: 0,
-      cancelled: 0,
+    summary: {
+      total: data.summary?.total ?? 0,
+      active: data.summary?.active ?? 0,
+      delivered: data.summary?.delivered ?? 0,
+      cancelled: data.summary?.cancelled ?? 0,
+      platformCommission: Number(data.summary?.platformCommission) || 0,
     },
     data: data.data ?? [],
   };

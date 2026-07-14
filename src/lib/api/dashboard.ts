@@ -1,25 +1,9 @@
 import api from "@/lib/axios";
 import type { AdminMonitorEvent, Partner, Restaurant, User } from "@/types/models";
+import { fetchDispatchOrders } from "@/lib/api/orders";
 
 interface ApiListResponse<T> {
   data?: T[];
-}
-
-interface DispatchOrdersResponse {
-  summary?: {
-    total?: number;
-    active?: number;
-    delivered?: number;
-    cancelled?: number;
-  };
-  data?: Array<{
-    id: string;
-    pickfooId?: string | null;
-    status: string;
-    orderType: "pickup" | "delivery" | string;
-    totalAmount?: number | null;
-    createdAt: string;
-  }>;
 }
 
 export interface DashboardActivity {
@@ -42,7 +26,8 @@ export interface DashboardOverview {
   pendingRestaurantVerifications: number;
   activeUsers: number;
   totalOrders: number;
-  grossRevenue: number;
+  /** Platform / company commission income only. */
+  platformCommission: number;
   onlinePartners: number;
   recentActivity: DashboardActivity[];
   verificationQueue: DashboardVerificationItem[];
@@ -54,15 +39,15 @@ export async function fetchDashboardOverview(): Promise<DashboardOverview> {
     api.get<ApiListResponse<User>>("/users"),
     api.get<ApiListResponse<Partner>>("/partners"),
     api.get<ApiListResponse<AdminMonitorEvent>>("/monitor/events?limit=120"),
-    api.get<DispatchOrdersResponse>("/dispatch/orders?limit=300"),
+    fetchDispatchOrders({ limit: 300 }),
   ]);
 
   const restaurants = restaurantsRes.data?.data ?? [];
   const users = usersRes.data?.data ?? [];
   const partners = partnersRes.data?.data ?? [];
   const events = monitorRes.data?.data ?? [];
-  const orders = ordersRes.data?.data ?? [];
-  const orderSummary = ordersRes.data?.summary;
+  const orders = ordersRes.data ?? [];
+  const orderSummary = ordersRes.summary;
 
   const pendingRestaurants = restaurants.filter((restaurant) => {
     return restaurant.status === "pending";
@@ -72,17 +57,12 @@ export async function fetchDashboardOverview(): Promise<DashboardOverview> {
   }).length;
   const onlinePartners = partners.filter((partner) => partner.isOnline).length;
 
-  const grossRevenue = orders.reduce((sum, order) => {
-    const amount = asNumber(order.totalAmount);
-    return sum + (amount || 0);
-  }, 0);
-
   return {
     totalRestaurants: restaurants.length,
     pendingRestaurantVerifications: pendingRestaurants.length,
     activeUsers,
     totalOrders: orderSummary?.total ?? orders.length,
-    grossRevenue,
+    platformCommission: orderSummary?.platformCommission ?? 0,
     onlinePartners,
     recentActivity: events.slice(0, 6).map((event) => ({
       id: event.id,
@@ -115,8 +95,7 @@ function describeMonitorEvent(event: AdminMonitorEvent): string {
       return `${asString(payload.orderRef) || "Order"} has no partner available`;
     case "order:live:new-request": {
       const orderRef = asString(payload.orderId) || "New order";
-      const amount = asNumber(payload.totalAmount);
-      return amount ? `${orderRef} placed for ₹${amount}` : `${orderRef} placed`;
+      return `${orderRef} placed`;
     }
     case "order:live:status-updated":
       return `${asString(payload.orderId) || "Order"} status changed to ${
@@ -137,13 +116,4 @@ function asObject(value: unknown): Record<string, unknown> {
 function asString(value: unknown): string {
   if (typeof value !== "string") return "";
   return value.trim();
-}
-
-function asNumber(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string") {
-    const parsed = Number(value);
-    if (Number.isFinite(parsed)) return parsed;
-  }
-  return null;
 }

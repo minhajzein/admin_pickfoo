@@ -147,9 +147,9 @@ export default function AdminLayout({
 
     socket.on(
       "order:live:new-request",
-      (data: { orderId?: string; totalAmount?: number; orderType?: string }) => {
+      (data: { orderId?: string; orderType?: string }) => {
         toast.message("New live order request", {
-          description: `${data.orderId || "Order"} (${data.orderType || "delivery"}) ₹${data.totalAmount ?? 0}`,
+          description: `${data.orderId || "Order"} (${data.orderType || "delivery"})`,
           duration: 6000,
           action: {
             label: "Orders",
@@ -237,7 +237,7 @@ export default function AdminLayout({
     { name: "Monitor", icon: Activity, href: "/monitor" },
     { name: "Users", icon: Users, href: "/users" },
     { name: "Orders", icon: ClipboardList, href: "/orders" },
-    { name: "Revenue", icon: Wallet, href: "/revenue" },
+    { name: "Company income", icon: Wallet, href: "/revenue" },
     { name: "Reviews", icon: Star, href: "/reviews" },
   ];
 
