@@ -22,6 +22,7 @@ import {
   Activity,
   Headset,
   ImageIcon,
+  Bell,
 } from "lucide-react";
 import { io } from "socket.io-client";
 import { toast } from "sonner";
@@ -231,6 +232,7 @@ export default function AdminLayout({
     { name: "Live map", icon: Map, href: "/map" },
     { name: "Partners", icon: Bike, href: "/partners" },
     { name: "Support", icon: Headset, href: "/support" },
+    { name: "Partner updates", icon: Bell, href: "/partner-updates" },
     { name: "Gigs", icon: ClipboardList, href: "/gigs" },
     { name: "Monitor", icon: Activity, href: "/monitor" },
     { name: "Users", icon: Users, href: "/users" },
