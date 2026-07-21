@@ -11,6 +11,7 @@ import {
   Users,
   ClipboardList,
   Wallet,
+  Banknote,
   Star,
   LogOut,
   Menu as MenuIcon,
@@ -238,6 +239,7 @@ export default function AdminLayout({
     { name: "Users", icon: Users, href: "/users" },
     { name: "Orders", icon: ClipboardList, href: "/orders" },
     { name: "Company income", icon: Wallet, href: "/revenue" },
+    { name: "Withdrawals", icon: Banknote, href: "/withdrawals" },
     { name: "Reviews", icon: Star, href: "/reviews" },
   ];
 

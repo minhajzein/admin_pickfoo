@@ -40,6 +40,7 @@ export type RestaurantStatus =
 
 export const RESTAURANT_TYPES = [
   'restaurant',
+  'cafe',
   'bakery',
   'coolbar',
   'hotbar',

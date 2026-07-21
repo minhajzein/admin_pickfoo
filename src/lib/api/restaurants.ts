@@ -20,3 +20,13 @@ export async function updateRestaurantCommission(
   });
   return data.data;
 }
+
+export async function updateRestaurantPayoutMode(
+  restaurantId: string,
+  payoutMode: "manual" | "auto",
+): Promise<Restaurant> {
+  const { data } = await api.patch(`/restaurants/${restaurantId}/payout-mode`, {
+    payoutMode,
+  });
+  return data.data;
+}

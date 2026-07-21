@@ -35,6 +35,7 @@ import NextImage from "next/image";
 import { fetchZones, suggestZoneForPoint } from "@/lib/api/zones";
 import {
   updateRestaurantCommission,
+  updateRestaurantPayoutMode,
   updateRestaurantZone,
 } from "@/lib/api/restaurants";
 
@@ -172,6 +173,20 @@ export default function VerifyRestaurantPage() {
     },
     onError: () => {
       toast.error("Failed to update commission");
+    },
+  });
+
+  const updatePayoutModeMutation = useMutation({
+    mutationFn: async (payoutMode: "manual" | "auto") => {
+      return updateRestaurantPayoutMode(String(id), payoutMode);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["restaurant", id] });
+      queryClient.invalidateQueries({ queryKey: ["restaurants"] });
+      toast.success("Payout mode updated");
+    },
+    onError: () => {
+      toast.error("Failed to update payout mode");
     },
   });
 
@@ -521,6 +536,33 @@ export default function VerifyRestaurantPage() {
                   "Save commission"
                 )}
               </Button>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-[#002833] border-white/5 text-white">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg">Payout mode</CardTitle>
+              <CardDescription className="text-white/40">
+                Manual: owners submit withdraw requests for admin verification.
+                Auto: scheduled transfers when available; owners can still request
+                a manual withdraw if auto fails.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <select
+                value={
+                  restaurant.payoutMode === "auto" ? "auto" : "manual"
+                }
+                disabled={updatePayoutModeMutation.isPending}
+                onChange={(e) => {
+                  const v = e.target.value === "auto" ? "auto" : "manual";
+                  updatePayoutModeMutation.mutate(v);
+                }}
+                className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white focus:border-[#98E32F]/50 focus:outline-none"
+              >
+                <option value="manual">Manual</option>
+                <option value="auto">Auto</option>
+              </select>
             </CardContent>
           </Card>
 
