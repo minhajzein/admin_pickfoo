@@ -240,6 +240,11 @@ export default function AdminLayout({
     { name: "Orders", icon: ClipboardList, href: "/orders" },
     { name: "Company income", icon: Wallet, href: "/revenue" },
     { name: "Withdrawals", icon: Banknote, href: "/withdrawals" },
+    {
+      name: "Partner payouts",
+      icon: Banknote,
+      href: "/partner-withdrawals",
+    },
     { name: "Reviews", icon: Star, href: "/reviews" },
   ];
 
