@@ -587,7 +587,9 @@ export default function PartnerDetailsPage() {
                       />
                       <span className="text-sm">
                         {zone.name}{" "}
-                        <span className="text-xs text-white/50">({zone.code})</span>
+                        <span className="text-xs text-white/50">
+                          ({zone.lsgiCode || zone.pincode || zone.code})
+                        </span>
                       </span>
                     </label>
                   ))

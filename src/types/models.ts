@@ -63,6 +63,10 @@ export interface DeliveryZoneSummary {
   _id: string;
   name: string;
   code: string;
+  /** Open Data Kerala LSGI code (e.g. G12005). */
+  lsgiCode?: string;
+  /** Optional Indian PIN. */
+  pincode?: string;
   district: string;
   color?: string;
 }

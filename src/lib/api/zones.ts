@@ -4,10 +4,14 @@ import type { DeliveryZone, ZoneGeometry } from "@/types/models";
 export async function fetchZones(params?: {
   district?: string;
   includeInactive?: boolean;
+  pincode?: string;
+  lsgiCode?: string;
 }): Promise<DeliveryZone[]> {
   const sp = new URLSearchParams();
   if (params?.district) sp.set("district", params.district);
   if (params?.includeInactive) sp.set("includeInactive", "true");
+  if (params?.pincode) sp.set("pincode", params.pincode);
+  if (params?.lsgiCode) sp.set("lsgiCode", params.lsgiCode);
   const q = sp.toString();
   const { data } = await api.get(`/zones${q ? `?${q}` : ""}`);
   return data.data;
@@ -15,7 +19,9 @@ export async function fetchZones(params?: {
 
 export async function createZone(body: {
   name: string;
-  code: string;
+  code?: string;
+  lsgiCode?: string;
+  pincode?: string;
   district?: string;
   geometry: ZoneGeometry;
   color?: string;
@@ -31,6 +37,8 @@ export async function updateZone(
   body: Partial<{
     name: string;
     code: string;
+    lsgiCode: string;
+    pincode: string;
     district: string;
     geometry: ZoneGeometry;
     color: string;
@@ -51,8 +59,20 @@ export async function suggestZoneForPoint(body: {
   lng: number;
   district?: string;
 }): Promise<{
-  matches: { _id: string; name: string; code: string }[];
-  primary: { _id: string; name: string; code: string } | null;
+  matches: {
+    _id: string;
+    name: string;
+    code: string;
+    lsgiCode?: string;
+    pincode?: string;
+  }[];
+  primary: {
+    _id: string;
+    name: string;
+    code: string;
+    lsgiCode?: string;
+    pincode?: string;
+  } | null;
 }> {
   const { data } = await api.post("/zones/suggest-for-point", body);
   return data.data;

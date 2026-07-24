@@ -5,7 +5,7 @@
  *     https://raw.githubusercontent.com/opendatakerala/kl_district/main/Kerala_districts.json
  *   - kerala_lsg_temp.geojson — from lsg-kerala-data, e.g.
  *     https://raw.githubusercontent.com/opendatakerala/lsg-kerala-data/main/data/kerala_lsg_data.geojson
- * Output: public/geo/wayanad-*.geojson
+ * Output: public/geo/wayanad-*.geojson and src/lib/wayanadLsgCatalog.json
  */
 import * as topojson from "topojson-client";
 import centroid from "@turf/centroid";
@@ -17,9 +17,7 @@ import { fileURLToPath } from "url";
 
 /**
  * Police-style sub divisions (Mananthavady / Kalpetta / Sulthan Bathery) as a
- * dissolve of Open Data Kerala LSG units. Gram panchayat names are grouped to
- * match the published Wayanad police jurisdiction map; this is not a certified
- * police boundary dataset.
+ * dissolve of Open Data Kerala LSG units. Kept for optional reference layers.
  */
 const GP_SUBDIVISION = {
   Thondernad: "mananthavady",
@@ -106,6 +104,60 @@ function dissolveSubdivisions(wayanadFeatures) {
   return { polygons: out, labelPoints };
 }
 
+function slugifyName(name) {
+  return String(name)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+function buildLsgZones(wayanadFeatures) {
+  const features = wayanadFeatures
+    .filter(
+      (f) =>
+        f.properties?.local_auth === "gram_panchayat" ||
+        f.properties?.local_auth === "municipality",
+    )
+    .map((f) => {
+      const name = f.properties.name;
+      return {
+        type: "Feature",
+        properties: {
+          lsgi_code: f.properties.LSGI_Code,
+          lsg_key: slugifyName(name),
+          lsg_label: name,
+          local_auth: f.properties.local_auth,
+          district: "Wayanad",
+          source: "Open Data Kerala LSG (ODbL)",
+        },
+        geometry: f.geometry,
+      };
+    })
+    .sort((a, b) =>
+      a.properties.lsg_label.localeCompare(b.properties.lsg_label),
+    );
+
+  const labelPoints = features.map((f) => {
+    const c = centroid(f);
+    c.properties = {
+      lsgi_code: f.properties.lsgi_code,
+      lsg_key: f.properties.lsg_key,
+      lsg_label: f.properties.lsg_label,
+      local_auth: f.properties.local_auth,
+    };
+    return c;
+  });
+
+  const catalog = features.map((f) => ({
+    key: f.properties.lsg_key,
+    name: f.properties.lsg_label,
+    lsgiCode: f.properties.lsgi_code,
+    localAuth: f.properties.local_auth,
+  }));
+
+  return { features, labelPoints, catalog };
+}
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, "..");
 const pub = path.join(root, "public");
@@ -179,6 +231,24 @@ function main() {
     }),
   );
 
+  const {
+    features: lsgFeatures,
+    labelPoints: lsgLabels,
+    catalog,
+  } = buildLsgZones(wayanadAll);
+  fs.writeFileSync(
+    path.join(geoDir, "wayanad-lsg.geojson"),
+    JSON.stringify({ type: "FeatureCollection", features: lsgFeatures }),
+  );
+  fs.writeFileSync(
+    path.join(geoDir, "wayanad-lsg-labels.geojson"),
+    JSON.stringify({ type: "FeatureCollection", features: lsgLabels }),
+  );
+  fs.writeFileSync(
+    path.join(root, "src", "lib", "wayanadLsgCatalog.json"),
+    JSON.stringify(catalog, null, 2),
+  );
+
   console.log(
     "Wrote public/geo: district (1), municipalities (" +
       municipalities.length +
@@ -186,7 +256,9 @@ function main() {
       corporations.length +
       "), police subdivisions (" +
       subdivisionFeatures.length +
-      ") + labels.",
+      "), LSG local bodies (" +
+      lsgFeatures.length +
+      ") + catalog.",
   );
 }
 

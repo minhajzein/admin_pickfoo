@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,13 +24,23 @@ import {
   updateZone,
 } from "@/lib/api/zones";
 import { parseZoneGeometryFromText } from "@/lib/geojson";
-import type { SubdivisionPickMeta } from "@/components/zones/ZoneMapEditor";
+import type { LsgPickMeta } from "@/components/zones/ZoneMapEditor";
 import type {
   DeliveryZone,
   PolygonZoneGeometry,
   ZoneGeometry,
 } from "@/types/models";
+import wayanadLsgCatalog from "@/lib/wayanadLsgCatalog.json";
 import { Loader2, MapPin, Plus, Save, Trash2 } from "lucide-react";
+
+type LsgCatalogEntry = {
+  key: string;
+  name: string;
+  lsgiCode: string;
+  localAuth: string;
+};
+
+const LSG_CATALOG = wayanadLsgCatalog as LsgCatalogEntry[];
 
 const ZoneMapEditor = dynamic(
   () => import("@/components/zones/ZoneMapEditor"),
@@ -45,8 +55,8 @@ const ZoneMapEditor = dynamic(
 );
 
 const DEFAULT_ZONE_COLOR = "#98e32f";
+const PINCODE_RE = /^[1-9][0-9]{5}$/;
 
-/** `#rrggbb` for `<input type="color">` (6-digit only). */
 function normalizePickerHex(raw: string | undefined | null): string {
   const t = (raw ?? "").trim();
   if (/^#[0-9A-Fa-f]{6}$/i.test(t)) return t.toLowerCase();
@@ -65,6 +75,47 @@ function geometryForSave(
   return parseZoneGeometryFromText(geoText);
 }
 
+function codeFromLsgName(name: string): string {
+  return name
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+function localAuthLabel(auth: string): string {
+  if (auth === "municipality") return "Municipality";
+  if (auth === "gram_panchayat") return "Gram panchayat";
+  return auth;
+}
+
+async function loadLsgGeometryByCode(
+  lsgiCode: string,
+): Promise<ZoneGeometry | null> {
+  const res = await fetch("/geo/wayanad-lsg.geojson");
+  if (!res.ok) return null;
+  const fc = (await res.json()) as {
+    features: {
+      properties?: { lsgi_code?: string };
+      geometry?: ZoneGeometry;
+    }[];
+  };
+  const feat = fc.features.find(
+    (f) =>
+      String(f.properties?.lsgi_code ?? "").toUpperCase() ===
+      lsgiCode.toUpperCase(),
+  );
+  if (!feat?.geometry) return null;
+  const g = feat.geometry;
+  if (g.type === "MultiPolygon" && g.coordinates.length === 1) {
+    return {
+      type: "Polygon",
+      coordinates: g.coordinates[0] as number[][][],
+    };
+  }
+  return g;
+}
+
 export default function ZonesPage() {
   const token = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN ?? "";
   const queryClient = useQueryClient();
@@ -77,8 +128,10 @@ export default function ZonesPage() {
 
   const [zoneDialogOpen, setZoneDialogOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | "new" | null>(null);
+  const [lsgiCode, setLsgiCode] = useState("");
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
+  const [pincode, setPincode] = useState("");
   const [district, setDistrict] = useState("Wayanad");
   const [color, setColor] = useState(DEFAULT_ZONE_COLOR);
   const [sortOrder, setSortOrder] = useState(0);
@@ -89,11 +142,19 @@ export default function ZonesPage() {
   );
   const [geometryOverride, setGeometryOverride] =
     useState<ZoneGeometry | null>(null);
+  const [loadingLsgGeom, setLoadingLsgGeom] = useState(false);
+
+  const selectedLsg = useMemo(
+    () => LSG_CATALOG.find((e) => e.lsgiCode === lsgiCode) ?? null,
+    [lsgiCode],
+  );
 
   const resetForm = useCallback(() => {
     setSelectedId(null);
+    setLsgiCode("");
     setName("");
     setCode("");
+    setPincode("");
     setDistrict("Wayanad");
     setColor(DEFAULT_ZONE_COLOR);
     setSortOrder(0);
@@ -103,10 +164,56 @@ export default function ZonesPage() {
     setGeometryOverride(null);
   }, []);
 
+  const applyGeometry = useCallback((geom: ZoneGeometry) => {
+    setGeometryOverride(geom.type === "MultiPolygon" ? geom : null);
+    setGeoText(JSON.stringify(geom, null, 2));
+    if (geom.type === "Polygon") {
+      setDrawPolygon(geom as PolygonZoneGeometry);
+    } else if (
+      geom.type === "MultiPolygon" &&
+      geom.coordinates.length === 1
+    ) {
+      const poly: PolygonZoneGeometry = {
+        type: "Polygon",
+        coordinates: geom.coordinates[0] as number[][][],
+      };
+      setDrawPolygon(poly);
+      setGeometryOverride(null);
+      setGeoText(JSON.stringify(poly, null, 2));
+    } else {
+      setDrawPolygon(null);
+    }
+  }, []);
+
+  const applyLsgSelection = useCallback(
+    async (entry: LsgCatalogEntry, opts?: { keepName?: boolean }) => {
+      setLsgiCode(entry.lsgiCode);
+      if (!opts?.keepName) {
+        setName(entry.name);
+        setCode(codeFromLsgName(entry.name));
+      }
+      setLoadingLsgGeom(true);
+      try {
+        const geom = await loadLsgGeometryByCode(entry.lsgiCode);
+        if (!geom) {
+          toast.error(`Could not load map for ${entry.name}`);
+          return;
+        }
+        applyGeometry(geom);
+        toast.success(`${entry.name} boundary loaded`);
+      } finally {
+        setLoadingLsgGeom(false);
+      }
+    },
+    [applyGeometry],
+  );
+
   const loadZoneIntoForm = useCallback((z: DeliveryZone) => {
     setSelectedId(z._id);
+    setLsgiCode(z.lsgiCode ?? "");
     setName(z.name);
     setCode(z.code);
+    setPincode(z.pincode ?? "");
     setDistrict(z.district);
     setColor(normalizePickerHex(z.color));
     setSortOrder(z.sortOrder ?? 0);
@@ -115,8 +222,19 @@ export default function ZonesPage() {
     setGeometryOverride(null);
     if (z.geometry.type === "Polygon") {
       setDrawPolygon(z.geometry as PolygonZoneGeometry);
+    } else if (
+      z.geometry.type === "MultiPolygon" &&
+      z.geometry.coordinates.length === 1
+    ) {
+      setDrawPolygon({
+        type: "Polygon",
+        coordinates: z.geometry.coordinates[0] as number[][][],
+      });
     } else {
       setDrawPolygon(null);
+      if (z.geometry.type === "MultiPolygon") {
+        setGeometryOverride(z.geometry);
+      }
     }
   }, []);
 
@@ -194,10 +312,10 @@ export default function ZonesPage() {
     if (geometryOverride?.type === "MultiPolygon") return geometryOverride;
     if (selectedId && selectedId !== "new") {
       const z = zones.find((x) => x._id === selectedId);
-      if (z?.geometry.type === "MultiPolygon") return z.geometry;
+      if (z?.geometry.type === "MultiPolygon" && !drawPolygon) return z.geometry;
     }
     return null;
-  }, [geometryOverride, selectedId, zones]);
+  }, [geometryOverride, selectedId, zones, drawPolygon]);
 
   const applyGeoJson = () => {
     const parsed = parseZoneGeometryFromText(geoText);
@@ -205,12 +323,7 @@ export default function ZonesPage() {
       toast.error("Invalid GeoJSON (need Polygon or MultiPolygon)");
       return;
     }
-    setGeometryOverride(parsed);
-    if (parsed.type === "Polygon") {
-      setDrawPolygon(parsed as PolygonZoneGeometry);
-    } else {
-      setDrawPolygon(null);
-    }
+    applyGeometry(parsed);
     toast.message("GeoJSON applied", {
       description: `${parsed.type} loaded. Save to persist.`,
     });
@@ -222,45 +335,61 @@ export default function ZonesPage() {
     setGeoText(p ? JSON.stringify(p, null, 2) : "");
   }, []);
 
-  const handleSubdivisionGeometryPick = useCallback(
-    (geometry: PolygonZoneGeometry, meta: SubdivisionPickMeta) => {
-      setDrawPolygon(geometry);
-      setGeometryOverride(null);
-      setGeoText(JSON.stringify(geometry, null, 2));
-      setName((n) => (n.trim() ? n : `Delivery — ${meta.label}`));
-      const codeFromKey =
-        meta.key && meta.key.length > 0
-          ? `SD-${meta.key.replace(/_/g, "-").toUpperCase()}`
-          : "";
-      const codeFromLabel = `SD-${meta.label
-        .replace(/\s+/g, "-")
-        .slice(0, 24)
-        .toUpperCase()
-        .replace(/[^A-Z0-9-]/g, "")}`;
-      setCode((c) => (c.trim() ? c : codeFromKey || codeFromLabel));
-      toast.success(`Boundary set to ${meta.label}`, {
-        description: "Save the zone when you are ready.",
+  const handleLsgGeometryPick = useCallback(
+    (geometry: ZoneGeometry, meta: LsgPickMeta) => {
+      setLsgiCode(meta.lsgiCode);
+      setName((n) => (n.trim() ? n : meta.label));
+      setCode((c) => (c.trim() ? c : codeFromLsgName(meta.label)));
+      applyGeometry(geometry);
+      toast.success(`Zone set to ${meta.label}`, {
+        description: meta.lsgiCode,
       });
     },
-    [],
+    [applyGeometry],
   );
+
+  const handleLsgSelectChange = async (nextCode: string) => {
+    if (!nextCode) {
+      setLsgiCode("");
+      return;
+    }
+    const entry = LSG_CATALOG.find((e) => e.lsgiCode === nextCode);
+    if (!entry) return;
+    await applyLsgSelection(entry);
+  };
+
+  // Prefetch LSG geojson once dialog opens so dropdown feels snappy
+  useEffect(() => {
+    if (!zoneDialogOpen) return;
+    void fetch("/geo/wayanad-lsg.geojson");
+  }, [zoneDialogOpen]);
 
   const handleSave = () => {
     const geom = geometryForSave(drawPolygon, geometryOverride, geoText);
-    if (!name.trim() || !code.trim()) {
-      toast.error("Name and code are required");
+    if (!name.trim()) {
+      toast.error("Name is required");
+      return;
+    }
+    if (!lsgiCode.trim()) {
+      toast.error("Select a local body (e.g. Mananthavady, Edavaka)");
+      return;
+    }
+    if (pincode.trim() && !PINCODE_RE.test(pincode.trim())) {
+      toast.error("Pincode must be a valid 6-digit PIN if provided");
       return;
     }
     if (!geom) {
       toast.error(
-        "Draw your zone on the map (pentagon tool, then double-click to finish), or open Advanced to paste GeoJSON.",
+        "Select a local body to load its map area, or draw / paste GeoJSON.",
       );
       return;
     }
 
     const payload = {
       name: name.trim(),
-      code: code.trim(),
+      code: (code.trim() || codeFromLsgName(name)).toUpperCase(),
+      lsgiCode: lsgiCode.trim().toUpperCase(),
+      pincode: pincode.trim() || undefined,
       district: district.trim() || "Wayanad",
       geometry: geom,
       color: normalizePickerHex(color),
@@ -294,8 +423,8 @@ export default function ZonesPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-xs text-white/40">
-            Click <span className="text-[#98E32F]/90">New zone</span> to draw an
-            area on the map, or select a zone to edit.
+            Zones are Wayanad local bodies — gram panchayats and municipalities
+            (e.g. Mananthavady, Edavaka, Thavinhal, Panamaram).
           </p>
           {isLoading ? (
             <div className="flex justify-center py-8 text-white/40">
@@ -317,7 +446,7 @@ export default function ZonesPage() {
                     <MapPin className="h-4 w-4 shrink-0 opacity-60" />
                     <span className="truncate font-medium">{z.name}</span>
                     <span className="shrink-0 text-xs text-white/40">
-                      {z.code}
+                      {z.lsgiCode || z.code}
                     </span>
                     {!z.isActive && (
                       <span className="ml-auto text-[10px] uppercase text-red-400">
@@ -330,8 +459,8 @@ export default function ZonesPage() {
               {zones.length === 0 && (
                 <p className="py-6 text-center text-sm text-white/40">
                   No zones yet. Click{" "}
-                  <span className="font-medium text-white/60">New zone</span> to
-                  draw your first area.
+                  <span className="font-medium text-white/60">New zone</span> and
+                  pick a local body.
                 </p>
               )}
             </ul>
@@ -350,22 +479,56 @@ export default function ZonesPage() {
                 {isEditMode ? "Edit zone" : "New zone"}
               </DialogTitle>
               <DialogDescription className="text-white/50">
-                {isEditMode
-                  ? "Update details and boundary, then save."
-                  : "Fill in the details and draw the delivery area on the map."}
+                Choose a Wayanad gram panchayat or municipality — the map area
+                loads automatically.
               </DialogDescription>
             </DialogHeader>
           </div>
 
           <div className="space-y-4 px-6 py-4">
             <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2 sm:col-span-2">
+                <Label className="text-white/60">Local body</Label>
+                <select
+                  value={lsgiCode}
+                  onChange={(e) => void handleLsgSelectChange(e.target.value)}
+                  className={`h-10 w-full rounded-md border px-3 text-sm shadow-inner focus:outline-none focus:ring-2 focus:ring-[#98E32F]/40 ${
+                    lsgiCode
+                      ? "border-[#98E32F]/70 bg-[#001820] font-medium text-white"
+                      : "border-white/20 bg-[#001820] text-white/70"
+                  }`}
+                >
+                  <option value="" className="bg-[#001820] text-white/60">
+                    Select panchayat / municipality…
+                  </option>
+                  {LSG_CATALOG.map((e) => (
+                    <option
+                      key={e.lsgiCode}
+                      value={e.lsgiCode}
+                      className="bg-[#001820] text-white"
+                    >
+                      {e.name} — {localAuthLabel(e.localAuth)} ({e.lsgiCode})
+                    </option>
+                  ))}
+                </select>
+                {selectedLsg && (
+                  <p className="rounded-md border border-[#98E32F]/30 bg-[#001820] px-2.5 py-1.5 text-[11px] font-medium text-[#b8f04a]">
+                    Selected: {selectedLsg.name} ·{" "}
+                    {localAuthLabel(selectedLsg.localAuth)} · LSGI{" "}
+                    <span className="font-mono text-white">
+                      {selectedLsg.lsgiCode}
+                    </span>
+                    {loadingLsgGeom ? " · loading map…" : ""}
+                  </p>
+                )}
+              </div>
               <div className="space-y-2">
                 <Label className="text-white/60">Name</Label>
                 <Input
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   className="border-white/10 bg-black/20 text-white"
-                  placeholder="Kalpetta North"
+                  placeholder="Edavaka"
                 />
               </div>
               <div className="space-y-2">
@@ -374,7 +537,23 @@ export default function ZonesPage() {
                   value={code}
                   onChange={(e) => setCode(e.target.value)}
                   className="border-white/10 bg-black/20 text-white"
-                  placeholder="KLP-N"
+                  placeholder="EDAVAKA"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-white/60">
+                  Pincode{" "}
+                  <span className="font-normal text-white/35">(optional)</span>
+                </Label>
+                <Input
+                  value={pincode}
+                  onChange={(e) =>
+                    setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))
+                  }
+                  className="border-white/10 bg-black/20 font-mono text-white"
+                  placeholder="670645"
+                  inputMode="numeric"
+                  maxLength={6}
                 />
               </div>
               <div className="space-y-2">
@@ -428,9 +607,8 @@ export default function ZonesPage() {
                   Zone boundary
                 </h3>
                 <p className="text-xs text-white/45">
-                  Draw on the map, use{" "}
-                  <span className="text-white/55">Use subdivision as zone</span>{" "}
-                  in the map panel, or paste GeoJSON (Advanced).
+                  Selecting a local body loads its map. You can also pick on the
+                  map or paste GeoJSON (Advanced).
                 </p>
               </div>
               <div className="relative h-[min(58vh,560px)] min-h-[320px] w-full overflow-hidden rounded-xl border border-white/10 bg-black/30">
@@ -446,7 +624,8 @@ export default function ZonesPage() {
                       drawPolygon={drawPolygon}
                       onDrawPolygonChange={handleDrawChange}
                       readOnlyGeometry={readOnlyGeometry}
-                      onSubdivisionGeometryPick={handleSubdivisionGeometryPick}
+                      selectedLsgiCode={lsgiCode || null}
+                      onLsgGeometryPick={handleLsgGeometryPick}
                     />
                   )
                 )}
@@ -524,7 +703,11 @@ export default function ZonesPage() {
                 type="button"
                 className="bg-[#98E32F] text-[#013644] hover:bg-[#86c926]"
                 onClick={handleSave}
-                disabled={createMut.isPending || updateMut.isPending}
+                disabled={
+                  createMut.isPending ||
+                  updateMut.isPending ||
+                  loadingLsgGeom
+                }
               >
                 {(createMut.isPending || updateMut.isPending) && (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />

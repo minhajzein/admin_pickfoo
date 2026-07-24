@@ -1,0 +1,158 @@
+[
+  {
+    "key": "ambalavayal",
+    "name": "Ambalavayal",
+    "lsgiCode": "G12010",
+    "localAuth": "gram_panchayat"
+  },
+  {
+    "key": "edavaka",
+    "name": "Edavaka",
+    "lsgiCode": "G12005",
+    "localAuth": "gram_panchayat"
+  },
+  {
+    "key": "kalpetta",
+    "name": "Kalpetta",
+    "lsgiCode": "M12051",
+    "localAuth": "municipality"
+  },
+  {
+    "key": "kaniyambetta",
+    "name": "Kaniyambetta",
+    "lsgiCode": "G12022",
+    "localAuth": "gram_panchayat"
+  },
+  {
+    "key": "kottathara",
+    "name": "Kottathara",
+    "lsgiCode": "G12018",
+    "localAuth": "gram_panchayat"
+  },
+  {
+    "key": "mananthavady",
+    "name": "Mananthavady",
+    "lsgiCode": "M12081",
+    "localAuth": "municipality"
+  },
+  {
+    "key": "meenangadi",
+    "name": "Meenangadi",
+    "lsgiCode": "G12011",
+    "localAuth": "gram_panchayat"
+  },
+  {
+    "key": "meppadi",
+    "name": "Meppadi",
+    "lsgiCode": "G12016",
+    "localAuth": "gram_panchayat"
+  },
+  {
+    "key": "mullankolly",
+    "name": "Mullankolly",
+    "lsgiCode": "G12025",
+    "localAuth": "gram_panchayat"
+  },
+  {
+    "key": "mupainad",
+    "name": "Mupainad",
+    "lsgiCode": "G12017",
+    "localAuth": "gram_panchayat"
+  },
+  {
+    "key": "muttil",
+    "name": "Muttil",
+    "lsgiCode": "G12019",
+    "localAuth": "gram_panchayat"
+  },
+  {
+    "key": "nenmeni",
+    "name": "Nenmeni",
+    "lsgiCode": "G12009",
+    "localAuth": "gram_panchayat"
+  },
+  {
+    "key": "noolpuzha",
+    "name": "Noolpuzha",
+    "lsgiCode": "G12008",
+    "localAuth": "gram_panchayat"
+  },
+  {
+    "key": "padinharathara",
+    "name": "Padinharathara",
+    "lsgiCode": "G12020",
+    "localAuth": "gram_panchayat"
+  },
+  {
+    "key": "panamaram",
+    "name": "Panamaram",
+    "lsgiCode": "G12021",
+    "localAuth": "gram_panchayat"
+  },
+  {
+    "key": "poothadi",
+    "name": "Poothadi",
+    "lsgiCode": "G12023",
+    "localAuth": "gram_panchayat"
+  },
+  {
+    "key": "pozhuthana",
+    "name": "Pozhuthana",
+    "lsgiCode": "G12014",
+    "localAuth": "gram_panchayat"
+  },
+  {
+    "key": "pulpally",
+    "name": "Pulpally",
+    "lsgiCode": "G12024",
+    "localAuth": "gram_panchayat"
+  },
+  {
+    "key": "sulthan-bathery",
+    "name": "Sulthan Bathery",
+    "lsgiCode": "M12082",
+    "localAuth": "municipality"
+  },
+  {
+    "key": "thariode",
+    "name": "Thariode",
+    "lsgiCode": "G12015",
+    "localAuth": "gram_panchayat"
+  },
+  {
+    "key": "thavinhal",
+    "name": "Thavinhal",
+    "lsgiCode": "G12006",
+    "localAuth": "gram_panchayat"
+  },
+  {
+    "key": "thirunelly",
+    "name": "Thirunelly",
+    "lsgiCode": "G12003",
+    "localAuth": "gram_panchayat"
+  },
+  {
+    "key": "thondernad",
+    "name": "Thondernad",
+    "lsgiCode": "G12004",
+    "localAuth": "gram_panchayat"
+  },
+  {
+    "key": "vellamunda",
+    "name": "Vellamunda",
+    "lsgiCode": "G12002",
+    "localAuth": "gram_panchayat"
+  },
+  {
+    "key": "vengappally",
+    "name": "Vengappally",
+    "lsgiCode": "G12012",
+    "localAuth": "gram_panchayat"
+  },
+  {
+    "key": "vythiri",
+    "name": "Vythiri",
+    "lsgiCode": "G12013",
+    "localAuth": "gram_panchayat"
+  }
+]

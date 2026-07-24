@@ -257,7 +257,7 @@ export default function RestaurantsPage() {
                           <option value="">None</option>
                           {zoneOptions.map((z) => (
                             <option key={z._id} value={z._id}>
-                              {z.name} ({z.code})
+                              {z.name} ({z.lsgiCode || z.pincode || z.code})
                             </option>
                           ))}
                         </select>

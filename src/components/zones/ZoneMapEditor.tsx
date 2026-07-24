@@ -19,6 +19,7 @@ import type {
   FeatureCollection,
   Geometry,
   MultiPolygon,
+  Polygon,
 } from "geojson";
 import type { PolygonZoneGeometry, ZoneGeometry } from "@/types/models";
 import { HelpCircle, Layers, X } from "lucide-react";
@@ -43,9 +44,11 @@ const THEME = {
   tealMid: "#0d5c6b",
 } as const;
 
-export type SubdivisionPickMeta = {
+export type LsgPickMeta = {
+  key: string;
   label: string;
-  key?: string;
+  lsgiCode: string;
+  localAuth?: string;
 };
 
 export type ZoneMapEditorProps = {
@@ -55,25 +58,49 @@ export type ZoneMapEditorProps = {
   onDrawPolygonChange: (polygon: PolygonZoneGeometry | null) => void;
   /** Non-editable outline (e.g. MultiPolygon), shown as fill + line. */
   readOnlyGeometry: ZoneGeometry | null;
-  /** Called when admin picks a police subdivision polygon as the zone boundary. */
-  onSubdivisionGeometryPick?: (
-    geometry: PolygonZoneGeometry,
-    meta: SubdivisionPickMeta,
-  ) => void;
+  /** Currently selected LSGI code — highlighted darker on the map. */
+  selectedLsgiCode?: string | null;
+  /** Called when admin picks an LSG (gram panchayat / municipality) polygon. */
+  onLsgGeometryPick?: (geometry: ZoneGeometry, meta: LsgPickMeta) => void;
 };
+
+function geometryFromFeature(
+  geometry: Polygon | MultiPolygon,
+): ZoneGeometry | null {
+  if (geometry.type === "Polygon") {
+    return {
+      type: "Polygon",
+      coordinates: JSON.parse(JSON.stringify(geometry.coordinates)),
+    };
+  }
+  if (geometry.type === "MultiPolygon") {
+    // Single-part MultiPolygon → editable Polygon for Mapbox Draw
+    if (geometry.coordinates.length === 1) {
+      return {
+        type: "Polygon",
+        coordinates: JSON.parse(JSON.stringify(geometry.coordinates[0])),
+      };
+    }
+    return {
+      type: "MultiPolygon",
+      coordinates: JSON.parse(JSON.stringify(geometry.coordinates)),
+    };
+  }
+  return null;
+}
 
 export default function ZoneMapEditor({
   accessToken,
   drawPolygon,
   onDrawPolygonChange,
   readOnlyGeometry,
-  onSubdivisionGeometryPick,
+  selectedLsgiCode = null,
+  onLsgGeometryPick,
 }: ZoneMapEditorProps) {
   const mapRef = useRef<MapRef>(null);
   const drawRef = useRef<MapboxDraw | null>(null);
   const drawSerializedRef = useRef<string | null>(null);
   const [mapReady, setMapReady] = useState(false);
-  /** Default closed so the map uses full height; open from “Drawing tips” if needed. */
   const [hintsOpen, setHintsOpen] = useState(false);
   const [adminDistrictFc, setAdminDistrictFc] =
     useState<FeatureCollection<Geometry> | null>(null);
@@ -83,26 +110,25 @@ export default function ZoneMapEditor({
     useState<FeatureCollection<Geometry> | null>(null);
   const [showDistrictBoundary, setShowDistrictBoundary] = useState(true);
   const [showMunicipalityBoundary, setShowMunicipalityBoundary] =
-    useState(true);
+    useState(false);
   const [showCorporationBoundary, setShowCorporationBoundary] =
-    useState(true);
-  const [adminSubdivisionFc, setAdminSubdivisionFc] =
+    useState(false);
+  const [adminLsgFc, setAdminLsgFc] =
     useState<FeatureCollection<Geometry> | null>(null);
-  const [adminSubdivisionLabelsFc, setAdminSubdivisionLabelsFc] =
+  const [adminLsgLabelsFc, setAdminLsgLabelsFc] =
     useState<FeatureCollection<Geometry> | null>(null);
-  const [showSubdivisionBoundary, setShowSubdivisionBoundary] =
-    useState(true);
+  const [showLsgBoundary, setShowLsgBoundary] = useState(true);
   const [adminBoundariesPanelOpen, setAdminBoundariesPanelOpen] =
     useState(true);
-  const [subdivisionPickMode, setSubdivisionPickMode] = useState(false);
+  const [lsgPickMode, setLsgPickMode] = useState(false);
   const onDrawPolygonChangeRef = useRef(onDrawPolygonChange);
-  const onSubdivisionGeometryPickRef = useRef(onSubdivisionGeometryPick);
+  const onLsgGeometryPickRef = useRef(onLsgGeometryPick);
   useEffect(() => {
     onDrawPolygonChangeRef.current = onDrawPolygonChange;
   }, [onDrawPolygonChange]);
   useEffect(() => {
-    onSubdivisionGeometryPickRef.current = onSubdivisionGeometryPick;
-  }, [onSubdivisionGeometryPick]);
+    onLsgGeometryPickRef.current = onLsgGeometryPick;
+  }, [onLsgGeometryPick]);
 
   useEffect(() => {
     let cancelled = false;
@@ -115,24 +141,24 @@ export default function ZoneMapEditor({
       load("/geo/wayanad-district.geojson"),
       load("/geo/wayanad-municipalities.geojson"),
       load("/geo/wayanad-corporations.geojson"),
-      load("/geo/wayanad-police-subdivisions.geojson"),
-      load("/geo/wayanad-police-subdivision-labels.geojson"),
+      load("/geo/wayanad-lsg.geojson"),
+      load("/geo/wayanad-lsg-labels.geojson"),
     ])
-      .then(([d, m, c, sub, subLbl]) => {
+      .then(([d, m, c, lsg, lsgLbl]) => {
         if (cancelled) return;
         setAdminDistrictFc(d);
         setAdminMunicipalityFc(m);
         setAdminCorporationFc(c);
-        setAdminSubdivisionFc(sub);
-        setAdminSubdivisionLabelsFc(subLbl);
+        setAdminLsgFc(lsg);
+        setAdminLsgLabelsFc(lsgLbl);
       })
       .catch(() => {
         if (!cancelled) {
           setAdminDistrictFc(EMPTY_FC);
           setAdminMunicipalityFc(EMPTY_FC);
           setAdminCorporationFc(EMPTY_FC);
-          setAdminSubdivisionFc(EMPTY_FC);
-          setAdminSubdivisionLabelsFc(EMPTY_FC);
+          setAdminLsgFc(EMPTY_FC);
+          setAdminLsgLabelsFc(EMPTY_FC);
         }
       });
     return () => {
@@ -180,7 +206,7 @@ export default function ZoneMapEditor({
   );
 
   useEffect(() => {
-    if (!mapReady || subdivisionPickMode) return;
+    if (!mapReady || lsgPickMode) return;
     const draw = drawRef.current;
     if (!draw) return;
     const serialized = drawPolygon ? JSON.stringify(drawPolygon) : "__empty__";
@@ -197,7 +223,7 @@ export default function ZoneMapEditor({
     } else {
       draw.changeMode("draw_polygon");
     }
-  }, [drawPolygon, mapReady, subdivisionPickMode]);
+  }, [drawPolygon, mapReady, lsgPickMode]);
 
   useEffect(() => {
     if (!mapReady) return;
@@ -215,28 +241,19 @@ export default function ZoneMapEditor({
     };
   }, [mapReady]);
 
-  /** Subdivision lines were drawn under basemap land/road layers; move to stack top. */
   useEffect(() => {
-    if (!mapReady || !adminSubdivisionFc) return;
+    if (!mapReady || !adminLsgFc) return;
     const map = mapRef.current?.getMap();
     if (!map) return;
 
     const bringToFront = () => {
       try {
-        if (map.getLayer("admin-subdivision-fill")) {
-          map.moveLayer("admin-subdivision-fill");
-        }
-        if (map.getLayer("admin-subdivision-casing")) {
-          map.moveLayer("admin-subdivision-casing");
-        }
-        if (map.getLayer("admin-subdivision-line")) {
-          map.moveLayer("admin-subdivision-line");
-        }
-        if (map.getLayer("admin-subdivision-symbol")) {
-          map.moveLayer("admin-subdivision-symbol");
-        }
+        if (map.getLayer("admin-lsg-fill")) map.moveLayer("admin-lsg-fill");
+        if (map.getLayer("admin-lsg-casing")) map.moveLayer("admin-lsg-casing");
+        if (map.getLayer("admin-lsg-line")) map.moveLayer("admin-lsg-line");
+        if (map.getLayer("admin-lsg-symbol")) map.moveLayer("admin-lsg-symbol");
       } catch {
-        /* style not ready or layer ids missing */
+        /* style not ready */
       }
     };
 
@@ -248,24 +265,19 @@ export default function ZoneMapEditor({
       window.clearTimeout(t);
       window.clearTimeout(t2);
     };
-  }, [mapReady, adminSubdivisionFc, adminSubdivisionLabelsFc]);
+  }, [mapReady, adminLsgFc, adminLsgLabelsFc]);
 
   useEffect(() => {
     if (!mapReady) return;
     const draw = drawRef.current;
     if (!draw) return;
-    if (subdivisionPickMode) {
+    if (lsgPickMode) {
       draw.changeMode("simple_select");
     }
-  }, [mapReady, subdivisionPickMode]);
+  }, [mapReady, lsgPickMode]);
 
   useEffect(() => {
-    if (
-      !mapReady ||
-      !subdivisionPickMode ||
-      !showSubdivisionBoundary ||
-      !onSubdivisionGeometryPick
-    ) {
+    if (!mapReady || !lsgPickMode || !showLsgBoundary || !onLsgGeometryPick) {
       return;
     }
     const map = mapRef.current?.getMap();
@@ -273,31 +285,34 @@ export default function ZoneMapEditor({
 
     const handler = (e: MapLayerMouseEvent) => {
       const f = e.features?.[0];
-      if (!f?.geometry || f.geometry.type !== "Polygon") return;
-      const coords = JSON.parse(
-        JSON.stringify(f.geometry.coordinates),
-      ) as PolygonZoneGeometry["coordinates"];
+      if (!f?.geometry) return;
+      if (f.geometry.type !== "Polygon" && f.geometry.type !== "MultiPolygon") {
+        return;
+      }
+      const geom = geometryFromFeature(f.geometry);
+      if (!geom) return;
       const props = f.properties as Record<string, unknown>;
-      const label = String(props.subdivision_label ?? "Subdivision");
+      const label = String(props.lsg_label ?? "Local body");
       const key =
-        typeof props.subdivision_key === "string"
-          ? props.subdivision_key
-          : undefined;
-      const geometry = {
-        type: "Polygon" as const,
-        coordinates: coords as number[][][],
-      };
-      onSubdivisionGeometryPickRef.current?.(
-        geometry as PolygonZoneGeometry,
-        { label, key },
-      );
-      setSubdivisionPickMode(false);
+        typeof props.lsg_key === "string"
+          ? props.lsg_key
+          : label.toLowerCase().replace(/\s+/g, "-");
+      const lsgiCode = String(props.lsgi_code ?? "").toUpperCase();
+      if (!lsgiCode) return;
+      onLsgGeometryPickRef.current?.(geom, {
+        key,
+        label,
+        lsgiCode,
+        localAuth:
+          typeof props.local_auth === "string" ? props.local_auth : undefined,
+      });
+      setLsgPickMode(false);
     };
 
     let attached = false;
     const tryAttach = () => {
-      if (attached || !map.getLayer("admin-subdivision-fill")) return;
-      map.on("click", "admin-subdivision-fill", handler);
+      if (attached || !map.getLayer("admin-lsg-fill")) return;
+      map.on("click", "admin-lsg-fill", handler);
       attached = true;
       map.getCanvas().style.cursor = "crosshair";
     };
@@ -311,16 +326,10 @@ export default function ZoneMapEditor({
       window.clearTimeout(t1);
       window.clearTimeout(t2);
       map.off("idle", tryAttach);
-      map.off("click", "admin-subdivision-fill", handler);
+      map.off("click", "admin-lsg-fill", handler);
       map.getCanvas().style.cursor = "";
     };
-  }, [
-    mapReady,
-    subdivisionPickMode,
-    showSubdivisionBoundary,
-    onSubdivisionGeometryPick,
-    adminSubdivisionFc,
-  ]);
+  }, [mapReady, lsgPickMode, showLsgBoundary, onLsgGeometryPick, adminLsgFc]);
 
   const overlayData: Feature<MultiPolygon> | null =
     readOnlyGeometry?.type === "MultiPolygon"
@@ -435,71 +444,163 @@ export default function ZoneMapEditor({
             />
           </Source>
         )}
-        {adminSubdivisionFc && (
-          <Source
-            id="admin-subdivisions"
-            type="geojson"
-            data={adminSubdivisionFc}
-          >
+        {adminLsgFc && (
+          <Source id="admin-lsg" type="geojson" data={adminLsgFc}>
             <Layer
-              id="admin-subdivision-fill"
+              id="admin-lsg-fill"
               type="fill"
               layout={{
-                visibility: showSubdivisionBoundary ? "visible" : "none",
+                visibility: showLsgBoundary ? "visible" : "none",
               }}
               paint={{
-                "fill-color": THEME.teal,
-                "fill-opacity": subdivisionPickMode ? 0.08 : 0,
+                "fill-color": selectedLsgiCode
+                  ? [
+                      "case",
+                      [
+                        "==",
+                        ["upcase", ["get", "lsgi_code"]],
+                        selectedLsgiCode.toUpperCase(),
+                      ],
+                      "#013644",
+                      "#0a4a5a",
+                    ]
+                  : "#013644",
+                "fill-opacity": selectedLsgiCode
+                  ? [
+                      "case",
+                      [
+                        "==",
+                        ["upcase", ["get", "lsgi_code"]],
+                        selectedLsgiCode.toUpperCase(),
+                      ],
+                      0.55,
+                      lsgPickMode ? 0.18 : 0.1,
+                    ]
+                  : lsgPickMode
+                    ? 0.22
+                    : 0.12,
               }}
             />
             <Layer
-              id="admin-subdivision-casing"
+              id="admin-lsg-casing"
               type="line"
               layout={{
-                visibility: showSubdivisionBoundary ? "visible" : "none",
+                visibility: showLsgBoundary ? "visible" : "none",
               }}
               paint={{
-                "line-color": THEME.teal,
-                "line-width": 10,
-                "line-opacity": 0.85,
+                "line-color": selectedLsgiCode
+                  ? [
+                      "case",
+                      [
+                        "==",
+                        ["upcase", ["get", "lsgi_code"]],
+                        selectedLsgiCode.toUpperCase(),
+                      ],
+                      "#001820",
+                      THEME.teal,
+                    ]
+                  : "#001820",
+                "line-width": selectedLsgiCode
+                  ? [
+                      "case",
+                      [
+                        "==",
+                        ["upcase", ["get", "lsgi_code"]],
+                        selectedLsgiCode.toUpperCase(),
+                      ],
+                      10,
+                      4,
+                    ]
+                  : 5,
+                "line-opacity": 0.95,
               }}
             />
             <Layer
-              id="admin-subdivision-line"
+              id="admin-lsg-line"
               type="line"
               layout={{
-                visibility: showSubdivisionBoundary ? "visible" : "none",
+                visibility: showLsgBoundary ? "visible" : "none",
               }}
               paint={{
-                "line-color": THEME.lime,
-                "line-width": 4,
+                "line-color": selectedLsgiCode
+                  ? [
+                      "case",
+                      [
+                        "==",
+                        ["upcase", ["get", "lsgi_code"]],
+                        selectedLsgiCode.toUpperCase(),
+                      ],
+                      "#6bb81f",
+                      THEME.limeMuted,
+                    ]
+                  : THEME.lime,
+                "line-width": selectedLsgiCode
+                  ? [
+                      "case",
+                      [
+                        "==",
+                        ["upcase", ["get", "lsgi_code"]],
+                        selectedLsgiCode.toUpperCase(),
+                      ],
+                      4,
+                      1.5,
+                    ]
+                  : 2.5,
                 "line-opacity": 1,
-                "line-dasharray": [2.5, 1.5],
               }}
             />
           </Source>
         )}
-        {adminSubdivisionLabelsFc && (
-          <Source
-            id="admin-subdivision-labels"
-            type="geojson"
-            data={adminSubdivisionLabelsFc}
-          >
+        {adminLsgLabelsFc && (
+          <Source id="admin-lsg-labels" type="geojson" data={adminLsgLabelsFc}>
             <Layer
-              id="admin-subdivision-symbol"
+              id="admin-lsg-symbol"
               type="symbol"
               layout={{
-                visibility: showSubdivisionBoundary ? "visible" : "none",
-                "text-field": ["get", "subdivision_label"],
-                "text-size": 13,
+                visibility: showLsgBoundary ? "visible" : "none",
+                "text-field": ["get", "lsg_label"],
+                "text-size": selectedLsgiCode
+                  ? [
+                      "case",
+                      [
+                        "==",
+                        ["upcase", ["get", "lsgi_code"]],
+                        selectedLsgiCode.toUpperCase(),
+                      ],
+                      14,
+                      11,
+                    ]
+                  : 11,
                 "text-anchor": "center",
-                "text-allow-overlap": true,
-                "text-ignore-placement": true,
+                "text-allow-overlap": false,
+                "text-optional": true,
               }}
               paint={{
-                "text-color": THEME.lime,
-                "text-halo-color": THEME.teal,
-                "text-halo-width": 3,
+                "text-color": selectedLsgiCode
+                  ? [
+                      "case",
+                      [
+                        "==",
+                        ["upcase", ["get", "lsgi_code"]],
+                        selectedLsgiCode.toUpperCase(),
+                      ],
+                      "#ffffff",
+                      THEME.lime,
+                    ]
+                  : THEME.lime,
+                "text-halo-color": "#001820",
+                "text-halo-width": selectedLsgiCode
+                  ? [
+                      "case",
+                      [
+                        "==",
+                        ["upcase", ["get", "lsgi_code"]],
+                        selectedLsgiCode.toUpperCase(),
+                      ],
+                      3.5,
+                      2.5,
+                    ]
+                  : 2.5,
                 "text-halo-blur": 0.5,
               }}
             />
@@ -508,150 +609,134 @@ export default function ZoneMapEditor({
       </Map>
 
       {adminBoundariesPanelOpen && (
-      <div
-        id="admin-boundaries-panel"
-        className="pointer-events-auto absolute bottom-3 left-3 z-2 max-w-[min(100%,300px)] rounded-lg border border-white/10 bg-[#002833]/95 px-2.5 py-2 text-[10px] text-white/85 shadow-md backdrop-blur-sm sm:text-[11px]"
-        role="region"
-        aria-label="Admin boundary layer toggles"
-      >
-        <div className="mb-1.5 flex items-start justify-between gap-2">
-          <p className="font-semibold text-white/90">Admin boundaries</p>
-          <button
-            type="button"
-            onClick={() => setAdminBoundariesPanelOpen(false)}
-            className="-m-1 shrink-0 rounded-md p-1 text-white/50 transition-colors hover:bg-white/10 hover:text-white"
-            aria-controls="admin-boundaries-panel"
-            aria-label="Hide admin boundaries panel"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="flex cursor-pointer items-center gap-2">
-            <input
-              type="checkbox"
-              checked={showDistrictBoundary}
-              onChange={(e) => setShowDistrictBoundary(e.target.checked)}
-              className="accent-[#98E32F]"
-            />
-            <span className="flex items-center gap-1.5">
-              <span
-                className="inline-block h-0.5 w-4 rounded-sm bg-[#98E32F]"
-                aria-hidden
+        <div
+          id="admin-boundaries-panel"
+          className="pointer-events-auto absolute bottom-3 left-3 z-2 max-w-[min(100%,300px)] rounded-lg border border-white/10 bg-[#002833]/95 px-2.5 py-2 text-[10px] text-white/85 shadow-md backdrop-blur-sm sm:text-[11px]"
+          role="region"
+          aria-label="Admin boundary layer toggles"
+        >
+          <div className="mb-1.5 flex items-start justify-between gap-2">
+            <p className="font-semibold text-white/90">Admin boundaries</p>
+            <button
+              type="button"
+              onClick={() => setAdminBoundariesPanelOpen(false)}
+              className="-m-1 shrink-0 rounded-md p-1 text-white/50 transition-colors hover:bg-white/10 hover:text-white"
+              aria-controls="admin-boundaries-panel"
+              aria-label="Hide admin boundaries panel"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="flex cursor-pointer items-center gap-2">
+              <input
+                type="checkbox"
+                checked={showDistrictBoundary}
+                onChange={(e) => setShowDistrictBoundary(e.target.checked)}
+                className="accent-[#98E32F]"
               />
-              District
-            </span>
-          </label>
-          <label className="flex cursor-pointer items-start gap-2">
-            <input
-              type="checkbox"
-              checked={showSubdivisionBoundary}
-              onChange={(e) => {
-                setShowSubdivisionBoundary(e.target.checked);
-                if (!e.target.checked) setSubdivisionPickMode(false);
-              }}
-              className="mt-0.5 accent-[#7ec41f]"
-            />
-            <span className="flex min-w-0 flex-col gap-0.5">
               <span className="flex items-center gap-1.5">
                 <span
-                  className="inline-block h-0.5 w-4 rounded-sm border border-dashed border-[#7ec41f] bg-[#002833]/80"
+                  className="inline-block h-0.5 w-4 rounded-sm bg-[#98E32F]"
                   aria-hidden
                 />
-                Subdivisions
+                District
               </span>
-              {onSubdivisionGeometryPick &&
-                adminSubdivisionFc &&
-                adminSubdivisionFc.features.length > 0 && (
-                  <div className="pl-5 pt-1">
-                    {subdivisionPickMode ? (
-                      <div className="space-y-1.5">
-                        <p className="text-[9px] font-medium text-[#98E32F]/90 sm:text-[10px]">
-                          Click inside Mananthavady, Kalpetta, or Sulthan Bathery
-                          to set the zone boundary.
-                        </p>
+            </label>
+            <label className="flex cursor-pointer items-start gap-2">
+              <input
+                type="checkbox"
+                checked={showLsgBoundary}
+                onChange={(e) => {
+                  setShowLsgBoundary(e.target.checked);
+                  if (!e.target.checked) setLsgPickMode(false);
+                }}
+                className="mt-0.5 accent-[#7ec41f]"
+              />
+              <span className="flex min-w-0 flex-col gap-0.5">
+                <span className="flex items-center gap-1.5">
+                  <span
+                    className="inline-block h-0.5 w-4 rounded-sm border border-dashed border-[#7ec41f] bg-[#002833]/80"
+                    aria-hidden
+                  />
+                  Local bodies (LSG)
+                </span>
+                {onLsgGeometryPick &&
+                  adminLsgFc &&
+                  adminLsgFc.features.length > 0 && (
+                    <div className="pl-5 pt-1">
+                      {lsgPickMode ? (
+                        <div className="space-y-1.5">
+                          <p className="text-[9px] font-medium text-[#98E32F]/90 sm:text-[10px]">
+                            Click a panchayat or municipality (e.g. Edavaka,
+                            Thavinhal, Panamaram) to set the zone.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => setLsgPickMode(false)}
+                            className="text-[9px] text-white/50 underline hover:text-white/80 sm:text-[10px]"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
                         <button
                           type="button"
-                          onClick={() => setSubdivisionPickMode(false)}
-                          className="text-[9px] text-white/50 underline hover:text-white/80 sm:text-[10px]"
+                          disabled={!showLsgBoundary}
+                          onClick={() => setLsgPickMode(true)}
+                          className="text-left text-[9px] font-medium text-[#98E32F]/90 underline decoration-[#98E32F]/40 underline-offset-2 hover:text-[#b8f04a] disabled:cursor-not-allowed disabled:opacity-40 sm:text-[10px]"
                         >
-                          Cancel
+                          Pick local body on map…
                         </button>
-                      </div>
-                    ) : (
-                      <button
-                        type="button"
-                        disabled={!showSubdivisionBoundary}
-                        onClick={() => setSubdivisionPickMode(true)}
-                        className="text-left text-[9px] font-medium text-[#98E32F]/90 underline decoration-[#98E32F]/40 underline-offset-2 hover:text-[#b8f04a] disabled:cursor-not-allowed disabled:opacity-40 sm:text-[10px]"
-                      >
-                        Use subdivision as zone…
-                      </button>
-                    )}
-                  </div>
-                )}
-            </span>
-          </label>
-          <label className="flex cursor-pointer items-center gap-2">
-            <input
-              type="checkbox"
-              checked={showMunicipalityBoundary}
-              onChange={(e) => setShowMunicipalityBoundary(e.target.checked)}
-              className="accent-[#0d5c6b]"
-            />
-            <span className="flex items-center gap-1.5">
-              <span
-                className="inline-block h-0.5 w-4 rounded-sm border border-dashed border-[#0d5c6b] bg-transparent"
-                aria-hidden
-              />
-              Municipality
-            </span>
-          </label>
-          <label className="flex cursor-pointer items-center gap-2">
-            <input
-              type="checkbox"
-              checked={showCorporationBoundary}
-              onChange={(e) => setShowCorporationBoundary(e.target.checked)}
-              className="accent-[#b8f04a]"
-            />
-            <span className="flex items-center gap-1.5">
-              <span
-                className="inline-block h-0.5 w-4 rounded-sm bg-[#b8f04a]"
-                aria-hidden
-              />
-              Corporation
-            </span>
-          </label>
-        </div>
-        <p className="mt-1.5 border-t border-white/10 pt-1.5 text-[9px] leading-snug text-white/45 sm:text-[10px]">
-          <a
-            href="https://github.com/opendatakerala/kl_district"
-            className="text-[#98E32F]/80 underline hover:text-[#98E32F]"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            District
-          </a>
-          {" · "}
-          <a
-            href="https://github.com/opendatakerala/lsg-kerala-data"
-            className="text-[#98E32F]/80 underline hover:text-[#98E32F]"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            LSG
-          </a>{" "}
-          (Open Data Kerala, ODbL). Subdivision outlines merge LSG units to
-          match the published police jurisdiction grouping; they are not
-          certified police geometry.
-          {adminCorporationFc &&
-            adminCorporationFc.features.length === 0 && (
-              <span className="mt-0.5 block text-white/40">
-                No corporation boundaries in this extract.
+                      )}
+                    </div>
+                  )}
               </span>
-            )}
-        </p>
-      </div>
+            </label>
+            <label className="flex cursor-pointer items-center gap-2">
+              <input
+                type="checkbox"
+                checked={showMunicipalityBoundary}
+                onChange={(e) => setShowMunicipalityBoundary(e.target.checked)}
+                className="accent-[#0d5c6b]"
+              />
+              <span className="flex items-center gap-1.5">
+                <span
+                  className="inline-block h-0.5 w-4 rounded-sm border border-dashed border-[#0d5c6b] bg-transparent"
+                  aria-hidden
+                />
+                Municipality outline
+              </span>
+            </label>
+            <label className="flex cursor-pointer items-center gap-2">
+              <input
+                type="checkbox"
+                checked={showCorporationBoundary}
+                onChange={(e) => setShowCorporationBoundary(e.target.checked)}
+                className="accent-[#b8f04a]"
+              />
+              <span className="flex items-center gap-1.5">
+                <span
+                  className="inline-block h-0.5 w-4 rounded-sm bg-[#b8f04a]"
+                  aria-hidden
+                />
+                Corporation
+              </span>
+            </label>
+          </div>
+          <p className="mt-1.5 border-t border-white/10 pt-1.5 text-[9px] leading-snug text-white/45 sm:text-[10px]">
+            Zones are Wayanad gram panchayats and municipalities (
+            <a
+              href="https://github.com/opendatakerala/lsg-kerala-data"
+              className="text-[#98E32F]/80 underline hover:text-[#98E32F]"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Open Data Kerala LSG
+            </a>
+            , ODbL).
+          </p>
+        </div>
       )}
 
       {!adminBoundariesPanelOpen && (
@@ -692,7 +777,7 @@ export default function ZoneMapEditor({
           >
             <div className="mb-2 flex items-start justify-between gap-2">
               <p className="font-bold text-[#98E32F]">
-                Draw the zone on the map
+                Create a local-body zone
               </p>
               <button
                 type="button"
@@ -705,29 +790,18 @@ export default function ZoneMapEditor({
             </div>
             <ol className="list-decimal space-y-1 pl-4 text-white/75">
               <li>
-                Use the{" "}
-                <span className="font-semibold text-white/90">pentagon</span>{" "}
-                tool (top-left) if it is not already active.
+                Prefer the form{" "}
+                <span className="font-semibold text-white/90">Local body</span>{" "}
+                dropdown, or{" "}
+                <span className="font-semibold text-white/90">
+                  Pick local body on map
+                </span>
+                .
               </li>
               <li>
-                Click each corner of the delivery area along roads or landmarks.
-              </li>
-              <li>
-                <span className="font-semibold text-white/90">Double-click</span>{" "}
-                the last point to finish the shape.
-              </li>
-              <li>
-                Drag corners to adjust. Use the{" "}
-                <span className="font-semibold text-white/90">trash</span> icon
-                to start over.
+                Adjust corners with the draw tools if needed, then save.
               </li>
             </ol>
-            {readOnlyGeometry?.type === "MultiPolygon" && (
-              <p className="mt-2 border-t border-white/10 pt-2 text-amber-200/90">
-                This zone uses a complex shape (MultiPolygon). Edit it under
-                Advanced → GeoJSON, or redraw as a single area on the map.
-              </p>
-            )}
           </div>
         </div>
       )}
