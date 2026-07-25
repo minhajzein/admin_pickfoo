@@ -51,13 +51,18 @@ export type RestaurantType = (typeof RESTAURANT_TYPES)[number];
 
 export type ZoneGeometryType = "Polygon" | "MultiPolygon";
 
-export interface ZoneGeometry {
-  type: ZoneGeometryType;
-  coordinates: number[][][] | number[][][][];
+/** Single polygon (Mapbox Draw + primary zone shape). */
+export interface PolygonZoneGeometry {
+  type: "Polygon";
+  coordinates: number[][][];
 }
 
-/** Single polygon (Mapbox Draw + primary zone shape). */
-export type PolygonZoneGeometry = Extract<ZoneGeometry, { type: "Polygon" }>;
+export interface MultiPolygonZoneGeometry {
+  type: "MultiPolygon";
+  coordinates: number[][][][];
+}
+
+export type ZoneGeometry = PolygonZoneGeometry | MultiPolygonZoneGeometry;
 
 export interface DeliveryZoneSummary {
   _id: string;
