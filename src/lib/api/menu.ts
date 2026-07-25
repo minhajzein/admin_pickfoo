@@ -86,8 +86,15 @@ export async function deleteRestaurantMenuItem(
   await api.delete(`/restaurants/${restaurantId}/menu/${itemId}`);
 }
 
-export async function fetchCategories(): Promise<AdminCategory[]> {
-  const { data } = await api.get("/menu/categories");
+export async function fetchCategories(params?: {
+  search?: string;
+  limit?: number;
+}): Promise<AdminCategory[]> {
+  const sp = new URLSearchParams();
+  if (params?.search?.trim()) sp.set("search", params.search.trim());
+  if (params?.limit != null) sp.set("limit", String(params.limit));
+  const qs = sp.toString();
+  const { data } = await api.get(`/menu/categories${qs ? `?${qs}` : ""}`);
   return (data.data ?? []) as AdminCategory[];
 }
 

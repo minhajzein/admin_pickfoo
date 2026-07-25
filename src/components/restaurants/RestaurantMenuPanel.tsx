@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   Edit2,
@@ -40,6 +40,7 @@ import {
   uploadMenuImage,
 } from "@/lib/api/menu";
 import { CustomerStyleMenuCard } from "@/components/restaurants/CustomerStyleMenuCard";
+import { CategorySearchField } from "@/components/restaurants/CategorySearchField";
 import { RESTAURANT_TYPES, type RestaurantType } from "@/types/models";
 
 type MealType = "breakfast" | "lunch" | "dinner";
@@ -115,6 +116,9 @@ export function RestaurantMenuPanel({
   const [isSaving, setIsSaving] = useState(false);
 
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+  const [categoryListSearch, setCategoryListSearch] = useState("");
+  const [debouncedCategoryListSearch, setDebouncedCategoryListSearch] =
+    useState("");
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategoryImage, setNewCategoryImage] = useState("");
   const [isUploadingCategoryImage, setIsUploadingCategoryImage] = useState(false);
@@ -127,14 +131,26 @@ export function RestaurantMenuPanel({
     name: string;
   } | null>(null);
 
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      setDebouncedCategoryListSearch(categoryListSearch.trim());
+    }, 250);
+    return () => window.clearTimeout(t);
+  }, [categoryListSearch]);
+
   const { data: menuItems = [], isLoading: isMenuLoading } = useQuery({
     queryKey: ["restaurant-menu", restaurantId],
     queryFn: () => fetchRestaurantMenu(restaurantId),
   });
 
   const { data: categories = [], isLoading: isCategoriesLoading } = useQuery({
-    queryKey: ["menu-categories"],
-    queryFn: fetchCategories,
+    queryKey: ["menu-categories", debouncedCategoryListSearch],
+    queryFn: () =>
+      fetchCategories({
+        search: debouncedCategoryListSearch || undefined,
+        limit: 50,
+      }),
+    enabled: isCategoryModalOpen,
   });
 
   const filteredItems = useMemo(() => {
@@ -567,27 +583,13 @@ export function RestaurantMenuPanel({
                       Manage
                     </button>
                   </div>
-                  <select
+                  <CategorySearchField
                     value={form.category}
-                    onChange={(e) =>
-                      setForm((p) => ({ ...p, category: e.target.value }))
+                    onChange={(category) =>
+                      setForm((p) => ({ ...p, category }))
                     }
-                    className="mt-1 w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white"
-                  >
-                    <option value="">Select category</option>
-                    {categories.map((cat) => (
-                      <option key={cat._id} value={cat.name}>
-                        {cat.name}
-                      </option>
-                    ))}
-                    {categories.length === 0 && (
-                      <>
-                        <option value="Main Course">Main Course</option>
-                        <option value="Starters">Starters</option>
-                        <option value="Beverages">Beverages</option>
-                      </>
-                    )}
-                  </select>
+                    placeholder="Search categories..."
+                  />
                 </div>
                 <div>
                   <label className="text-[10px] font-bold text-white/40 uppercase tracking-wider">
@@ -1009,12 +1011,32 @@ export function RestaurantMenuPanel({
               </Button>
             </div>
 
+            <div className="relative">
+              <Search
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30"
+                size={14}
+              />
+              <Input
+                value={categoryListSearch}
+                onChange={(e) => setCategoryListSearch(e.target.value)}
+                placeholder="Search categories..."
+                className="pl-9 bg-black/20 border-white/10 text-white"
+              />
+            </div>
+
             {isCategoriesLoading ? (
               <div className="flex justify-center py-6">
                 <Loader2 className="animate-spin text-[#98E32F]" />
               </div>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                {categories.length === 0 && (
+                  <p className="text-sm text-white/40 text-center py-4">
+                    {debouncedCategoryListSearch
+                      ? `No categories match “${debouncedCategoryListSearch}”`
+                      : "Type to search, or create a category above."}
+                  </p>
+                )}
                 {categories.map((cat) => (
                   <div
                     key={cat._id}
@@ -1089,11 +1111,6 @@ export function RestaurantMenuPanel({
                     )}
                   </div>
                 ))}
-                {categories.length === 0 && (
-                  <p className="text-sm text-white/40 text-center py-4">
-                    No categories yet.
-                  </p>
-                )}
               </div>
             )}
           </div>
