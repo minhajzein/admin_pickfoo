@@ -33,7 +33,7 @@ export interface AdminCategory {
   name: string;
   image?: string;
   owner?: string;
-  parent?: string | null;
+  parent?: string | null | { _id: string; name?: string };
 }
 
 export interface AdminMenuItemInput {

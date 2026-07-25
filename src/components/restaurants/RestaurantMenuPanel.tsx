@@ -32,6 +32,7 @@ import {
   deleteRestaurantMenuItem,
   fetchCategories,
   fetchRestaurantMenu,
+  type AdminCategory,
   type AdminMenuItem,
   type AdminMenuItemInput,
   type AdminMenuVariant,
@@ -40,7 +41,7 @@ import {
   uploadMenuImage,
 } from "@/lib/api/menu";
 import { CustomerStyleMenuCard } from "@/components/restaurants/CustomerStyleMenuCard";
-import { CategorySearchField } from "@/components/restaurants/CategorySearchField";
+import { CategorySearchField, categoryParentId, categoryParentName } from "@/components/restaurants/CategorySearchField";
 import { RESTAURANT_TYPES, type RestaurantType } from "@/types/models";
 
 type MealType = "breakfast" | "lunch" | "dinner";
@@ -121,9 +122,14 @@ export function RestaurantMenuPanel({
     useState("");
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategoryImage, setNewCategoryImage] = useState("");
+  const [newCategoryParentId, setNewCategoryParentId] = useState("");
+  const [newCategoryParentLabel, setNewCategoryParentLabel] = useState("");
   const [isUploadingCategoryImage, setIsUploadingCategoryImage] = useState(false);
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const [editingCategoryName, setEditingCategoryName] = useState("");
+  const [editingCategoryParentId, setEditingCategoryParentId] = useState("");
+  const [editingCategoryParentLabel, setEditingCategoryParentLabel] =
+    useState("");
 
   const [deleteTarget, setDeleteTarget] = useState<{
     type: "item" | "category";
@@ -148,10 +154,44 @@ export function RestaurantMenuPanel({
     queryFn: () =>
       fetchCategories({
         search: debouncedCategoryListSearch || undefined,
-        limit: 50,
+        limit: debouncedCategoryListSearch ? 50 : 200,
       }),
     enabled: isCategoryModalOpen,
   });
+
+  const categoryTreeRows = useMemo(() => {
+    type Row = { cat: AdminCategory; level: number };
+    const byId = new Map(categories.map((c) => [c._id, c]));
+    const children = new Map<string | null, AdminCategory[]>();
+
+    for (const cat of categories) {
+      let p = categoryParentId(cat);
+      if (p && !byId.has(p)) p = null;
+      const list = children.get(p) ?? [];
+      list.push(cat);
+      children.set(p, list);
+    }
+
+    for (const list of children.values()) {
+      list.sort((a, b) => a.name.localeCompare(b.name));
+    }
+
+    const rows: Row[] = [];
+    const walk = (parentKey: string | null, level: number) => {
+      for (const cat of children.get(parentKey) ?? []) {
+        rows.push({ cat, level });
+        walk(cat._id, level + 1);
+      }
+    };
+    walk(null, 0);
+
+    // If searching, also include matches that weren't reached via walk roots
+    // (already covered when parent missing → treated as root).
+    if (debouncedCategoryListSearch && rows.length === 0) {
+      return categories.map((cat) => ({ cat, level: 0 }));
+    }
+    return rows;
+  }, [categories, debouncedCategoryListSearch]);
 
   const filteredItems = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -357,11 +397,13 @@ export function RestaurantMenuPanel({
       await createCategoryForRestaurant(restaurantId, {
         name,
         image: newCategoryImage || undefined,
-        parent: null,
+        parent: newCategoryParentId.trim() || null,
       });
       toast.success("Category created");
       setNewCategoryName("");
       setNewCategoryImage("");
+      setNewCategoryParentId("");
+      setNewCategoryParentLabel("");
       invalidateCategories();
     } catch (err: unknown) {
       const msg =
@@ -381,10 +423,15 @@ export function RestaurantMenuPanel({
       return;
     }
     try {
-      await updateCategory(editingCategoryId, { name });
+      await updateCategory(editingCategoryId, {
+        name,
+        parent: editingCategoryParentId.trim() || null,
+      });
       toast.success("Category updated");
       setEditingCategoryId(null);
       setEditingCategoryName("");
+      setEditingCategoryParentId("");
+      setEditingCategoryParentLabel("");
       invalidateCategories();
     } catch (err: unknown) {
       const msg =
@@ -394,6 +441,14 @@ export function RestaurantMenuPanel({
           : undefined;
       toast.error(msg || "Failed to update category");
     }
+  };
+
+  const startEditCategory = (cat: AdminCategory) => {
+    setEditingCategoryId(cat._id);
+    setEditingCategoryName(cat.name);
+    const pid = categoryParentId(cat) ?? "";
+    setEditingCategoryParentId(pid);
+    setEditingCategoryParentLabel(categoryParentName(cat) ?? "");
   };
 
   return (
@@ -948,6 +1003,23 @@ export function RestaurantMenuPanel({
                 placeholder="Category name"
                 className="bg-black/20 border-white/10 text-white"
               />
+              <div>
+                <label className="text-[10px] font-bold text-white/40 uppercase tracking-wider">
+                  Parent category
+                </label>
+                <CategorySearchField
+                  valueKey="_id"
+                  value={newCategoryParentId}
+                  displayValue={newCategoryParentLabel}
+                  allowRoot
+                  rootLabel="No Parent (Root Category)"
+                  placeholder="Search parent category..."
+                  onChange={(id, cat) => {
+                    setNewCategoryParentId(id);
+                    setNewCategoryParentLabel(cat?.name ?? "");
+                  }}
+                />
+              </div>
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <label className="text-[10px] font-bold text-white/40 uppercase tracking-wider">
@@ -1030,17 +1102,18 @@ export function RestaurantMenuPanel({
               </div>
             ) : (
               <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-                {categories.length === 0 && (
+                {categoryTreeRows.length === 0 && (
                   <p className="text-sm text-white/40 text-center py-4">
                     {debouncedCategoryListSearch
                       ? `No categories match “${debouncedCategoryListSearch}”`
                       : "Type to search, or create a category above."}
                   </p>
                 )}
-                {categories.map((cat) => (
+                {categoryTreeRows.map(({ cat, level }) => (
                   <div
                     key={cat._id}
                     className="flex items-center gap-3 rounded-xl border border-white/10 bg-black/20 px-3 py-2"
+                    style={{ marginLeft: Math.min(level, 4) * 16 }}
                   >
                     <div className="relative w-12 h-12 rounded-lg overflow-hidden bg-white/5 shrink-0">
                       {cat.image ? (
@@ -1051,46 +1124,78 @@ export function RestaurantMenuPanel({
                           className="w-full h-full object-cover"
                         />
                       ) : (
-                        <div className="w-full h-full flex items-center justify-center text-white/20">
-                          <ImageIcon size={16} />
+                        <div className="w-full h-full flex items-center justify-center text-white/20 text-xs font-bold">
+                          {cat.name[0]?.toUpperCase() || "?"}
                         </div>
                       )}
                     </div>
                     {editingCategoryId === cat._id ? (
-                      <>
+                      <div className="flex-1 space-y-2 min-w-0">
                         <Input
                           value={editingCategoryName}
                           onChange={(e) => setEditingCategoryName(e.target.value)}
                           className="bg-white/5 border-white/10 text-white h-8"
                         />
-                        <Button
-                          type="button"
-                          size="sm"
-                          className="bg-[#98E32F] text-[#013644] font-bold h-8"
-                          onClick={handleUpdateCategory}
-                        >
-                          Save
-                        </Button>
-                        <button
-                          type="button"
-                          className="text-white/40"
-                          onClick={() => setEditingCategoryId(null)}
-                        >
-                          <X size={16} />
-                        </button>
-                      </>
+                        <CategorySearchField
+                          valueKey="_id"
+                          value={editingCategoryParentId}
+                          displayValue={editingCategoryParentLabel}
+                          allowRoot
+                          rootLabel="No Parent (Root Category)"
+                          excludeId={cat._id}
+                          placeholder="Search parent..."
+                          onChange={(id, selected) => {
+                            setEditingCategoryParentId(id);
+                            setEditingCategoryParentLabel(selected?.name ?? "");
+                          }}
+                        />
+                        <div className="flex gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            className="bg-[#98E32F] text-[#013644] font-bold h-8"
+                            onClick={handleUpdateCategory}
+                          >
+                            Save
+                          </Button>
+                          <button
+                            type="button"
+                            className="text-white/40 px-2"
+                            onClick={() => {
+                              setEditingCategoryId(null);
+                              setEditingCategoryParentId("");
+                              setEditingCategoryParentLabel("");
+                            }}
+                          >
+                            <X size={16} />
+                          </button>
+                        </div>
+                      </div>
                     ) : (
                       <>
-                        <span className="flex-1 text-sm font-medium truncate">
-                          {cat.name}
-                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            {level > 0 && (
+                              <span className="text-white/25 text-xs shrink-0">└</span>
+                            )}
+                            <span className="text-sm font-medium truncate">
+                              {cat.name}
+                            </span>
+                          </div>
+                          {categoryParentName(cat) ? (
+                            <p className="text-[10px] text-white/35 truncate mt-0.5">
+                              under {categoryParentName(cat)}
+                            </p>
+                          ) : (
+                            <p className="text-[10px] text-white/25 mt-0.5">
+                              Root category
+                            </p>
+                          )}
+                        </div>
                         <button
                           type="button"
                           className="p-1.5 text-white/40 hover:text-white"
-                          onClick={() => {
-                            setEditingCategoryId(cat._id);
-                            setEditingCategoryName(cat.name);
-                          }}
+                          onClick={() => startEditCategory(cat)}
                         >
                           <Edit2 size={14} />
                         </button>
