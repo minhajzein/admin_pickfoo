@@ -38,6 +38,7 @@ import {
   AlertCircle,
   Eye,
   Trash2,
+  UtensilsCrossed,
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -296,8 +297,14 @@ export default function RestaurantsPage() {
                           >
                             <Eye className="mr-2 h-4 w-4" /> View Details
                           </DropdownMenuItem>
-                          <Link href={`/restaurants/verify/${restaurant._id}`}>
+                          <Link href={`/restaurants/${restaurant._id}/menu`}>
                             <DropdownMenuItem className="text-[#98E32F] focus:text-[#98E32F] focus:bg-[#98E32F]/10">
+                              <UtensilsCrossed className="mr-2 h-4 w-4" />{" "}
+                              Manage Menu
+                            </DropdownMenuItem>
+                          </Link>
+                          <Link href={`/restaurants/verify/${restaurant._id}`}>
+                            <DropdownMenuItem>
                               <ShieldCheck className="mr-2 h-4 w-4" /> Verify
                               Documents
                             </DropdownMenuItem>

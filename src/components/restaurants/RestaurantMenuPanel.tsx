@@ -40,6 +40,7 @@ import {
   updateRestaurantMenuItem,
   uploadMenuImage,
 } from "@/lib/api/menu";
+import { CustomerStyleMenuCard } from "@/components/restaurants/CustomerStyleMenuCard";
 
 type MealType = "breakfast" | "lunch" | "dinner";
 
@@ -80,8 +81,10 @@ function validateForm(form: AdminMenuItemInput): string | null {
 
 export function RestaurantMenuPanel({
   restaurantId,
+  restaurantName,
 }: {
   restaurantId: string;
+  restaurantName?: string;
 }) {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
@@ -376,11 +379,11 @@ export function RestaurantMenuPanel({
       </div>
 
       {isMenuLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {[1, 2, 3, 4].map((i) => (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
             <div
               key={i}
-              className="h-36 rounded-2xl bg-white/5 border border-white/10 animate-pulse"
+              className="aspect-[2/3] rounded-[20px] bg-white/10 animate-pulse"
             />
           ))}
         </div>
@@ -401,91 +404,21 @@ export function RestaurantMenuPanel({
           </Button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
           {filteredItems.map((item) => (
-            <div
+            <CustomerStyleMenuCard
               key={item._id}
-              className="bg-[#002833] border border-white/10 rounded-2xl p-4 flex gap-4"
-            >
-              <div className="relative w-24 h-24 rounded-xl overflow-hidden bg-white/5 shrink-0">
-                {item.image ? (
-                  <NextImage
-                    src={item.image}
-                    alt={item.name}
-                    fill
-                    unoptimized
-                    className={`object-cover ${!item.isActive ? "grayscale" : ""}`}
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-white/20">
-                    <ImageIcon size={24} />
-                  </div>
-                )}
-                {!item.isActive && (
-                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                    <span className="text-[10px] font-bold uppercase tracking-wider bg-black/50 px-2 py-1 rounded">
-                      Inactive
-                    </span>
-                  </div>
-                )}
-              </div>
-              <div className="flex-1 min-w-0 flex flex-col">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-bold text-white truncate">{item.name}</h3>
-                      <span
-                        className={`shrink-0 w-2.5 h-2.5 rounded-sm border ${
-                          item.isVeg ? "border-green-500" : "border-red-500"
-                        } flex items-center justify-center p-px`}
-                      >
-                        <span
-                          className={`w-full h-full rounded-full ${
-                            item.isVeg ? "bg-green-500" : "bg-red-500"
-                          }`}
-                        />
-                      </span>
-                    </div>
-                    <p className="text-[10px] uppercase tracking-widest text-white/40 mt-0.5">
-                      {item.type || "lunch"} · {item.category}
-                    </p>
-                  </div>
-                  <p className="text-[#98E32F] font-bold whitespace-nowrap">
-                    ₹
-                    {item.variants && item.variants.length > 0
-                      ? Math.min(...item.variants.map((v) => v.price))
-                      : item.price}
-                  </p>
-                </div>
-                <p className="text-xs text-white/40 line-clamp-2 mt-1">
-                  {item.description}
-                </p>
-                <div className="mt-auto pt-2 flex justify-end gap-1">
-                  <button
-                    type="button"
-                    onClick={() => openEdit(item)}
-                    className="p-1.5 hover:bg-white/5 rounded-lg text-white/40 hover:text-white transition-colors"
-                    title="Edit"
-                  >
-                    <Edit2 size={16} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setDeleteTarget({
-                        type: "item",
-                        id: item._id,
-                        name: item.name,
-                      })
-                    }
-                    className="p-1.5 hover:bg-red-500/10 rounded-lg text-red-500/50 hover:text-red-500 transition-colors"
-                    title="Delete"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              </div>
-            </div>
+              item={item}
+              restaurantName={restaurantName}
+              onEdit={() => openEdit(item)}
+              onDelete={() =>
+                setDeleteTarget({
+                  type: "item",
+                  id: item._id,
+                  name: item.name,
+                })
+              }
+            />
           ))}
         </div>
       )}

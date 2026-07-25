@@ -21,6 +21,8 @@ export interface AdminMenuItem {
   image?: string;
   ingredients?: string[];
   restaurants?: string[];
+  rating?: number;
+  numReviews?: number;
   createdAt?: string;
   updatedAt?: string;
 }
