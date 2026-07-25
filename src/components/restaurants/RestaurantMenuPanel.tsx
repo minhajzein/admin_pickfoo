@@ -1,7 +1,6 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import NextImage from "next/image";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -425,7 +424,7 @@ export function RestaurantMenuPanel({
 
       {/* Add / Edit item dialog */}
       <Dialog open={isItemModalOpen} onOpenChange={setIsItemModalOpen}>
-        <DialogContent className="bg-[#002833] border-white/10 text-white max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="bg-[#002833] border-white/10 text-white max-w-2xl sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {editingItemId ? "Edit menu item" : "Add menu item"}
@@ -436,110 +435,130 @@ export function RestaurantMenuPanel({
           </DialogHeader>
 
           <div className="space-y-5 py-2">
-            <div className="flex flex-col sm:flex-row gap-4">
-              <div>
-                <input
-                  type="file"
-                  id="admin-menu-item-image"
-                  className="hidden"
-                  accept="image/*"
-                  onChange={handleItemImageUpload}
-                />
-                <label
-                  htmlFor="admin-menu-item-image"
-                  className="w-full sm:w-36 h-36 border border-dashed border-white/15 rounded-2xl flex flex-col items-center justify-center gap-2 cursor-pointer hover:border-[#98E32F]/50 overflow-hidden bg-white/5"
-                >
-                  {isUploadingImage ? (
-                    <Loader2 className="animate-spin text-[#98E32F]" size={22} />
-                  ) : form.image ? (
-                    <div className="relative w-full h-full">
-                      <NextImage
-                        src={form.image}
-                        alt="Preview"
-                        fill
-                        unoptimized
-                        className="object-cover"
-                      />
-                    </div>
-                  ) : (
-                    <>
-                      <ImageIcon size={22} className="text-white/30" />
-                      <span className="text-[10px] text-white/40 font-bold">
-                        Upload image
-                      </span>
-                    </>
-                  )}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-[10px] font-bold text-white/40 uppercase tracking-wider">
+                  Item image
                 </label>
+                {form.image ? (
+                  <button
+                    type="button"
+                    onClick={() => setForm((p) => ({ ...p, image: "" }))}
+                    className="text-[10px] font-bold text-red-400 hover:text-red-300"
+                  >
+                    Remove
+                  </button>
+                ) : null}
               </div>
+              <input
+                type="file"
+                id="admin-menu-item-image"
+                className="hidden"
+                accept="image/*"
+                onChange={handleItemImageUpload}
+              />
+              <label
+                htmlFor="admin-menu-item-image"
+                className="relative block w-full h-48 sm:h-56 border border-dashed border-white/15 rounded-2xl cursor-pointer hover:border-[#98E32F]/50 overflow-hidden bg-white/5"
+              >
+                {isUploadingImage ? (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-[#98E32F]">
+                    <Loader2 className="animate-spin" size={28} />
+                    <span className="text-xs font-bold">Uploading...</span>
+                  </div>
+                ) : form.image ? (
+                  <>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={form.image}
+                      alt="Menu item preview"
+                      className="absolute inset-0 w-full h-full object-cover"
+                    />
+                    <div className="absolute inset-0 bg-black/50 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <span className="text-xs font-bold text-white bg-black/60 px-3 py-1.5 rounded-full">
+                        Change image
+                      </span>
+                    </div>
+                  </>
+                ) : (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-white/30">
+                    <ImageIcon size={28} />
+                    <span className="text-xs font-bold">Click to upload image</span>
+                    <span className="text-[10px] text-white/20">
+                      Square photo recommended
+                    </span>
+                  </div>
+                )}
+              </label>
+            </div>
 
-              <div className="flex-1 space-y-3">
+            <div className="space-y-3">
+              <div>
+                <label className="text-[10px] font-bold text-white/40 uppercase tracking-wider">
+                  Name
+                </label>
+                <Input
+                  value={form.name}
+                  onChange={(e) =>
+                    setForm((p) => ({ ...p, name: e.target.value }))
+                  }
+                  className="mt-1 bg-white/5 border-white/10 text-white"
+                  placeholder="e.g. Malabar Biryani"
+                />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-bold text-white/40 uppercase tracking-wider">
+                      Category
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setIsCategoryModalOpen(true)}
+                      className="text-[10px] font-bold text-[#98E32F]"
+                    >
+                      Manage
+                    </button>
+                  </div>
+                  <select
+                    value={form.category}
+                    onChange={(e) =>
+                      setForm((p) => ({ ...p, category: e.target.value }))
+                    }
+                    className="mt-1 w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white"
+                  >
+                    <option value="">Select category</option>
+                    {categories.map((cat) => (
+                      <option key={cat._id} value={cat.name}>
+                        {cat.name}
+                      </option>
+                    ))}
+                    {categories.length === 0 && (
+                      <>
+                        <option value="Main Course">Main Course</option>
+                        <option value="Starters">Starters</option>
+                        <option value="Beverages">Beverages</option>
+                      </>
+                    )}
+                  </select>
+                </div>
                 <div>
                   <label className="text-[10px] font-bold text-white/40 uppercase tracking-wider">
-                    Name
+                    Base price
                   </label>
                   <Input
-                    value={form.name}
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={form.price}
                     onChange={(e) =>
-                      setForm((p) => ({ ...p, name: e.target.value }))
+                      setForm((p) => ({
+                        ...p,
+                        price: Number(e.target.value),
+                      }))
                     }
                     className="mt-1 bg-white/5 border-white/10 text-white"
-                    placeholder="e.g. Malabar Biryani"
                   />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <div className="flex items-center justify-between">
-                      <label className="text-[10px] font-bold text-white/40 uppercase tracking-wider">
-                        Category
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => setIsCategoryModalOpen(true)}
-                        className="text-[10px] font-bold text-[#98E32F]"
-                      >
-                        Manage
-                      </button>
-                    </div>
-                    <select
-                      value={form.category}
-                      onChange={(e) =>
-                        setForm((p) => ({ ...p, category: e.target.value }))
-                      }
-                      className="mt-1 w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white"
-                    >
-                      <option value="">Select category</option>
-                      {categories.map((cat) => (
-                        <option key={cat._id} value={cat.name}>
-                          {cat.name}
-                        </option>
-                      ))}
-                      {categories.length === 0 && (
-                        <>
-                          <option value="Main Course">Main Course</option>
-                          <option value="Starters">Starters</option>
-                          <option value="Beverages">Beverages</option>
-                        </>
-                      )}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-white/40 uppercase tracking-wider">
-                      Base price
-                    </label>
-                    <Input
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      value={form.price}
-                      onChange={(e) =>
-                        setForm((p) => ({
-                          ...p,
-                          price: Number(e.target.value),
-                        }))
-                      }
-                      className="mt-1 bg-white/5 border-white/10 text-white"
-                    />
-                  </div>
                 </div>
               </div>
             </div>
@@ -714,21 +733,21 @@ export function RestaurantMenuPanel({
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div>
-                <label className="text-[10px] font-bold text-white/40 uppercase tracking-wider mb-2 block">
+            <div className="space-y-4 pt-1">
+              <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                <label className="text-[10px] font-bold text-white/40 uppercase tracking-wider mb-2.5 block">
                   Meal type
                 </label>
-                <div className="flex gap-1 bg-white/5 p-1 rounded-xl">
+                <div className="grid grid-cols-3 gap-2">
                   {(["breakfast", "lunch", "dinner"] as MealType[]).map((t) => (
                     <button
                       key={t}
                       type="button"
                       onClick={() => setForm((p) => ({ ...p, type: t }))}
-                      className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider ${
+                      className={`py-2.5 px-2 rounded-xl text-[11px] font-black uppercase tracking-wide transition-colors ${
                         form.type === t
                           ? "bg-[#98E32F] text-[#013644]"
-                          : "text-white/40 hover:text-white"
+                          : "bg-white/5 text-white/50 hover:text-white hover:bg-white/10"
                       }`}
                     >
                       {t}
@@ -736,62 +755,66 @@ export function RestaurantMenuPanel({
                   ))}
                 </div>
               </div>
-              <div>
-                <label className="text-[10px] font-bold text-white/40 uppercase tracking-wider mb-2 block">
-                  Dietary
-                </label>
-                <div className="flex gap-1 bg-white/5 p-1 rounded-xl">
-                  <button
-                    type="button"
-                    onClick={() => setForm((p) => ({ ...p, isVeg: true }))}
-                    className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase ${
-                      form.isVeg
-                        ? "bg-[#98E32F] text-[#013644]"
-                        : "text-white/40"
-                    }`}
-                  >
-                    Veg
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setForm((p) => ({ ...p, isVeg: false }))}
-                    className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase ${
-                      !form.isVeg
-                        ? "bg-[#98E32F] text-[#013644]"
-                        : "text-white/40"
-                    }`}
-                  >
-                    Non-veg
-                  </button>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                  <label className="text-[10px] font-bold text-white/40 uppercase tracking-wider mb-2.5 block">
+                    Dietary
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setForm((p) => ({ ...p, isVeg: true }))}
+                      className={`py-2.5 rounded-xl text-[11px] font-black uppercase transition-colors ${
+                        form.isVeg
+                          ? "bg-[#98E32F] text-[#013644]"
+                          : "bg-white/5 text-white/50 hover:text-white"
+                      }`}
+                    >
+                      Veg
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setForm((p) => ({ ...p, isVeg: false }))}
+                      className={`py-2.5 rounded-xl text-[11px] font-black uppercase transition-colors ${
+                        !form.isVeg
+                          ? "bg-[#98E32F] text-[#013644]"
+                          : "bg-white/5 text-white/50 hover:text-white"
+                      }`}
+                    >
+                      Non-veg
+                    </button>
+                  </div>
                 </div>
-              </div>
-              <div>
-                <label className="text-[10px] font-bold text-white/40 uppercase tracking-wider mb-2 block">
-                  Availability
-                </label>
-                <div className="flex gap-1 bg-white/5 p-1 rounded-xl">
-                  <button
-                    type="button"
-                    onClick={() => setForm((p) => ({ ...p, isActive: true }))}
-                    className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase ${
-                      form.isActive
-                        ? "bg-[#98E32F] text-[#013644]"
-                        : "text-white/40"
-                    }`}
-                  >
-                    Active
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setForm((p) => ({ ...p, isActive: false }))}
-                    className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase ${
-                      !form.isActive
-                        ? "bg-[#98E32F] text-[#013644]"
-                        : "text-white/40"
-                    }`}
-                  >
-                    Off
-                  </button>
+
+                <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                  <label className="text-[10px] font-bold text-white/40 uppercase tracking-wider mb-2.5 block">
+                    Availability
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setForm((p) => ({ ...p, isActive: true }))}
+                      className={`py-2.5 rounded-xl text-[11px] font-black uppercase transition-colors ${
+                        form.isActive
+                          ? "bg-[#98E32F] text-[#013644]"
+                          : "bg-white/5 text-white/50 hover:text-white"
+                      }`}
+                    >
+                      Active
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setForm((p) => ({ ...p, isActive: false }))}
+                      className={`py-2.5 rounded-xl text-[11px] font-black uppercase transition-colors ${
+                        !form.isActive
+                          ? "bg-[#98E32F] text-[#013644]"
+                          : "bg-white/5 text-white/50 hover:text-white"
+                      }`}
+                    >
+                      Off
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -846,7 +869,21 @@ export function RestaurantMenuPanel({
                 placeholder="Category name"
                 className="bg-black/20 border-white/10 text-white"
               />
-              <div className="flex items-center gap-3">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-bold text-white/40 uppercase tracking-wider">
+                    Category image
+                  </label>
+                  {newCategoryImage ? (
+                    <button
+                      type="button"
+                      onClick={() => setNewCategoryImage("")}
+                      className="text-[10px] font-bold text-red-400"
+                    >
+                      Remove
+                    </button>
+                  ) : null}
+                </div>
                 <input
                   type="file"
                   id="admin-category-image"
@@ -856,23 +893,43 @@ export function RestaurantMenuPanel({
                 />
                 <label
                   htmlFor="admin-category-image"
-                  className="text-xs text-[#98E32F] cursor-pointer font-bold"
+                  className="relative block w-full h-36 border border-dashed border-white/15 rounded-xl cursor-pointer hover:border-[#98E32F]/50 overflow-hidden bg-black/20"
                 >
-                  {isUploadingCategoryImage
-                    ? "Uploading..."
-                    : newCategoryImage
-                      ? "Image ready · change"
-                      : "Optional image"}
+                  {isUploadingCategoryImage ? (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-[#98E32F]">
+                      <Loader2 className="animate-spin" size={22} />
+                      <span className="text-xs font-bold">Uploading...</span>
+                    </div>
+                  ) : newCategoryImage ? (
+                    <>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={newCategoryImage}
+                        alt="Category preview"
+                        className="absolute inset-0 w-full h-full object-cover"
+                      />
+                      <div className="absolute inset-0 bg-black/50 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <span className="text-xs font-bold text-white bg-black/60 px-3 py-1.5 rounded-full">
+                          Change image
+                        </span>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 text-white/30">
+                      <ImageIcon size={22} />
+                      <span className="text-xs font-bold">Optional image</span>
+                    </div>
+                  )}
                 </label>
-                <Button
-                  type="button"
-                  size="sm"
-                  className="ml-auto bg-[#98E32F] text-[#013644] font-bold"
-                  onClick={handleCreateCategory}
-                >
-                  Create
-                </Button>
               </div>
+              <Button
+                type="button"
+                size="sm"
+                className="w-full bg-[#98E32F] text-[#013644] font-bold"
+                onClick={handleCreateCategory}
+              >
+                Create category
+              </Button>
             </div>
 
             {isCategoriesLoading ? (
@@ -884,8 +941,22 @@ export function RestaurantMenuPanel({
                 {categories.map((cat) => (
                   <div
                     key={cat._id}
-                    className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2"
+                    className="flex items-center gap-3 rounded-xl border border-white/10 bg-black/20 px-3 py-2"
                   >
+                    <div className="relative w-12 h-12 rounded-lg overflow-hidden bg-white/5 shrink-0">
+                      {cat.image ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={cat.image}
+                          alt={cat.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-white/20">
+                          <ImageIcon size={16} />
+                        </div>
+                      )}
+                    </div>
                     {editingCategoryId === cat._id ? (
                       <>
                         <Input
