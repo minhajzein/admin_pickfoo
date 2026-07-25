@@ -111,6 +111,12 @@ export default function ManageRestaurantMenuPage() {
       <RestaurantMenuPanel
         restaurantId={restaurantId}
         restaurantName={restaurant.name}
+        restaurantTypes={
+          Array.isArray(restaurant.restaurantTypes) &&
+          restaurant.restaurantTypes.length > 0
+            ? restaurant.restaurantTypes
+            : ["restaurant"]
+        }
       />
     </div>
   );

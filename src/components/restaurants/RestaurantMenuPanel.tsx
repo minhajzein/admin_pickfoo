@@ -40,10 +40,22 @@ import {
   uploadMenuImage,
 } from "@/lib/api/menu";
 import { CustomerStyleMenuCard } from "@/components/restaurants/CustomerStyleMenuCard";
+import { RESTAURANT_TYPES, type RestaurantType } from "@/types/models";
 
 type MealType = "breakfast" | "lunch" | "dinner";
 
-const emptyForm = (): AdminMenuItemInput & { variants: AdminMenuVariant[] } => ({
+const RESTAURANT_TYPE_LABELS: Record<RestaurantType, string> = {
+  restaurant: "Restaurant",
+  cafe: "Cafe",
+  bakery: "Bakery",
+  coolbar: "Cool Bar",
+  hotbar: "Hot Bar",
+  home_made: "Home Made",
+};
+
+const emptyForm = (
+  restaurantTypes: string[] = ["restaurant"],
+): AdminMenuItemInput & { variants: AdminMenuVariant[] } => ({
   name: "",
   description: "",
   price: 0,
@@ -56,6 +68,8 @@ const emptyForm = (): AdminMenuItemInput & { variants: AdminMenuVariant[] } => (
   isActive: true,
   image: "",
   ingredients: [],
+  restaurantTypes:
+    restaurantTypes.length > 0 ? [...restaurantTypes] : ["restaurant"],
 });
 
 function validateForm(form: AdminMenuItemInput): string | null {
@@ -69,6 +83,9 @@ function validateForm(form: AdminMenuItemInput): string | null {
   if (!Number.isFinite(form.price) || form.price < 0) {
     return "Price cannot be negative";
   }
+  if (!form.restaurantTypes || form.restaurantTypes.length === 0) {
+    return "Select at least one restaurant type";
+  }
   for (const v of form.variants ?? []) {
     if (!v.name.trim()) return "Each variant needs a name";
     if (!Number.isFinite(v.price) || v.price < 0) {
@@ -81,15 +98,18 @@ function validateForm(form: AdminMenuItemInput): string | null {
 export function RestaurantMenuPanel({
   restaurantId,
   restaurantName,
+  restaurantTypes: restaurantTypeDefaults = ["restaurant"],
 }: {
   restaurantId: string;
   restaurantName?: string;
+  /** Types configured on this restaurant — used to seed new items. */
+  restaurantTypes?: string[];
 }) {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [isItemModalOpen, setIsItemModalOpen] = useState(false);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
-  const [form, setForm] = useState(emptyForm);
+  const [form, setForm] = useState(() => emptyForm(restaurantTypeDefaults));
   const [ingredientInput, setIngredientInput] = useState("");
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -172,13 +192,19 @@ export function RestaurantMenuPanel({
 
   const openCreate = () => {
     setEditingItemId(null);
-    setForm(emptyForm());
+    setForm(emptyForm(restaurantTypeDefaults));
     setIngredientInput("");
     setIsItemModalOpen(true);
   };
 
   const openEdit = (item: AdminMenuItem) => {
     setEditingItemId(item._id);
+    const itemTypes =
+      item.restaurantTypes && item.restaurantTypes.length > 0
+        ? item.restaurantTypes
+        : restaurantTypeDefaults.length > 0
+          ? restaurantTypeDefaults
+          : ["restaurant"];
     setForm({
       name: item.name,
       description: item.description,
@@ -192,9 +218,29 @@ export function RestaurantMenuPanel({
       isActive: item.isActive,
       image: item.image || "",
       ingredients: item.ingredients ?? [],
+      restaurantTypes: [...itemTypes],
     });
     setIngredientInput("");
     setIsItemModalOpen(true);
+  };
+
+  const toggleRestaurantType = (type: RestaurantType) => {
+    setForm((prev) => {
+      const current = prev.restaurantTypes ?? [];
+      if (current.includes(type)) {
+        if (current.length <= 1) return prev;
+        return {
+          ...prev,
+          restaurantTypes: current.filter((t) => t !== type),
+        };
+      }
+      return {
+        ...prev,
+        restaurantTypes: RESTAURANT_TYPES.filter(
+          (t) => t === type || current.includes(t),
+        ),
+      };
+    });
   };
 
   const handleItemImageUpload = async (
@@ -258,6 +304,7 @@ export function RestaurantMenuPanel({
       variants: (form.variants ?? []).filter((v) => v.name.trim()),
       ingredients: form.ingredients ?? [],
       image: form.image || undefined,
+      restaurantTypes: form.restaurantTypes ?? ["restaurant"],
     };
     try {
       setIsSaving(true);
@@ -730,6 +777,36 @@ export function RestaurantMenuPanel({
                     <X size={10} />
                   </button>
                 ))}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-white/10 bg-black/20 p-3 space-y-2">
+              <div>
+                <label className="text-[10px] font-bold text-white/40 uppercase tracking-wider block">
+                  Restaurant type
+                </label>
+                <p className="text-[11px] text-white/45 mt-1">
+                  Select where this item should appear (Cafe, Cool Bar, etc.).
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {RESTAURANT_TYPES.map((type) => {
+                  const selected = (form.restaurantTypes ?? []).includes(type);
+                  return (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => toggleRestaurantType(type)}
+                      className={`px-3 py-2 rounded-xl text-[11px] font-black uppercase tracking-wide transition-colors border ${
+                        selected
+                          ? "bg-[#98E32F] text-[#013644] border-[#98E32F]"
+                          : "bg-white/5 text-white/50 border-white/10 hover:text-white hover:bg-white/10"
+                      }`}
+                    >
+                      {RESTAURANT_TYPE_LABELS[type]}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 

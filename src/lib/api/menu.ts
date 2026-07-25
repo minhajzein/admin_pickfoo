@@ -21,6 +21,7 @@ export interface AdminMenuItem {
   image?: string;
   ingredients?: string[];
   restaurants?: string[];
+  restaurantTypes?: string[];
   rating?: number;
   numReviews?: number;
   createdAt?: string;
@@ -48,6 +49,7 @@ export interface AdminMenuItemInput {
   isActive: boolean;
   image?: string;
   ingredients?: string[];
+  restaurantTypes?: string[];
 }
 
 export async function fetchRestaurantMenu(
