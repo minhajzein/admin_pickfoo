@@ -22,6 +22,8 @@ export interface AdminMenuItem {
   ingredients?: string[];
   restaurants?: string[];
   restaurantTypes?: string[];
+  /** Other dishes suggested as "complete your meal" pairings. */
+  completeMealItemIds?: string[];
   rating?: number;
   numReviews?: number;
   createdAt?: string;
@@ -51,6 +53,7 @@ export interface AdminMenuItemInput {
   image?: string;
   ingredients?: string[];
   restaurantTypes?: string[];
+  completeMealItemIds?: string[];
 }
 
 export async function fetchRestaurantMenu(

@@ -73,7 +73,25 @@ const emptyForm = (
   ingredients: [],
   restaurantTypes:
     restaurantTypes.length > 0 ? [...restaurantTypes] : ["restaurant"],
+  completeMealItemIds: [],
 });
+
+function normalizeRelatedItemIds(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return [
+    ...new Set(
+      raw
+        .map((id) => {
+          if (typeof id === "string") return id.trim();
+          if (id && typeof id === "object" && "_id" in id) {
+            return String((id as { _id: unknown })._id).trim();
+          }
+          return String(id ?? "").trim();
+        })
+        .filter(Boolean),
+    ),
+  ];
+}
 
 function validateForm(form: AdminMenuItemInput): string | null {
   if (!form.name.trim() || form.name.trim().length < 2) {
@@ -117,6 +135,7 @@ export function RestaurantMenuPanel({
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [form, setForm] = useState(() => emptyForm(restaurantTypeDefaults));
   const [ingredientInput, setIngredientInput] = useState("");
+  const [relatedItemSearch, setRelatedItemSearch] = useState("");
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -208,6 +227,24 @@ export function RestaurantMenuPanel({
     );
   }, [menuItems, search]);
 
+  const relatedItemCandidates = useMemo(() => {
+    const q = relatedItemSearch.trim().toLowerCase();
+    return menuItems.filter((item) => {
+      if (editingItemId && item._id === editingItemId) return false;
+      if (!item.isActive) return false;
+      if (!q) return true;
+      return (
+        item.name.toLowerCase().includes(q) ||
+        item.category.toLowerCase().includes(q)
+      );
+    });
+  }, [menuItems, editingItemId, relatedItemSearch]);
+
+  const selectedRelatedItems = useMemo(() => {
+    const ids = new Set(form.completeMealItemIds ?? []);
+    return menuItems.filter((item) => ids.has(item._id));
+  }, [menuItems, form.completeMealItemIds]);
+
   const invalidateMenu = () => {
     queryClient.invalidateQueries({ queryKey: ["restaurant-menu", restaurantId] });
   };
@@ -254,6 +291,7 @@ export function RestaurantMenuPanel({
     setEditingItemId(null);
     setForm(emptyForm(restaurantTypeDefaults));
     setIngredientInput("");
+    setRelatedItemSearch("");
     setIsItemModalOpen(true);
   };
 
@@ -286,8 +324,10 @@ export function RestaurantMenuPanel({
       image: item.image || "",
       ingredients: item.ingredients ?? [],
       restaurantTypes: [...itemTypes],
+      completeMealItemIds: normalizeRelatedItemIds(item.completeMealItemIds),
     });
     setIngredientInput("");
+    setRelatedItemSearch("");
     setIsItemModalOpen(true);
   };
 
@@ -329,6 +369,22 @@ export function RestaurantMenuPanel({
         ...prev,
         mealTypes: nextMealTypes,
         type: nextMealTypes[0] ?? type,
+      };
+    });
+  };
+
+  const toggleRelatedItem = (itemId: string) => {
+    setForm((prev) => {
+      const current = prev.completeMealItemIds ?? [];
+      if (current.includes(itemId)) {
+        return {
+          ...prev,
+          completeMealItemIds: current.filter((id) => id !== itemId),
+        };
+      }
+      return {
+        ...prev,
+        completeMealItemIds: [...current, itemId],
       };
     });
   };
@@ -397,6 +453,7 @@ export function RestaurantMenuPanel({
       ingredients: form.ingredients ?? [],
       image: form.image || undefined,
       restaurantTypes: form.restaurantTypes ?? ["restaurant"],
+      completeMealItemIds: form.completeMealItemIds ?? [],
     };
     try {
       setIsSaving(true);
@@ -410,6 +467,7 @@ export function RestaurantMenuPanel({
       invalidateMenu();
       setIsItemModalOpen(false);
       setEditingItemId(null);
+      setRelatedItemSearch("");
       setForm(emptyForm(restaurantTypeDefaults));
     } catch (err: unknown) {
       const msg =
@@ -871,6 +929,107 @@ export function RestaurantMenuPanel({
                   </button>
                 ))}
               </div>
+            </div>
+
+            <div className="rounded-xl border border-white/10 bg-black/20 p-3 space-y-3">
+              <div>
+                <label className="text-[10px] font-bold text-white/40 uppercase tracking-wider block">
+                  Related items
+                </label>
+                <p className="text-[11px] text-white/45 mt-1">
+                  Pick other dishes from this restaurant to suggest as “complete
+                  your meal” in the customer cart.
+                </p>
+              </div>
+
+              {selectedRelatedItems.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {selectedRelatedItems.map((item) => (
+                    <button
+                      key={item._id}
+                      type="button"
+                      onClick={() => toggleRelatedItem(item._id)}
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-[#98E32F]/15 border border-[#98E32F]/40 text-[11px] text-[#98E32F] font-semibold"
+                    >
+                      <span className="truncate max-w-[140px]">{item.name}</span>
+                      <X size={12} />
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <div className="relative">
+                <Search
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30"
+                  size={14}
+                />
+                <Input
+                  value={relatedItemSearch}
+                  onChange={(e) => setRelatedItemSearch(e.target.value)}
+                  placeholder="Search this restaurant’s menu..."
+                  className="pl-9 bg-white/5 border-white/10 text-white"
+                />
+              </div>
+
+              {menuItems.length <= 1 && !editingItemId ? (
+                <p className="text-[11px] text-white/35 italic">
+                  Add more menu items first to choose related dishes.
+                </p>
+              ) : relatedItemCandidates.length === 0 ? (
+                <p className="text-[11px] text-white/35 italic">
+                  {relatedItemSearch.trim()
+                    ? "No matching items."
+                    : "No other active items available."}
+                </p>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-48 overflow-y-auto pr-1">
+                  {relatedItemCandidates.map((item) => {
+                    const selected = (form.completeMealItemIds ?? []).includes(
+                      item._id,
+                    );
+                    return (
+                      <button
+                        key={item._id}
+                        type="button"
+                        onClick={() => toggleRelatedItem(item._id)}
+                        className={`text-left rounded-xl border overflow-hidden transition-colors ${
+                          selected
+                            ? "border-[#98E32F] bg-[#98E32F]/10"
+                            : "border-white/10 bg-white/5 hover:border-white/20"
+                        }`}
+                      >
+                        <div className="relative h-16 bg-black/20">
+                          {item.image ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={item.image}
+                              alt={item.name}
+                              className="absolute inset-0 w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className="absolute inset-0 flex items-center justify-center text-white/20">
+                              <ImageIcon size={16} />
+                            </div>
+                          )}
+                          {selected && (
+                            <div className="absolute top-1 right-1 w-5 h-5 rounded-full bg-[#98E32F] text-[#013644] flex items-center justify-center text-[10px] font-black">
+                              ✓
+                            </div>
+                          )}
+                        </div>
+                        <div className="px-2 py-1.5">
+                          <p className="text-[11px] font-semibold text-white truncate">
+                            {item.name}
+                          </p>
+                          <p className="text-[10px] text-white/40 truncate">
+                            ₹{Math.round(item.price)}
+                          </p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             <div className="rounded-xl border border-white/10 bg-black/20 p-3 space-y-2">
