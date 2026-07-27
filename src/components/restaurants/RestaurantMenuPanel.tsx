@@ -265,11 +265,11 @@ export function RestaurantMenuPanel({
         : restaurantTypeDefaults.length > 0
           ? restaurantTypeDefaults
           : ["restaurant"];
-    const itemMealTypes =
+    const itemMealTypes: MealType[] =
       item.mealTypes && item.mealTypes.length > 0
         ? item.mealTypes
         : item.type
-          ? [item.type]
+          ? ([item.type] as MealType[])
           : ["lunch"];
     setForm({
       name: item.name,
