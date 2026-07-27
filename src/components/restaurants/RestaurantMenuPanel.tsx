@@ -63,6 +63,7 @@ const emptyForm = (
   price: 0,
   category: "",
   type: "lunch",
+  mealTypes: ["lunch"],
   preparationTime: 0,
   packingCharge: 0,
   variants: [],
@@ -84,6 +85,9 @@ function validateForm(form: AdminMenuItemInput): string | null {
   if (!form.category.trim()) return "Category is required";
   if (!Number.isFinite(form.price) || form.price < 0) {
     return "Price cannot be negative";
+  }
+  if (!form.mealTypes || form.mealTypes.length === 0) {
+    return "Select at least one meal type";
   }
   if (!form.restaurantTypes || form.restaurantTypes.length === 0) {
     return "Select at least one restaurant type";
@@ -261,12 +265,19 @@ export function RestaurantMenuPanel({
         : restaurantTypeDefaults.length > 0
           ? restaurantTypeDefaults
           : ["restaurant"];
+    const itemMealTypes =
+      item.mealTypes && item.mealTypes.length > 0
+        ? item.mealTypes
+        : item.type
+          ? [item.type]
+          : ["lunch"];
     setForm({
       name: item.name,
       description: item.description,
       price: item.price,
       category: item.category,
       type: item.type || "lunch",
+      mealTypes: [...itemMealTypes],
       preparationTime: item.preparationTime ?? 0,
       packingCharge: item.packingCharge ?? 0,
       variants: item.variants?.map((v) => ({ ...v })) ?? [],
@@ -295,6 +306,29 @@ export function RestaurantMenuPanel({
         restaurantTypes: RESTAURANT_TYPES.filter(
           (t) => t === type || current.includes(t),
         ),
+      };
+    });
+  };
+
+  const toggleMealType = (type: MealType) => {
+    setForm((prev) => {
+      const current = prev.mealTypes ?? [];
+      if (current.includes(type)) {
+        if (current.length <= 1) return prev;
+        const nextMealTypes = current.filter((t) => t !== type);
+        return {
+          ...prev,
+          mealTypes: nextMealTypes,
+          type: nextMealTypes[0] ?? "lunch",
+        };
+      }
+      const nextMealTypes = (["breakfast", "lunch", "dinner"] as MealType[]).filter(
+        (t) => t === type || current.includes(t),
+      );
+      return {
+        ...prev,
+        mealTypes: nextMealTypes,
+        type: nextMealTypes[0] ?? type,
       };
     });
   };
@@ -357,6 +391,8 @@ export function RestaurantMenuPanel({
       name: form.name.trim(),
       description: form.description.trim(),
       category: form.category.trim(),
+      type: (form.mealTypes?.[0] as MealType | undefined) ?? form.type ?? "lunch",
+      mealTypes: form.mealTypes ?? [form.type ?? "lunch"],
       variants: (form.variants ?? []).filter((v) => v.name.trim()),
       ingredients: form.ingredients ?? [],
       image: form.image || undefined,
@@ -374,7 +410,7 @@ export function RestaurantMenuPanel({
       invalidateMenu();
       setIsItemModalOpen(false);
       setEditingItemId(null);
-      setForm(emptyForm());
+      setForm(emptyForm(restaurantTypeDefaults));
     } catch (err: unknown) {
       const msg =
         err && typeof err === "object" && "response" in err
@@ -872,14 +908,17 @@ export function RestaurantMenuPanel({
                 <label className="text-[10px] font-bold text-white/40 uppercase tracking-wider mb-2.5 block">
                   Meal type
                 </label>
+                <p className="text-[11px] text-white/45 mt-1 mb-2.5">
+                  Select one or more meal periods.
+                </p>
                 <div className="grid grid-cols-3 gap-2">
                   {(["breakfast", "lunch", "dinner"] as MealType[]).map((t) => (
                     <button
                       key={t}
                       type="button"
-                      onClick={() => setForm((p) => ({ ...p, type: t }))}
+                      onClick={() => toggleMealType(t)}
                       className={`py-2.5 px-2 rounded-xl text-[11px] font-black uppercase tracking-wide transition-colors ${
-                        form.type === t
+                        (form.mealTypes ?? []).includes(t)
                           ? "bg-[#98E32F] text-[#013644]"
                           : "bg-white/5 text-white/50 hover:text-white hover:bg-white/10"
                       }`}

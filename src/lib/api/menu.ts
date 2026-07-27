@@ -42,6 +42,7 @@ export interface AdminMenuItemInput {
   price: number;
   category: string;
   type: "breakfast" | "lunch" | "dinner";
+  mealTypes?: ("breakfast" | "lunch" | "dinner")[];
   preparationTime: number;
   packingCharge: number;
   variants?: AdminMenuVariant[];
