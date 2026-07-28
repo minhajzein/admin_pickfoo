@@ -905,7 +905,8 @@ export function RestaurantMenuPanel({
                     type="number"
                     min={0}
                     readOnly
-                    value={form.price}
+                    value={form.price || ""}
+                    placeholder="—"
                     className="mt-1 bg-[#98E32F]/10 border-[#98E32F]/30 text-[#98E32F] font-semibold"
                   />
                 </div>
@@ -920,11 +921,12 @@ export function RestaurantMenuPanel({
                 <Input
                   type="number"
                   min={0}
-                  value={form.preparationTime}
+                  value={form.preparationTime || ""}
+                  placeholder="e.g. 20"
                   onChange={(e) =>
                     setForm((p) => ({
                       ...p,
-                      preparationTime: Number(e.target.value),
+                      preparationTime: e.target.value === "" ? 0 : Number(e.target.value),
                     }))
                   }
                   className="mt-1 bg-white/5 border-white/10 text-white"
@@ -938,11 +940,12 @@ export function RestaurantMenuPanel({
                   type="number"
                   min={0}
                   step="0.01"
-                  value={form.packingCharge}
+                  value={form.packingCharge || ""}
+                  placeholder="e.g. 5"
                   onChange={(e) =>
                     setForm((p) => ({
                       ...p,
-                      packingCharge: Number(e.target.value),
+                      packingCharge: e.target.value === "" ? 0 : Number(e.target.value),
                     }))
                   }
                   className="mt-1 bg-white/5 border-white/10 text-white"
@@ -1012,7 +1015,8 @@ export function RestaurantMenuPanel({
                     type="number"
                     min={0}
                     readOnly
-                    value={variant.price}
+                    value={variant.price || ""}
+                    placeholder="—"
                     className="bg-[#98E32F]/10 border-[#98E32F]/30 text-[#98E32F] font-semibold"
                   />
                   <button
