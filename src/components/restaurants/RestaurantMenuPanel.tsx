@@ -148,6 +148,7 @@ export function RestaurantMenuPanel({
   const [newCategoryParentId, setNewCategoryParentId] = useState("");
   const [newCategoryParentLabel, setNewCategoryParentLabel] = useState("");
   const [isUploadingCategoryImage, setIsUploadingCategoryImage] = useState(false);
+  const [isSavingCategory, setIsSavingCategory] = useState(false);
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const [editingCategoryName, setEditingCategoryName] = useState("");
   const [editingCategoryParentId, setEditingCategoryParentId] = useState("");
@@ -487,7 +488,9 @@ export function RestaurantMenuPanel({
       toast.error("Category name is required");
       return;
     }
+    if (isSavingCategory) return;
     try {
+      setIsSavingCategory(true);
       await createCategoryForRestaurant(restaurantId, {
         name,
         image: newCategoryImage || undefined,
@@ -506,6 +509,8 @@ export function RestaurantMenuPanel({
               ?.message
           : undefined;
       toast.error(msg || "Failed to create category");
+    } finally {
+      setIsSavingCategory(false);
     }
   };
 
@@ -516,7 +521,9 @@ export function RestaurantMenuPanel({
       toast.error("Category name is required");
       return;
     }
+    if (isSavingCategory) return;
     try {
+      setIsSavingCategory(true);
       await updateCategory(editingCategoryId, {
         name,
         parent: editingCategoryParentId.trim() || null,
@@ -534,6 +541,8 @@ export function RestaurantMenuPanel({
               ?.message
           : undefined;
       toast.error(msg || "Failed to update category");
+    } finally {
+      setIsSavingCategory(false);
     }
   };
 
@@ -1275,9 +1284,10 @@ export function RestaurantMenuPanel({
                 type="button"
                 size="sm"
                 className="w-full bg-[#98E32F] text-[#013644] font-bold"
+                disabled={isSavingCategory}
                 onClick={handleCreateCategory}
               >
-                Create category
+                {isSavingCategory ? "Saving..." : "Create category"}
               </Button>
             </div>
 
@@ -1352,9 +1362,10 @@ export function RestaurantMenuPanel({
                             type="button"
                             size="sm"
                             className="bg-[#98E32F] text-[#013644] font-bold h-8"
+                            disabled={isSavingCategory}
                             onClick={handleUpdateCategory}
                           >
-                            Save
+                            {isSavingCategory ? "Saving..." : "Save"}
                           </Button>
                           <button
                             type="button"
