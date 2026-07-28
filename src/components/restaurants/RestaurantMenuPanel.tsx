@@ -159,6 +159,7 @@ export function RestaurantMenuPanel({
     type: "item" | "category";
     id: string;
     name: string;
+    linkedMenuItemCount?: number;
   } | null>(null);
 
   useEffect(() => {
@@ -1403,23 +1404,31 @@ export function RestaurantMenuPanel({
                         </div>
                         <button
                           type="button"
-                          className="p-1.5 text-white/40 hover:text-white"
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs text-white/60 hover:text-white hover:bg-white/5"
                           onClick={() => startEditCategory(cat)}
                         >
                           <Edit2 size={14} />
+                          Edit
                         </button>
                         <button
                           type="button"
-                          className="p-1.5 text-red-500/50 hover:text-red-500"
-                          onClick={() =>
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                          onClick={() => {
+                            const linkedMenuItemCount = menuItems.filter(
+                              (item) =>
+                                item.category === cat.name ||
+                                item.category === cat._id
+                            ).length;
                             setDeleteTarget({
                               type: "category",
                               id: cat._id,
                               name: cat.name,
-                            })
-                          }
+                              linkedMenuItemCount,
+                            });
+                          }}
                         >
                           <Trash2 size={14} />
+                          Delete
                         </button>
                       </>
                     )}
@@ -1447,6 +1456,15 @@ export function RestaurantMenuPanel({
               This will permanently remove{" "}
               <span className="text-white font-medium">{deleteTarget?.name}</span>.
             </DialogDescription>
+            {deleteTarget?.type === "category" &&
+            (deleteTarget.linkedMenuItemCount ?? 0) > 0 ? (
+              <div className="rounded-xl border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-sm text-amber-200">
+                {deleteTarget.linkedMenuItemCount} menu item
+                {deleteTarget.linkedMenuItemCount === 1 ? " is" : "s are"} linked
+                to this category. Delete will be blocked until those items are moved
+                to another category.
+              </div>
+            ) : null}
           </DialogHeader>
           <DialogFooter className="gap-2">
             <Button
