@@ -46,6 +46,8 @@ import { RESTAURANT_TYPES, type RestaurantType } from "@/types/models";
 
 type MealType = "breakfast" | "lunch" | "dinner";
 
+const DEFAULT_COMMISSION_PERCENT = 12;
+
 const RESTAURANT_TYPE_LABELS: Record<RestaurantType, string> = {
   restaurant: "Restaurant",
   cafe: "Cafe",
@@ -54,6 +56,22 @@ const RESTAURANT_TYPE_LABELS: Record<RestaurantType, string> = {
   hotbar: "Hot Bar",
   home_made: "Home Made",
 };
+
+/** Raise partner price by commission % (rounded to nearest rupee). */
+function raisedPrice(original: number, percent: number): number {
+  const base = Number.isFinite(original) && original > 0 ? original : 0;
+  const pct = Number.isFinite(percent) ? percent : 0;
+  return Math.round((base * (100 + pct)) / 100);
+}
+
+/** Back-calculate original from a stored final price. */
+function originalFromFinal(finalPrice: number, percent: number): number {
+  const final = Number.isFinite(finalPrice) && finalPrice > 0 ? finalPrice : 0;
+  const pct = Number.isFinite(percent) ? percent : 0;
+  const factor = 100 + pct;
+  if (factor <= 0) return final;
+  return Math.round((final * 100) / factor);
+}
 
 const emptyForm = (
   restaurantTypes: string[] = ["restaurant"],
@@ -101,20 +119,20 @@ function validateForm(form: AdminMenuItemInput): string | null {
     return "Description must be at least 10 characters";
   }
   if (!form.category.trim()) return "Category is required";
-  if (!Number.isFinite(form.price) || form.price < 0) {
-    return "Price cannot be negative";
+  if (!Number.isFinite(form.price) || form.price <= 0) {
+    return "Enter an original price so the final raised price is greater than 0";
+  }
+  for (const variant of form.variants ?? []) {
+    if (!variant.name?.trim()) return "Each variant needs a name";
+    if (!Number.isFinite(variant.price) || variant.price <= 0) {
+      return `Variant "${variant.name}" needs an original price so final is > 0`;
+    }
   }
   if (!form.mealTypes || form.mealTypes.length === 0) {
     return "Select at least one meal type";
   }
   if (!form.restaurantTypes || form.restaurantTypes.length === 0) {
     return "Select at least one restaurant type";
-  }
-  for (const v of form.variants ?? []) {
-    if (!v.name.trim()) return "Each variant needs a name";
-    if (!Number.isFinite(v.price) || v.price < 0) {
-      return "Variant prices cannot be negative";
-    }
   }
   return null;
 }
@@ -136,6 +154,13 @@ export function RestaurantMenuPanel({
   const [form, setForm] = useState(() => emptyForm(restaurantTypeDefaults));
   const [ingredientInput, setIngredientInput] = useState("");
   const [relatedItemSearch, setRelatedItemSearch] = useState("");
+  const [commissionPercent, setCommissionPercent] = useState(
+    DEFAULT_COMMISSION_PERCENT,
+  );
+  const [originalPrice, setOriginalPrice] = useState(0);
+  const [originalVariantPrices, setOriginalVariantPrices] = useState<number[]>(
+    [],
+  );
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -294,6 +319,9 @@ export function RestaurantMenuPanel({
     setForm(emptyForm(restaurantTypeDefaults));
     setIngredientInput("");
     setRelatedItemSearch("");
+    setCommissionPercent(DEFAULT_COMMISSION_PERCENT);
+    setOriginalPrice(0);
+    setOriginalVariantPrices([]);
     setIsItemModalOpen(true);
   };
 
@@ -311,6 +339,8 @@ export function RestaurantMenuPanel({
         : item.type
           ? ([item.type] as MealType[])
           : ["lunch"];
+    const pct = DEFAULT_COMMISSION_PERCENT;
+    const variants = item.variants?.map((v) => ({ ...v })) ?? [];
     setForm({
       name: item.name,
       description: item.description,
@@ -320,7 +350,7 @@ export function RestaurantMenuPanel({
       mealTypes: [...itemMealTypes],
       preparationTime: item.preparationTime ?? 0,
       packingCharge: item.packingCharge ?? 0,
-      variants: item.variants?.map((v) => ({ ...v })) ?? [],
+      variants,
       isVeg: item.isVeg,
       isActive: item.isActive,
       image: item.image || "",
@@ -328,9 +358,71 @@ export function RestaurantMenuPanel({
       restaurantTypes: [...itemTypes],
       completeMealItemIds: normalizeRelatedItemIds(item.completeMealItemIds),
     });
+    setCommissionPercent(pct);
+    setOriginalPrice(originalFromFinal(item.price, pct));
+    setOriginalVariantPrices(
+      variants.map((v) => originalFromFinal(v.price, pct)),
+    );
     setIngredientInput("");
     setRelatedItemSearch("");
     setIsItemModalOpen(true);
+  };
+
+  const syncRaisedFromOriginals = (
+    nextOriginal: number,
+    nextPercent: number,
+    nextVariantOriginals: number[],
+  ) => {
+    setForm((p) => ({
+      ...p,
+      price: raisedPrice(nextOriginal, nextPercent),
+      variants: (p.variants ?? []).map((v, i) => ({
+        ...v,
+        price: raisedPrice(nextVariantOriginals[i] ?? 0, nextPercent),
+      })),
+    }));
+  };
+
+  const handleCommissionPercentChange = (raw: string) => {
+    const next = Number(raw);
+    const pct = Number.isFinite(next) ? next : 0;
+    setCommissionPercent(pct);
+    syncRaisedFromOriginals(originalPrice, pct, originalVariantPrices);
+  };
+
+  const handleOriginalPriceChange = (raw: string) => {
+    const next = Number(raw);
+    const orig = Number.isFinite(next) ? next : 0;
+    setOriginalPrice(orig);
+    syncRaisedFromOriginals(orig, commissionPercent, originalVariantPrices);
+  };
+
+  const handleOriginalVariantPriceChange = (index: number, raw: string) => {
+    const next = Number(raw);
+    const orig = Number.isFinite(next) ? next : 0;
+    const nextVariantOriginals = [...originalVariantPrices];
+    nextVariantOriginals[index] = orig;
+    setOriginalVariantPrices(nextVariantOriginals);
+    syncRaisedFromOriginals(originalPrice, commissionPercent, nextVariantOriginals);
+  };
+
+  const addVariantRow = () => {
+    setOriginalVariantPrices((prev) => [...prev, 0]);
+    setForm((p) => ({
+      ...p,
+      variants: [
+        ...(p.variants ?? []),
+        { name: "", price: raisedPrice(0, commissionPercent) },
+      ],
+    }));
+  };
+
+  const removeVariantRow = (index: number) => {
+    setOriginalVariantPrices((prev) => prev.filter((_, i) => i !== index));
+    setForm((p) => ({
+      ...p,
+      variants: (p.variants ?? []).filter((_, i) => i !== index),
+    }));
   };
 
   const toggleRestaurantType = (type: RestaurantType) => {
@@ -728,46 +820,26 @@ export function RestaurantMenuPanel({
                   placeholder="e.g. Malabar Biryani"
                 />
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <div className="flex items-center justify-between">
-                    <label className="text-[10px] font-bold text-white/40 uppercase tracking-wider">
-                      Category
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => setIsCategoryModalOpen(true)}
-                      className="text-[10px] font-bold text-[#98E32F]"
-                    >
-                      Manage
-                    </button>
-                  </div>
-                  <CategorySearchField
-                    value={form.category}
-                    onChange={(category) =>
-                      setForm((p) => ({ ...p, category }))
-                    }
-                    placeholder="Search categories..."
-                  />
-                </div>
-                <div>
+              <div>
+                <div className="flex items-center justify-between">
                   <label className="text-[10px] font-bold text-white/40 uppercase tracking-wider">
-                    Base price
+                    Category
                   </label>
-                  <Input
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    value={form.price}
-                    onChange={(e) =>
-                      setForm((p) => ({
-                        ...p,
-                        price: Number(e.target.value),
-                      }))
-                    }
-                    className="mt-1 bg-white/5 border-white/10 text-white"
-                  />
+                  <button
+                    type="button"
+                    onClick={() => setIsCategoryModalOpen(true)}
+                    className="text-[10px] font-bold text-[#98E32F]"
+                  >
+                    Manage
+                  </button>
                 </div>
+                <CategorySearchField
+                  value={form.category}
+                  onChange={(category) =>
+                    setForm((p) => ({ ...p, category }))
+                  }
+                  placeholder="Search categories..."
+                />
               </div>
             </div>
 
@@ -783,6 +855,61 @@ export function RestaurantMenuPanel({
                 className="mt-1 bg-white/5 border-white/10 text-white min-h-24"
                 placeholder="Describe the dish..."
               />
+            </div>
+
+            <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <label className="text-[10px] font-bold text-white/40 uppercase tracking-wider">
+                  Pricing (with commission)
+                </label>
+                <p className="text-[10px] text-white/35">
+                  Final = original × (1 + %) · rounded ₹
+                </p>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="text-[10px] font-bold text-white/40 uppercase tracking-wider">
+                    Original (₹) *
+                  </label>
+                  <Input
+                    type="number"
+                    min={0}
+                    step="1"
+                    required
+                    value={originalPrice || ""}
+                    onChange={(e) => handleOriginalPriceChange(e.target.value)}
+                    placeholder="Partner price"
+                    className="mt-1 bg-black/20 border-white/10 text-white"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-white/40 uppercase tracking-wider">
+                    Commission %
+                  </label>
+                  <Input
+                    type="number"
+                    min={0}
+                    step="0.1"
+                    value={commissionPercent}
+                    onChange={(e) =>
+                      handleCommissionPercentChange(e.target.value)
+                    }
+                    className="mt-1 bg-black/20 border-white/10 text-white"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-white/40 uppercase tracking-wider">
+                    Final (₹)
+                  </label>
+                  <Input
+                    type="number"
+                    min={0}
+                    readOnly
+                    value={form.price}
+                    className="mt-1 bg-[#98E32F]/10 border-[#98E32F]/30 text-[#98E32F] font-semibold"
+                  />
+                </div>
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -831,18 +958,30 @@ export function RestaurantMenuPanel({
                 <button
                   type="button"
                   className="text-[10px] font-bold text-[#98E32F]"
-                  onClick={() =>
-                    setForm((p) => ({
-                      ...p,
-                      variants: [...(p.variants ?? []), { name: "", price: 0 }],
-                    }))
-                  }
+                  onClick={addVariantRow}
                 >
                   + Add variant
                 </button>
               </div>
+              {(form.variants ?? []).length > 0 && (
+                <div className="grid grid-cols-[1fr_5.5rem_5.5rem_2rem] gap-2 px-0.5">
+                  <span className="text-[9px] font-bold text-white/30 uppercase">
+                    Name
+                  </span>
+                  <span className="text-[9px] font-bold text-white/30 uppercase">
+                    Original
+                  </span>
+                  <span className="text-[9px] font-bold text-white/30 uppercase">
+                    Final
+                  </span>
+                  <span />
+                </div>
+              )}
               {(form.variants ?? []).map((variant, index) => (
-                <div key={index} className="flex gap-2">
+                <div
+                  key={index}
+                  className="grid grid-cols-[1fr_5.5rem_5.5rem_2rem] gap-2 items-center"
+                >
                   <Input
                     value={variant.name}
                     placeholder="Size"
@@ -861,29 +1000,25 @@ export function RestaurantMenuPanel({
                   <Input
                     type="number"
                     min={0}
-                    value={variant.price}
-                    placeholder="Price"
+                    step="1"
+                    value={originalVariantPrices[index] || ""}
+                    placeholder="Orig"
                     onChange={(e) =>
-                      setForm((p) => {
-                        const variants = [...(p.variants ?? [])];
-                        variants[index] = {
-                          ...variants[index],
-                          price: Number(e.target.value),
-                        };
-                        return { ...p, variants };
-                      })
+                      handleOriginalVariantPriceChange(index, e.target.value)
                     }
-                    className="w-28 bg-black/20 border-white/10 text-white"
+                    className="bg-black/20 border-white/10 text-white"
+                  />
+                  <Input
+                    type="number"
+                    min={0}
+                    readOnly
+                    value={variant.price}
+                    className="bg-[#98E32F]/10 border-[#98E32F]/30 text-[#98E32F] font-semibold"
                   />
                   <button
                     type="button"
                     className="p-2 text-red-400/70 hover:text-red-400"
-                    onClick={() =>
-                      setForm((p) => ({
-                        ...p,
-                        variants: (p.variants ?? []).filter((_, i) => i !== index),
-                      }))
-                    }
+                    onClick={() => removeVariantRow(index)}
                   >
                     <Trash2 size={14} />
                   </button>
@@ -891,7 +1026,8 @@ export function RestaurantMenuPanel({
               ))}
               {(form.variants ?? []).length === 0 && (
                 <p className="text-[10px] text-white/30 italic">
-                  Standard pricing (base price only)
+                  Standard pricing (base price only). Same commission % applies
+                  to variants.
                 </p>
               )}
             </div>
