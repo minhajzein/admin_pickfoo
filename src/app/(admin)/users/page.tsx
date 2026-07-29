@@ -28,10 +28,12 @@ import {
   UserCog, 
   ShieldAlert,
   Mail,
-  Trash2
+  Trash2,
+  Wallet
 } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import Link from 'next/link';
 
 interface User {
   _id: string;
@@ -181,6 +183,11 @@ export default function UsersPage() {
                         <DropdownMenuContent align="end" className="bg-[#002833] border-white/5 text-white">
                           <DropdownMenuLabel>User Actions</DropdownMenuLabel>
                           <DropdownMenuSeparator className="bg-white/5" />
+                          <Link href={`/users/${user._id}/payments`}>
+                            <DropdownMenuItem className="text-[#98E32F] focus:text-[#98E32F] focus:bg-[#98E32F]/10">
+                              <Wallet className="mr-2 h-4 w-4" /> Payments & refunds
+                            </DropdownMenuItem>
+                          </Link>
                           <DropdownMenuItem onClick={() => {}}>
                             <Mail className="mr-2 h-4 w-4" /> Email User
                           </DropdownMenuItem>

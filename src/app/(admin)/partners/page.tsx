@@ -31,7 +31,7 @@ import {
 } from "@/lib/api/partners";
 import { fetchZones } from "@/lib/api/zones";
 import type { Partner, PartnerStatusType } from "@/types/models";
-import { Eye, Loader2, MapPin, Search } from "lucide-react";
+import { Eye, Loader2, MapPin, Search, Wallet } from "lucide-react";
 
 const statusFilterOptions: Array<{ label: string; value: "ALL" | PartnerStatusType }> = [
   { label: "All", value: "ALL" },
@@ -318,10 +318,23 @@ export default function PartnersPage() {
                             </Link>
                           </Button>
                         ) : null}
+                        {p._id ? (
+                          <Button
+                            asChild
+                            size="sm"
+                            variant="outline"
+                            className="border-[#98E32F]/40 text-[#98E32F] hover:bg-[#98E32F]/10"
+                          >
+                            <Link href={`/partners/${p._id}/ledger`}>
+                              <Wallet className="mr-1 h-3.5 w-3.5" />
+                              Ledger
+                            </Link>
+                          </Button>
+                        ) : null}
                         <Button
                           size="sm"
                           variant="outline"
-                          className="border-[#98E32F]/40 text-[#98E32F] hover:bg-[#98E32F]/10"
+                          className="border-white/10 text-white hover:bg-white/5"
                           onClick={() => openZonesDialog(p)}
                         >
                           <MapPin className="mr-1 h-3.5 w-3.5" />

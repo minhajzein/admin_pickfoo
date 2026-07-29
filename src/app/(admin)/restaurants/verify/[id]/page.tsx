@@ -28,9 +28,11 @@ import {
   AlertCircle,
   Loader2,
   Percent,
+  Wallet,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import Link from "next/link";
 import NextImage from "next/image";
 import { fetchZones, suggestZoneForPoint } from "@/lib/api/zones";
 import {
@@ -38,6 +40,7 @@ import {
   updateRestaurantPayoutMode,
   updateRestaurantZone,
 } from "@/lib/api/restaurants";
+import { RestaurantMessageThread } from "@/components/restaurants/RestaurantMessageThread";
 
 function zoneIdFromRestaurant(restaurant: { zone?: unknown } | null | undefined) {
   if (!restaurant) return "";
@@ -302,6 +305,11 @@ export default function VerifyRestaurantPage() {
             </p>
           </div>
         </div>
+        <Link href={`/restaurants/${id}/ledger`}>
+          <Button className="bg-[#98E32F] text-[#013644] hover:brightness-110 font-bold">
+            <Wallet className="mr-2 h-4 w-4" /> Ledger & payments
+          </Button>
+        </Link>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -699,6 +707,14 @@ export default function VerifyRestaurantPage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* ── Admin ↔ Restaurant Owner Messaging ── */}
+          {restaurant.owner?._id && (
+            <RestaurantMessageThread
+              ownerId={restaurant.owner._id}
+              restaurantName={restaurant.name}
+            />
+          )}
         </div>
       </div>
     </div>

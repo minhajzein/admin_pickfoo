@@ -33,7 +33,9 @@ import {
   Mail,
   Calendar,
   ExternalLink,
+  Wallet,
 } from "lucide-react";
+import Link from "next/link";
 
 function urlPathLower(url: string): string {
   try {
@@ -292,6 +294,11 @@ export default function PartnerDetailsPage() {
             <p className="text-sm text-white/50">Partner profile and verification</p>
           </div>
         </div>
+        <Link href={`/partners/${partnerId}/ledger`}>
+          <Button className="bg-[#98E32F] text-[#013644] hover:brightness-110 font-bold">
+            <Wallet className="mr-2 h-4 w-4" /> Ledger & payments
+          </Button>
+        </Link>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
