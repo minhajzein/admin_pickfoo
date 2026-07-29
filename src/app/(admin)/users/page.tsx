@@ -46,15 +46,28 @@ interface User {
   createdAt: string;
 }
 
+type RoleChip = 'user' | 'owner' | 'admin';
+
+const ROLE_CHIPS: Array<{ value: RoleChip; label: string }> = [
+  { value: 'user', label: 'Customers' },
+  { value: 'owner', label: 'Owners' },
+  { value: 'admin', label: 'Admins' },
+];
+
 export default function UsersPage() {
   const [search, setSearch] = useState('');
-  const [roleFilter, setRoleFilter] = useState('');
+  const [roleFilter, setRoleFilter] = useState<RoleChip>('user');
   const queryClient = useQueryClient();
 
   const { data: users, isLoading } = useQuery<User[]>({
     queryKey: ['users', search, roleFilter],
     queryFn: async () => {
-      const response = await api.get(`/users?search=${search}&role=${roleFilter}`);
+      const response = await api.get(`/users`, {
+        params: {
+          search: search.trim() || undefined,
+          role: roleFilter,
+        },
+      });
       return response.data.data;
     },
   });
@@ -80,38 +93,51 @@ export default function UsersPage() {
       case 'owner':
         return <Badge className="bg-[#98E32F] text-[#013644]">Owner</Badge>;
       default:
-        return <Badge variant="outline" className="text-white/40 border-white/10">User</Badge>;
+        return <Badge variant="outline" className="text-white/40 border-white/10">Customer</Badge>;
     }
   };
+
+  const activeLabel =
+    ROLE_CHIPS.find((c) => c.value === roleFilter)?.label ?? 'Customers';
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-3xl font-bold tracking-tight">User Management</h2>
-          <p className="text-white/50 text-sm">Monitor and manage all user accounts</p>
+          <p className="text-white/50 text-sm">
+            Viewing {activeLabel.toLowerCase()} only
+          </p>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="relative w-full sm:w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
-            <Input
-              placeholder="Search name, email, phone, PFU id..."
-              className="pl-9 bg-[#002833] border-white/10 text-white"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-          <select 
-            className="bg-[#002833] border border-white/10 text-white text-sm rounded-md px-3 py-2 outline-none focus:ring-1 focus:ring-[#98E32F]"
-            value={roleFilter}
-            onChange={(e) => setRoleFilter(e.target.value)}
-          >
-            <option value="">All Roles</option>
-            <option value="user">Users</option>
-            <option value="owner">Owners</option>
-            <option value="admin">Admins</option>
-          </select>
+        <div className="relative w-full sm:w-72">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
+          <Input
+            placeholder="Search name, email, phone, PFU id..."
+            className="pl-9 bg-[#002833] border-white/10 text-white"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
         </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {ROLE_CHIPS.map((chip) => {
+          const active = roleFilter === chip.value;
+          return (
+            <button
+              key={chip.value}
+              type="button"
+              onClick={() => setRoleFilter(chip.value)}
+              className={`rounded-full px-4 py-1.5 text-sm font-semibold border transition-colors ${
+                active
+                  ? 'bg-[#98E32F] text-[#013644] border-[#98E32F]'
+                  : 'bg-white/5 text-white/60 border-white/10 hover:bg-white/10 hover:text-white'
+              }`}
+            >
+              {chip.label}
+            </button>
+          );
+        })}
       </div>
 
       <Card className="bg-[#002833] border-white/5 text-white overflow-hidden">
@@ -131,13 +157,13 @@ export default function UsersPage() {
               {isLoading ? (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center py-8 text-white/40">
-                    Loading users...
+                    Loading {activeLabel.toLowerCase()}...
                   </TableCell>
                 </TableRow>
               ) : users?.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center py-8 text-white/40">
-                    No users found
+                    No {activeLabel.toLowerCase()} found
                   </TableCell>
                 </TableRow>
               ) : (
@@ -194,7 +220,7 @@ export default function UsersPage() {
                           <DropdownMenuSeparator className="bg-white/5" />
                           <DropdownMenuLabel className="text-[10px] uppercase text-white/20">Change Role</DropdownMenuLabel>
                           <DropdownMenuItem onClick={() => updateRoleMutation.mutate({ id: user._id, role: 'user' })}>
-                            <UserCog className="mr-2 h-4 w-4" /> Set as User
+                            <UserCog className="mr-2 h-4 w-4" /> Set as Customer
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => updateRoleMutation.mutate({ id: user._id, role: 'owner' })}>
                             <UserCog className="mr-2 h-4 w-4" /> Set as Owner
