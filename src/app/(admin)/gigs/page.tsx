@@ -29,6 +29,8 @@ import {
 } from "@/lib/api/gigs";
 import type { AdminGig, AdminGigBooking } from "@/types/models";
 import { Loader2 } from "lucide-react";
+import { ListPagination } from "@/components/ui/list-pagination";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 
 const toMinutes = (hhmm: string): number => {
   const [h, m] = hhmm.split(":").map((v) => Number(v));
@@ -45,6 +47,7 @@ const toLocalInputDate = (date = new Date()): string => {
 
 export default function GigsPage() {
   const queryClient = useQueryClient();
+  const [page, setPage] = useState(1);
   const [form, setForm] = useState({
     title: "Morning Rush Gig",
     subtitle: "Book gigs to deliver orders",
@@ -58,10 +61,19 @@ export default function GigsPage() {
   const [bookings, setBookings] = useState<AdminGigBooking[]>([]);
   const [openBookings, setOpenBookings] = useState(false);
 
-  const { data: gigs = [], isLoading } = useQuery({
-    queryKey: ["admin-gigs"],
-    queryFn: () => fetchGigs({ fromDayKey: toLocalInputDate() }),
+  const { data, isLoading } = useQuery({
+    queryKey: ["admin-gigs", page],
+    queryFn: () =>
+      fetchGigs({
+        fromDayKey: toLocalInputDate(),
+        page,
+        limit: DEFAULT_PAGE_SIZE,
+      }),
   });
+
+  const gigs = data?.data ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = data?.totalPages ?? 1;
 
   const createMutation = useMutation({
     mutationFn: createGig,
@@ -321,6 +333,13 @@ export default function GigsPage() {
               )}
             </TableBody>
           </Table>
+          <ListPagination
+            page={page}
+            limit={DEFAULT_PAGE_SIZE}
+            total={total}
+            totalPages={totalPages}
+            onPageChange={setPage}
+          />
         </CardContent>
       </Card>
 

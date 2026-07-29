@@ -1,5 +1,10 @@
 import api from '../axios';
 import type { AxiosError } from 'axios';
+import {
+  DEFAULT_PAGE_SIZE,
+  parsePaginatedResponse,
+  type PaginatedResult,
+} from '@/lib/pagination';
 
 export type SupportMessageType = 'text' | 'image' | 'video' | 'pdf' | 'audio';
 
@@ -51,14 +56,32 @@ function apiErrorMessage(err: unknown, fallback: string): string {
   return ax.response?.data?.message || ax.message || fallback;
 }
 
-export async function fetchSupportThreads(): Promise<SupportThread[]> {
-  const { data } = await api.get<{ success: boolean; threads: SupportThread[] }>(
-    '/support/threads',
-  );
+export async function fetchSupportThreads(params?: {
+  page?: number;
+  limit?: number;
+}): Promise<PaginatedResult<SupportThread>> {
+  const { data } = await api.get<{
+    success: boolean;
+    threads?: SupportThread[];
+    data?: SupportThread[];
+    page?: number;
+    limit?: number;
+    total?: number;
+    totalPages?: number;
+    count?: number;
+  }>('/support/threads', {
+    params: {
+      page: params?.page ?? 1,
+      limit: params?.limit ?? DEFAULT_PAGE_SIZE,
+    },
+  });
   if (data.success === false) {
     throw new Error('Failed to load support threads');
   }
-  return data.threads ?? [];
+  return parsePaginatedResponse<SupportThread>({
+    ...data,
+    data: data.threads ?? data.data ?? [],
+  });
 }
 
 export async function fetchSupportThread(partnerId: string): Promise<{

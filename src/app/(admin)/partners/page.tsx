@@ -32,6 +32,8 @@ import {
 import { fetchZones } from "@/lib/api/zones";
 import type { Partner, PartnerStatusType } from "@/types/models";
 import { Eye, Loader2, MapPin, Search, Wallet } from "lucide-react";
+import { ListPagination } from "@/components/ui/list-pagination";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 
 const statusFilterOptions: Array<{ label: string; value: "ALL" | PartnerStatusType }> = [
   { label: "All", value: "ALL" },
@@ -44,19 +46,36 @@ const statusFilterOptions: Array<{ label: string; value: "ALL" | PartnerStatusTy
 export default function PartnersPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<"ALL" | PartnerStatusType>("ALL");
   const [editPartner, setEditPartner] = useState<Partner | null>(null);
   const [selectedZoneIds, setSelectedZoneIds] = useState<string[]>([]);
   const [levelDraft, setLevelDraft] = useState<Record<string, number>>({});
 
-  const { data: partners = [], isLoading } = useQuery({
-    queryKey: ["partners", statusFilter, search],
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => window.clearTimeout(t);
+  }, [search]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter, debouncedSearch]);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["partners", statusFilter, debouncedSearch, page],
     queryFn: () =>
       fetchPartners({
         status: statusFilter === "ALL" ? undefined : statusFilter,
-        search: search || undefined,
+        search: debouncedSearch || undefined,
+        page,
+        limit: DEFAULT_PAGE_SIZE,
       }),
   });
+
+  const partners = data?.data ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = data?.totalPages ?? 1;
 
   const { data: zoneOptions = [] } = useQuery({
     queryKey: ["zones", "wayanad"],
@@ -347,6 +366,13 @@ export default function PartnersPage() {
               )}
             </TableBody>
           </Table>
+          <ListPagination
+            page={page}
+            limit={DEFAULT_PAGE_SIZE}
+            total={total}
+            totalPages={totalPages}
+            onPageChange={setPage}
+          />
         </CardContent>
       </Card>
 

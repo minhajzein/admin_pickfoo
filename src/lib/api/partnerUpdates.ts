@@ -1,4 +1,9 @@
 import api from "@/lib/axios";
+import {
+  DEFAULT_PAGE_SIZE,
+  parsePaginatedResponse,
+  type PaginatedResult,
+} from "@/lib/pagination";
 
 export type PartnerUpdateCategory = "payment" | "payout" | "offer" | "bonus";
 export type PartnerUpdateAudience = "all" | "zones" | "partners";
@@ -21,14 +26,17 @@ export type AdminPartnerUpdate = {
 
 export async function fetchPartnerUpdates(params?: {
   source?: PartnerUpdateSource;
+  page?: number;
   limit?: number;
-}): Promise<AdminPartnerUpdate[]> {
-  const sp = new URLSearchParams();
-  if (params?.source) sp.set("source", params.source);
-  if (params?.limit) sp.set("limit", String(params.limit));
-  const q = sp.toString();
-  const { data } = await api.get(`/partner-updates${q ? `?${q}` : ""}`);
-  return data.data as AdminPartnerUpdate[];
+}): Promise<PaginatedResult<AdminPartnerUpdate>> {
+  const { data } = await api.get(`/partner-updates`, {
+    params: {
+      source: params?.source || undefined,
+      page: params?.page ?? 1,
+      limit: params?.limit ?? DEFAULT_PAGE_SIZE,
+    },
+  });
+  return parsePaginatedResponse<AdminPartnerUpdate>(data);
 }
 
 export async function createPartnerUpdate(input: {

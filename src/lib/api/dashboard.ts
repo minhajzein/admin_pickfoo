@@ -1,10 +1,8 @@
 import api from "@/lib/axios";
 import type { AdminMonitorEvent, Partner, Restaurant, User } from "@/types/models";
 import { fetchDispatchOrders } from "@/lib/api/orders";
-
-interface ApiListResponse<T> {
-  data?: T[];
-}
+import { fetchPartners } from "@/lib/api/partners";
+import { parsePaginatedResponse } from "@/lib/pagination";
 
 export interface DashboardActivity {
   id: string;
@@ -34,33 +32,33 @@ export interface DashboardOverview {
 }
 
 export async function fetchDashboardOverview(): Promise<DashboardOverview> {
-  const [restaurantsRes, usersRes, partnersRes, monitorRes, ordersRes] = await Promise.all([
-    api.get<ApiListResponse<Restaurant>>("/restaurants"),
-    api.get<ApiListResponse<User>>("/users"),
-    api.get<ApiListResponse<Partner>>("/partners"),
-    api.get<ApiListResponse<AdminMonitorEvent>>("/monitor/events?limit=120"),
-    fetchDispatchOrders({ limit: 300 }),
-  ]);
+  const [restaurantsRes, pendingRes, usersRes, partnersResult, monitorRes, ordersRes] =
+    await Promise.all([
+      api.get("/restaurants", { params: { page: 1, limit: 1 } }),
+      api.get("/restaurants", {
+        params: { page: 1, limit: 5, status: "pending" },
+      }),
+      api.get("/users", { params: { role: "user", page: 1, limit: 1 } }),
+      fetchPartners({ page: 1, limit: 100 }),
+      api.get<{ data?: AdminMonitorEvent[] }>("/monitor/events?limit=120"),
+      fetchDispatchOrders({ page: 1, limit: 300 }),
+    ]);
 
-  const restaurants = restaurantsRes.data?.data ?? [];
-  const users = usersRes.data?.data ?? [];
-  const partners = partnersRes.data?.data ?? [];
+  const restaurantsMeta = parsePaginatedResponse<Restaurant>(restaurantsRes.data);
+  const pendingMeta = parsePaginatedResponse<Restaurant>(pendingRes.data);
+  const usersMeta = parsePaginatedResponse<User>(usersRes.data);
+  const partners = partnersResult.data ?? [];
   const events = monitorRes.data?.data ?? [];
   const orders = ordersRes.data ?? [];
   const orderSummary = ordersRes.summary;
 
-  const pendingRestaurants = restaurants.filter((restaurant) => {
-    return restaurant.status === "pending";
-  });
-  const activeUsers = users.filter((user) => {
-    return user.role === "user" && user.isVerified;
-  }).length;
-  const onlinePartners = partners.filter((partner) => partner.isOnline).length;
+  const onlinePartners = partners.filter((partner: Partner) => partner.isOnline)
+    .length;
 
   return {
-    totalRestaurants: restaurants.length,
-    pendingRestaurantVerifications: pendingRestaurants.length,
-    activeUsers,
+    totalRestaurants: restaurantsMeta.total,
+    pendingRestaurantVerifications: pendingMeta.total,
+    activeUsers: usersMeta.total,
     totalOrders: orderSummary?.total ?? orders.length,
     platformCommission: orderSummary?.platformCommission ?? 0,
     onlinePartners,
@@ -71,7 +69,7 @@ export async function fetchDashboardOverview(): Promise<DashboardOverview> {
       source: event.source,
       createdAt: event.createdAt,
     })),
-    verificationQueue: pendingRestaurants.slice(0, 5).map((restaurant) => ({
+    verificationQueue: pendingMeta.data.slice(0, 5).map((restaurant) => ({
       id: String(restaurant._id ?? ""),
       name: restaurant.name,
       city: restaurant.address?.city,

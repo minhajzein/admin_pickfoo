@@ -31,9 +31,11 @@ import {
   Trash2,
   Wallet
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import Link from 'next/link';
+import { ListPagination } from '@/components/ui/list-pagination';
+import { DEFAULT_PAGE_SIZE, parsePaginatedResponse } from '@/lib/pagination';
 
 interface User {
   _id: string;
@@ -56,21 +58,38 @@ const ROLE_CHIPS: Array<{ value: RoleChip; label: string }> = [
 
 export default function UsersPage() {
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<RoleChip>('user');
+  const [page, setPage] = useState(1);
   const queryClient = useQueryClient();
 
-  const { data: users, isLoading } = useQuery<User[]>({
-    queryKey: ['users', search, roleFilter],
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => window.clearTimeout(t);
+  }, [search]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [roleFilter, debouncedSearch]);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['users', debouncedSearch, roleFilter, page],
     queryFn: async () => {
       const response = await api.get(`/users`, {
         params: {
-          search: search.trim() || undefined,
+          search: debouncedSearch || undefined,
           role: roleFilter,
+          page,
+          limit: DEFAULT_PAGE_SIZE,
         },
       });
-      return response.data.data;
+      return parsePaginatedResponse<User>(response.data);
     },
   });
+
+  const users = data?.data ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = data?.totalPages ?? 1;
 
   const updateRoleMutation = useMutation({
     mutationFn: async ({ id, role }: { id: string; role: string }) => {
@@ -127,7 +146,10 @@ export default function UsersPage() {
             <button
               key={chip.value}
               type="button"
-              onClick={() => setRoleFilter(chip.value)}
+              onClick={() => {
+                setRoleFilter(chip.value);
+                setPage(1);
+              }}
               className={`rounded-full px-4 py-1.5 text-sm font-semibold border transition-colors ${
                 active
                   ? 'bg-[#98E32F] text-[#013644] border-[#98E32F]'
@@ -160,14 +182,14 @@ export default function UsersPage() {
                     Loading {activeLabel.toLowerCase()}...
                   </TableCell>
                 </TableRow>
-              ) : users?.length === 0 ? (
+              ) : users.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center py-8 text-white/40">
                     No {activeLabel.toLowerCase()} found
                   </TableCell>
                 </TableRow>
               ) : (
-                users?.map((user) => (
+                users.map((user) => (
                   <TableRow key={user._id} className="border-white/5 hover:bg-white/5 transition-colors">
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-3">
@@ -240,6 +262,13 @@ export default function UsersPage() {
               )}
             </TableBody>
           </Table>
+          <ListPagination
+            page={page}
+            limit={DEFAULT_PAGE_SIZE}
+            total={total}
+            totalPages={totalPages}
+            onPageChange={setPage}
+          />
         </CardContent>
       </Card>
     </div>

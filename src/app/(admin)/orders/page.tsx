@@ -21,6 +21,8 @@ import {
 } from "@/lib/api/orders";
 import { Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
+import { ListPagination } from "@/components/ui/list-pagination";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 
 const money = new Intl.NumberFormat("en-IN", {
   style: "currency",
@@ -45,11 +47,13 @@ function redispatchReasonLabel(reason?: string): string {
 
 export default function OrdersPage() {
   const queryClient = useQueryClient();
+  const [page, setPage] = useState(1);
   const [redispatchingRef, setRedispatchingRef] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["orders", "dispatch-orders"],
-    queryFn: () => fetchDispatchOrders({ limit: 300 }),
+    queryKey: ["orders", "dispatch-orders", page],
+    queryFn: () =>
+      fetchDispatchOrders({ page, limit: DEFAULT_PAGE_SIZE }),
     refetchInterval: 15000,
   });
 
@@ -90,6 +94,8 @@ export default function OrdersPage() {
     delivered: 0,
     cancelled: 0,
   };
+  const total = data?.total ?? 0;
+  const totalPages = data?.totalPages ?? 1;
 
   const handleRedispatch = (row: AdminOrderRow) => {
     const label = row.pickfooId || row.id;
@@ -239,6 +245,13 @@ export default function OrdersPage() {
               )}
             </TableBody>
           </Table>
+          <ListPagination
+            page={page}
+            limit={DEFAULT_PAGE_SIZE}
+            total={total}
+            totalPages={totalPages}
+            onPageChange={setPage}
+          />
         </CardContent>
       </Card>
     </div>

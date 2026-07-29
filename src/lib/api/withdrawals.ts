@@ -1,4 +1,9 @@
 import api from "@/lib/axios";
+import {
+  DEFAULT_PAGE_SIZE,
+  parsePaginatedResponse,
+  type PaginatedResult,
+} from "@/lib/pagination";
 
 export type WithdrawalStatus = "pending" | "approved" | "rejected" | "paid";
 
@@ -28,9 +33,18 @@ export interface AdminWithdrawal {
 export async function fetchWithdrawals(params?: {
   status?: string;
   search?: string;
-}): Promise<AdminWithdrawal[]> {
-  const { data } = await api.get("/withdrawals", { params });
-  return data.data ?? [];
+  page?: number;
+  limit?: number;
+}): Promise<PaginatedResult<AdminWithdrawal>> {
+  const { data } = await api.get("/withdrawals", {
+    params: {
+      status: params?.status || undefined,
+      search: params?.search?.trim() || undefined,
+      page: params?.page ?? 1,
+      limit: params?.limit ?? DEFAULT_PAGE_SIZE,
+    },
+  });
+  return parsePaginatedResponse<AdminWithdrawal>(data);
 }
 
 export async function updateWithdrawalStatus(

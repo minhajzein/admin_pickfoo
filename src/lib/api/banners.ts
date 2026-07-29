@@ -1,6 +1,11 @@
 import axios from "axios";
 import api from "@/lib/axios";
 import { uploadSupportMedia } from "@/lib/api/support";
+import {
+  DEFAULT_PAGE_SIZE,
+  parsePaginatedResponse,
+  type PaginatedResult,
+} from "@/lib/pagination";
 
 export type HomeBannerLinkType = "none" | "restaurant" | "dish" | "dishes";
 
@@ -37,16 +42,27 @@ export interface BannerMenuItemOption {
   restaurantIds: string[];
 }
 
-export async function fetchBanners(): Promise<AdminHomeBanner[]> {
-  const { data } = await api.get("/banners");
-  const rows = (data.data ?? []) as Array<AdminHomeBanner & { _id?: string }>;
-  return rows
-    .map((row) => ({
-      ...row,
-      id: String(row.id ?? row._id ?? "").trim(),
-      menuItemIds: row.menuItemIds ?? [],
-    }))
-    .filter((row) => row.id.length > 0);
+export async function fetchBanners(params?: {
+  page?: number;
+  limit?: number;
+}): Promise<PaginatedResult<AdminHomeBanner>> {
+  const { data } = await api.get("/banners", {
+    params: {
+      page: params?.page ?? 1,
+      limit: params?.limit ?? DEFAULT_PAGE_SIZE,
+    },
+  });
+  const parsed = parsePaginatedResponse<AdminHomeBanner & { _id?: string }>(data);
+  return {
+    ...parsed,
+    data: parsed.data
+      .map((row) => ({
+        ...row,
+        id: String(row.id ?? row._id ?? "").trim(),
+        menuItemIds: row.menuItemIds ?? [],
+      }))
+      .filter((row) => row.id.length > 0),
+  };
 }
 
 export async function createBanner(input: {
@@ -170,10 +186,13 @@ export async function uploadBannerImage(file: File): Promise<UploadPayload> {
 export async function searchBannerRestaurants(
   search: string,
 ): Promise<BannerRestaurantOption[]> {
-  const sp = new URLSearchParams();
-  if (search.trim()) sp.set("search", search.trim());
-  // Use main restaurants API (same as Restaurants page) — reliable in all deployments.
-  const { data } = await api.get(`/restaurants?${sp}`);
+  const { data } = await api.get(`/restaurants`, {
+    params: {
+      search: search.trim() || undefined,
+      page: 1,
+      limit: 50,
+    },
+  });
   const rows = (data.data ?? []) as Array<{
     _id: string;
     name: string;

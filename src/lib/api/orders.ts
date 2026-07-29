@@ -30,26 +30,41 @@ export interface AdminOrdersResponse {
     platformCommission: number;
   };
   data: AdminOrderRow[];
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
 }
 
 export async function fetchDispatchOrders(params?: {
   limit?: number;
+  page?: number;
   status?: string;
 }): Promise<AdminOrdersResponse> {
-  const sp = new URLSearchParams();
-  if (params?.limit) sp.set("limit", String(params.limit));
-  if (params?.status) sp.set("status", params.status);
-  const q = sp.toString();
-  const { data } = await api.get(`/dispatch/orders${q ? `?${q}` : ""}`);
+  const { data } = await api.get(`/dispatch/orders`, {
+    params: {
+      limit: params?.limit,
+      page: params?.page,
+      status: params?.status || undefined,
+    },
+  });
+  const page = Number(data.page) || 1;
+  const limit = Number(data.limit) || params?.limit || 25;
+  const total = Number(data.total ?? data.summary?.total) || 0;
   return {
     summary: {
-      total: data.summary?.total ?? 0,
+      total: data.summary?.total ?? total,
       active: data.summary?.active ?? 0,
       delivered: data.summary?.delivered ?? 0,
       cancelled: data.summary?.cancelled ?? 0,
       platformCommission: Number(data.summary?.platformCommission) || 0,
     },
     data: data.data ?? [],
+    page,
+    limit,
+    total,
+    totalPages:
+      Number(data.totalPages) || Math.max(1, Math.ceil(total / limit) || 1),
   };
 }
 

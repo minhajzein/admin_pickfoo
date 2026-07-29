@@ -15,7 +15,7 @@ const money = new Intl.NumberFormat("en-IN", {
 export default function RevenuePage() {
   const { data, isLoading } = useQuery({
     queryKey: ["revenue", "dispatch-orders"],
-    queryFn: () => fetchDispatchOrders({ limit: 500 }),
+    queryFn: () => fetchDispatchOrders({ page: 1, limit: 500 }),
     refetchInterval: 30000,
   });
 

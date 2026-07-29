@@ -1,16 +1,26 @@
 import api from "@/lib/axios";
+import {
+  DEFAULT_PAGE_SIZE,
+  parsePaginatedResponse,
+  type PaginatedResult,
+} from "@/lib/pagination";
 import type { Partner } from "@/types/models";
 
 export async function fetchPartners(params?: {
   status?: string;
   search?: string;
-}): Promise<Partner[]> {
-  const sp = new URLSearchParams();
-  if (params?.status) sp.set("status", params.status);
-  if (params?.search) sp.set("search", params.search);
-  const q = sp.toString();
-  const { data } = await api.get(`/partners${q ? `?${q}` : ""}`);
-  return data.data;
+  page?: number;
+  limit?: number;
+}): Promise<PaginatedResult<Partner>> {
+  const { data } = await api.get(`/partners`, {
+    params: {
+      status: params?.status || undefined,
+      search: params?.search?.trim() || undefined,
+      page: params?.page ?? 1,
+      limit: params?.limit ?? DEFAULT_PAGE_SIZE,
+    },
+  });
+  return parsePaginatedResponse<Partner>(data);
 }
 
 export async function fetchPartner(partnerId: string): Promise<Partner> {

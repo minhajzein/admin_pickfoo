@@ -41,12 +41,14 @@ import {
   UtensilsCrossed,
   Wallet,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import Link from "next/link";
 import { ShieldCheck } from "lucide-react";
 import { fetchZones } from "@/lib/api/zones";
 import { updateRestaurantZone } from "@/lib/api/restaurants";
+import { ListPagination } from "@/components/ui/list-pagination";
+import { DEFAULT_PAGE_SIZE, parsePaginatedResponse } from "@/lib/pagination";
 
 interface Restaurant {
   _id: string;
@@ -77,18 +79,39 @@ interface Restaurant {
 
 export default function RestaurantsPage() {
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [page, setPage] = useState(1);
   const [selectedRestaurant, setSelectedRestaurant] =
     useState<Restaurant | null>(null);
   const [isViewOpen, setIsViewOpen] = useState(false);
   const queryClient = useQueryClient();
 
-  const { data: restaurants, isLoading } = useQuery({
-    queryKey: ["restaurants", search],
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => window.clearTimeout(t);
+  }, [search]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch]);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["restaurants", debouncedSearch, page],
     queryFn: async () => {
-      const response = await api.get(`/restaurants?search=${search}`);
-      return response.data.data;
+      const response = await api.get(`/restaurants`, {
+        params: {
+          search: debouncedSearch || undefined,
+          page,
+          limit: DEFAULT_PAGE_SIZE,
+        },
+      });
+      return parsePaginatedResponse<Restaurant>(response.data);
     },
   });
+
+  const restaurants = data?.data ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = data?.totalPages ?? 1;
 
   const { data: zoneOptions = [] } = useQuery({
     queryKey: ["zones", "wayanad"],
@@ -202,7 +225,7 @@ export default function RestaurantsPage() {
                     </div>
                   </TableCell>
                 </TableRow>
-              ) : restaurants?.length === 0 ? (
+              ) : restaurants.length === 0 ? (
                 <TableRow>
                   <TableCell
                     colSpan={7}
@@ -212,7 +235,7 @@ export default function RestaurantsPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                restaurants?.map((restaurant: Restaurant) => (
+                restaurants.map((restaurant: Restaurant) => (
                   <TableRow
                     key={restaurant._id}
                     className="border-white/5 hover:bg-white/5 transition-colors"
@@ -355,6 +378,13 @@ export default function RestaurantsPage() {
               )}
             </TableBody>
           </Table>
+          <ListPagination
+            page={page}
+            limit={DEFAULT_PAGE_SIZE}
+            total={total}
+            totalPages={totalPages}
+            onPageChange={setPage}
+          />
         </CardContent>
       </Card>
 

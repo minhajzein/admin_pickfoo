@@ -31,6 +31,8 @@ import {
   type BannerRestaurantOption,
   type HomeBannerLinkType,
 } from "@/lib/api/banners";
+import { ListPagination } from "@/components/ui/list-pagination";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 
 const linkTypeLabels: Record<HomeBannerLinkType, string> = {
   none: "No link",
@@ -73,6 +75,7 @@ function fromDatetimeLocalValue(local: string): string | null {
 
 export default function BannersPage() {
   const queryClient = useQueryClient();
+  const [page, setPage] = useState(1);
   const [form, setForm] = useState(emptyForm());
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -89,10 +92,14 @@ export default function BannersPage() {
     });
   }, []);
 
-  const { data: banners = [], isLoading } = useQuery({
-    queryKey: ["admin-banners"],
-    queryFn: fetchBanners,
+  const { data, isLoading } = useQuery({
+    queryKey: ["admin-banners", page],
+    queryFn: () => fetchBanners({ page, limit: DEFAULT_PAGE_SIZE }),
   });
+
+  const banners = data?.data ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = data?.totalPages ?? 1;
 
   const resolveImageUrl = () =>
     form.imageStaticUrl.trim() || form.imagePreview.trim();
@@ -335,7 +342,7 @@ export default function BannersPage() {
         <Card className="bg-[#002833] border-white/10">
           <CardContent className="pt-6">
             <p className="text-sm text-white/60">Total banners</p>
-            <p className="text-3xl font-bold text-[#98E32F]">{banners.length}</p>
+            <p className="text-3xl font-bold text-[#98E32F]">{total}</p>
           </CardContent>
         </Card>
         <Card className="bg-[#002833] border-white/10">
@@ -706,6 +713,14 @@ export default function BannersPage() {
               </TableBody>
             </Table>
           )}
+          <ListPagination
+            page={page}
+            limit={DEFAULT_PAGE_SIZE}
+            total={total}
+            totalPages={totalPages}
+            onPageChange={setPage}
+            className="mt-2"
+          />
         </CardContent>
       </Card>
     </div>

@@ -1,12 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   fetchPartnerWithdrawals,
   updatePartnerWithdrawalStatus,
-  type AdminPartnerWithdrawal,
   type PartnerWithdrawalStatus,
 } from "@/lib/api/partner-withdrawals";
 import { Button } from "@/components/ui/button";
@@ -38,6 +37,8 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { MoreHorizontal, Search } from "lucide-react";
+import { ListPagination } from "@/components/ui/list-pagination";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 
 const STATUS_FILTERS: Array<PartnerWithdrawalStatus | "all"> = [
   "all",
@@ -76,6 +77,8 @@ export default function PartnerWithdrawalsPage() {
   const queryClient = useQueryClient();
   const [status, setStatus] = useState<PartnerWithdrawalStatus | "all">("pending");
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [page, setPage] = useState(1);
   const [notesOpen, setNotesOpen] = useState(false);
   const [notes, setNotes] = useState("");
   const [pendingAction, setPendingAction] = useState<{
@@ -83,14 +86,29 @@ export default function PartnerWithdrawalsPage() {
     status: PartnerWithdrawalStatus;
   } | null>(null);
 
-  const { data = [], isLoading, refetch } = useQuery({
-    queryKey: ["admin-partner-withdrawals", status, search],
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => window.clearTimeout(t);
+  }, [search]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [status, debouncedSearch]);
+
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ["admin-partner-withdrawals", status, debouncedSearch, page],
     queryFn: () =>
       fetchPartnerWithdrawals({
         status: status === "all" ? undefined : status,
-        search: search.trim() || undefined,
+        search: debouncedSearch || undefined,
+        page,
+        limit: DEFAULT_PAGE_SIZE,
       }),
   });
+
+  const rows = data?.data ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = data?.totalPages ?? 1;
 
   const mutation = useMutation({
     mutationFn: ({
@@ -115,8 +133,6 @@ export default function PartnerWithdrawalsPage() {
       );
     },
   });
-
-  const rows = useMemo(() => data as AdminPartnerWithdrawal[], [data]);
 
   function askStatus(id: string, next: PartnerWithdrawalStatus) {
     setPendingAction({ id, status: next });
@@ -300,6 +316,14 @@ export default function PartnerWithdrawalsPage() {
                 )}
               </TableBody>
             </Table>
+            <ListPagination
+              page={page}
+              limit={DEFAULT_PAGE_SIZE}
+              total={total}
+              totalPages={totalPages}
+              onPageChange={setPage}
+              dense
+            />
           </div>
         </CardContent>
       </Card>

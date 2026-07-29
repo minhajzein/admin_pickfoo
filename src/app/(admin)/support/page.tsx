@@ -16,12 +16,17 @@ import {
   type SupportMessagePayload,
   type SupportThread,
 } from "@/lib/api/support";
+import { ListPagination } from "@/components/ui/list-pagination";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 
 export default function SupportPage() {
   const searchParams = useSearchParams();
   const initialPartnerId = searchParams.get("partnerId") ?? "";
 
   const [threads, setThreads] = useState<SupportThread[]>([]);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   const [selectedPartnerId, setSelectedPartnerId] = useState(initialPartnerId);
   const [messages, setMessages] = useState<SupportMessage[]>([]);
   const [loadingThreads, setLoadingThreads] = useState(true);
@@ -35,11 +40,16 @@ export default function SupportPage() {
   const voiceChunksRef = useRef<Blob[]>([]);
   const recordStartedRef = useRef<number | null>(null);
 
-  const loadThreads = useCallback(async () => {
+  const loadThreads = useCallback(async (pageNum: number) => {
     setLoadingThreads(true);
     try {
-      const list = await fetchSupportThreads();
-      setThreads(list);
+      const result = await fetchSupportThreads({
+        page: pageNum,
+        limit: DEFAULT_PAGE_SIZE,
+      });
+      setThreads(result.data);
+      setTotal(result.total);
+      setTotalPages(result.totalPages);
     } catch {
       toast.error("Failed to load support threads");
     } finally {
@@ -67,8 +77,8 @@ export default function SupportPage() {
   }, []);
 
   useEffect(() => {
-    void loadThreads();
-  }, [loadThreads]);
+    void loadThreads(page);
+  }, [loadThreads, page]);
 
   useEffect(() => {
     if (selectedPartnerId) {
@@ -317,6 +327,14 @@ export default function SupportPage() {
               })
             )}
           </div>
+          <ListPagination
+            page={page}
+            limit={DEFAULT_PAGE_SIZE}
+            total={total}
+            totalPages={totalPages}
+            onPageChange={setPage}
+            dense
+          />
         </aside>
 
         <section className="flex-1 flex flex-col min-h-0 min-w-0">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Bell, Loader2, Plus, Trash2 } from "lucide-react";
@@ -24,6 +24,8 @@ import {
   type PartnerUpdateAudience,
   type PartnerUpdateCategory,
 } from "@/lib/api/partnerUpdates";
+import { ListPagination } from "@/components/ui/list-pagination";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 
 const categories: PartnerUpdateCategory[] = [
   "offer",
@@ -34,6 +36,7 @@ const categories: PartnerUpdateCategory[] = [
 
 export default function PartnerUpdatesPage() {
   const queryClient = useQueryClient();
+  const [page, setPage] = useState(1);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [category, setCategory] = useState<PartnerUpdateCategory>("offer");
@@ -41,15 +44,19 @@ export default function PartnerUpdatesPage() {
   const [partnerIdsRaw, setPartnerIdsRaw] = useState("");
   const [zoneIdsRaw, setZoneIdsRaw] = useState("");
 
-  const { data = [], isLoading, isError, error } = useQuery({
-    queryKey: ["partner-updates"],
-    queryFn: () => fetchPartnerUpdates({ limit: 80 }),
+  const { data, isLoading, isError, error } = useQuery({
+    queryKey: ["partner-updates", page],
+    queryFn: () =>
+      fetchPartnerUpdates({
+        source: "admin",
+        page,
+        limit: DEFAULT_PAGE_SIZE,
+      }),
   });
 
-  const adminRows = useMemo(
-    () => data.filter((row) => row.source === "admin"),
-    [data],
-  );
+  const adminRows = data?.data ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = data?.totalPages ?? 1;
 
   const createMutation = useMutation({
     mutationFn: createPartnerUpdate,
@@ -61,6 +68,7 @@ export default function PartnerUpdatesPage() {
       setZoneIdsRaw("");
       setAudience("all");
       setCategory("offer");
+      setPage(1);
       await queryClient.invalidateQueries({ queryKey: ["partner-updates"] });
     },
     onError: (err: unknown) => {
@@ -229,68 +237,77 @@ export default function PartnerUpdatesPage() {
         <CardHeader>
           <CardTitle className="text-lg">Recent broadcasts</CardTitle>
         </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="flex items-center gap-2 text-white/70">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Loading…
-            </div>
-          ) : isError ? (
-            <p className="text-red-300">
-              {(error as Error)?.message || "Failed to load updates"}
-            </p>
-          ) : adminRows.length === 0 ? (
-            <p className="text-white/60">No admin updates yet.</p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow className="border-white/10 hover:bg-transparent">
-                  <TableHead className="text-white/70">Title</TableHead>
-                  <TableHead className="text-white/70">Category</TableHead>
-                  <TableHead className="text-white/70">Audience</TableHead>
-                  <TableHead className="text-white/70">Published</TableHead>
-                  <TableHead className="text-right text-white/70">Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {adminRows.map((row) => (
-                  <TableRow key={row.id} className="border-white/10">
-                    <TableCell>
-                      <div className="font-medium">{row.title}</div>
-                      <div className="line-clamp-2 text-xs text-white/50">
-                        {row.body}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="secondary" className="capitalize">
-                        {row.category}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="capitalize">{row.audience}</TableCell>
-                    <TableCell className="text-sm text-white/60">
-                      {new Date(row.publishedAt).toLocaleString()}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        disabled={deleteMutation.isPending}
-                        onClick={() => {
-                          if (
-                            confirm("Delete this update from partner inboxes?")
-                          ) {
-                            deleteMutation.mutate(row.id);
-                          }
-                        }}
-                      >
-                        <Trash2 className="h-4 w-4 text-red-300" />
-                      </Button>
-                    </TableCell>
+        <CardContent className="p-0">
+          <div className="px-6 pb-0">
+            {isLoading ? (
+              <div className="flex items-center gap-2 text-white/70 py-4">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading…
+              </div>
+            ) : isError ? (
+              <p className="text-red-300 py-4">
+                {(error as Error)?.message || "Failed to load updates"}
+              </p>
+            ) : adminRows.length === 0 ? (
+              <p className="text-white/60 py-4">No admin updates yet.</p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-white/10 hover:bg-transparent">
+                    <TableHead className="text-white/70">Title</TableHead>
+                    <TableHead className="text-white/70">Category</TableHead>
+                    <TableHead className="text-white/70">Audience</TableHead>
+                    <TableHead className="text-white/70">Published</TableHead>
+                    <TableHead className="text-right text-white/70">Action</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
+                </TableHeader>
+                <TableBody>
+                  {adminRows.map((row) => (
+                    <TableRow key={row.id} className="border-white/10">
+                      <TableCell>
+                        <div className="font-medium">{row.title}</div>
+                        <div className="line-clamp-2 text-xs text-white/50">
+                          {row.body}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary" className="capitalize">
+                          {row.category}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="capitalize">{row.audience}</TableCell>
+                      <TableCell className="text-sm text-white/60">
+                        {new Date(row.publishedAt).toLocaleString()}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          disabled={deleteMutation.isPending}
+                          onClick={() => {
+                            if (
+                              confirm("Delete this update from partner inboxes?")
+                            ) {
+                              deleteMutation.mutate(row.id);
+                            }
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4 text-red-300" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </div>
+          <ListPagination
+            page={page}
+            limit={DEFAULT_PAGE_SIZE}
+            total={total}
+            totalPages={totalPages}
+            onPageChange={setPage}
+          />
         </CardContent>
       </Card>
     </div>

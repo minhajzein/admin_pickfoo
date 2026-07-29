@@ -1,12 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   fetchWithdrawals,
   updateWithdrawalStatus,
-  type AdminWithdrawal,
   type WithdrawalStatus,
 } from "@/lib/api/withdrawals";
 import { Button } from "@/components/ui/button";
@@ -38,6 +37,8 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { MoreHorizontal, Search } from "lucide-react";
+import { ListPagination } from "@/components/ui/list-pagination";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 
 const STATUS_FILTERS: Array<WithdrawalStatus | "all"> = [
   "all",
@@ -72,6 +73,8 @@ export default function WithdrawalsPage() {
   const queryClient = useQueryClient();
   const [status, setStatus] = useState<WithdrawalStatus | "all">("pending");
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [page, setPage] = useState(1);
   const [notesOpen, setNotesOpen] = useState(false);
   const [notes, setNotes] = useState("");
   const [pendingAction, setPendingAction] = useState<{
@@ -79,14 +82,29 @@ export default function WithdrawalsPage() {
     status: WithdrawalStatus;
   } | null>(null);
 
-  const { data = [], isLoading, refetch } = useQuery({
-    queryKey: ["admin-withdrawals", status, search],
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => window.clearTimeout(t);
+  }, [search]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [status, debouncedSearch]);
+
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ["admin-withdrawals", status, debouncedSearch, page],
     queryFn: () =>
       fetchWithdrawals({
         status: status === "all" ? undefined : status,
-        search: search.trim() || undefined,
+        search: debouncedSearch || undefined,
+        page,
+        limit: DEFAULT_PAGE_SIZE,
       }),
   });
+
+  const rows = data?.data ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = data?.totalPages ?? 1;
 
   const mutation = useMutation({
     mutationFn: ({
@@ -109,8 +127,6 @@ export default function WithdrawalsPage() {
       toast.error(err?.response?.data?.message || "Failed to update withdrawal");
     },
   });
-
-  const rows = useMemo(() => data as AdminWithdrawal[], [data]);
 
   function askStatus(id: string, next: WithdrawalStatus) {
     setPendingAction({ id, status: next });
@@ -276,6 +292,14 @@ export default function WithdrawalsPage() {
                 )}
               </TableBody>
             </Table>
+            <ListPagination
+              page={page}
+              limit={DEFAULT_PAGE_SIZE}
+              total={total}
+              totalPages={totalPages}
+              onPageChange={setPage}
+              dense
+            />
           </div>
         </CardContent>
       </Card>
