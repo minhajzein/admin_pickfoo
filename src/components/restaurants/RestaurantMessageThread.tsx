@@ -5,6 +5,7 @@ import { format, isToday, isYesterday, isSameDay } from "date-fns";
 import { Send, Loader2, MessageSquare } from "lucide-react";
 import {
   fetchRestaurantMessages,
+  markRestaurantMessagesRead,
   sendRestaurantMessage,
   type RestaurantMessage,
 } from "@/lib/api/restaurantMessages";
@@ -44,6 +45,7 @@ export function RestaurantMessageThread({ ownerId, restaurantName }: Props) {
     try {
       const { messages: msgs } = await fetchRestaurantMessages(ownerId);
       setMessages(msgs);
+      void markRestaurantMessagesRead(ownerId).catch(() => undefined);
     } catch (e: any) {
       setError(e.message || "Failed to load messages");
     } finally {

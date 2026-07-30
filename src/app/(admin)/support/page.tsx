@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { Headset, Mic, Paperclip, Send } from "lucide-react";
 import { toast } from "sonner";
 import { SupportMessageBubble } from "@/components/support/SupportMessageBubble";
+import { RestaurantMessageThread } from "@/components/restaurants/RestaurantMessageThread";
 import {
   fetchSupportThread,
   fetchSupportThreads,
@@ -16,18 +17,35 @@ import {
   type SupportMessagePayload,
   type SupportThread,
 } from "@/lib/api/support";
+import {
+  fetchRestaurantMessageThreads,
+  type RestaurantMessageThreadSummary,
+} from "@/lib/api/restaurantMessages";
 import { ListPagination } from "@/components/ui/list-pagination";
 import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
+
+type InboxTab = "delivery" | "restaurants";
 
 export default function SupportPage() {
   const searchParams = useSearchParams();
   const initialPartnerId = searchParams.get("partnerId") ?? "";
+  const initialOwnerId = searchParams.get("ownerId") ?? "";
+  const initialTab: InboxTab =
+    searchParams.get("tab") === "restaurants" || initialOwnerId
+      ? "restaurants"
+      : "delivery";
+
+  const [tab, setTab] = useState<InboxTab>(initialTab);
 
   const [threads, setThreads] = useState<SupportThread[]>([]);
+  const [restaurantThreads, setRestaurantThreads] = useState<
+    RestaurantMessageThreadSummary[]
+  >([]);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [selectedPartnerId, setSelectedPartnerId] = useState(initialPartnerId);
+  const [selectedOwnerId, setSelectedOwnerId] = useState(initialOwnerId);
   const [messages, setMessages] = useState<SupportMessage[]>([]);
   const [loadingThreads, setLoadingThreads] = useState(true);
   const [loadingChat, setLoadingChat] = useState(false);
@@ -40,7 +58,7 @@ export default function SupportPage() {
   const voiceChunksRef = useRef<Blob[]>([]);
   const recordStartedRef = useRef<number | null>(null);
 
-  const loadThreads = useCallback(async (pageNum: number) => {
+  const loadDeliveryThreads = useCallback(async (pageNum: number) => {
     setLoadingThreads(true);
     try {
       const result = await fetchSupportThreads({
@@ -52,6 +70,23 @@ export default function SupportPage() {
       setTotalPages(result.totalPages);
     } catch {
       toast.error("Failed to load support threads");
+    } finally {
+      setLoadingThreads(false);
+    }
+  }, []);
+
+  const loadRestaurantThreads = useCallback(async (pageNum: number) => {
+    setLoadingThreads(true);
+    try {
+      const result = await fetchRestaurantMessageThreads({
+        page: pageNum,
+        limit: DEFAULT_PAGE_SIZE,
+      });
+      setRestaurantThreads(result.data);
+      setTotal(result.total);
+      setTotalPages(result.totalPages);
+    } catch {
+      toast.error("Failed to load restaurant messages");
     } finally {
       setLoadingThreads(false);
     }
@@ -77,22 +112,33 @@ export default function SupportPage() {
   }, []);
 
   useEffect(() => {
-    void loadThreads(page);
-  }, [loadThreads, page]);
+    setPage(1);
+  }, [tab]);
 
   useEffect(() => {
+    if (tab === "delivery") {
+      void loadDeliveryThreads(page);
+    } else {
+      void loadRestaurantThreads(page);
+    }
+  }, [tab, page, loadDeliveryThreads, loadRestaurantThreads]);
+
+  useEffect(() => {
+    if (tab !== "delivery") return;
     if (selectedPartnerId) {
       void loadChat(selectedPartnerId);
     } else {
       setMessages([]);
     }
-  }, [selectedPartnerId, loadChat]);
+  }, [tab, selectedPartnerId, loadChat]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
   useEffect(() => {
+    if (tab !== "delivery") return;
+
     const onMessage = (event: Event) => {
       const detail = (event as CustomEvent<SupportMessagePayload>).detail;
       if (!detail?.message) return;
@@ -142,7 +188,7 @@ export default function SupportPage() {
       window.removeEventListener("admin:support-message", onMessage);
       window.removeEventListener("admin:support-thread-updated", onThread);
     };
-  }, [selectedPartnerId]);
+  }, [tab, selectedPartnerId]);
 
   const applyPayload = useCallback(
     (payload: SupportMessagePayload) => {
@@ -267,17 +313,57 @@ export default function SupportPage() {
   };
 
   const selectedThread = threads.find((t) => t.partnerId === selectedPartnerId);
+  const selectedRestaurantThread = restaurantThreads.find(
+    (t) => t.ownerId === selectedOwnerId,
+  );
+
+  const switchTab = (next: InboxTab) => {
+    setTab(next);
+    setDraft("");
+    setRecording(false);
+    if (next === "delivery") {
+      setSelectedOwnerId("");
+    } else {
+      setSelectedPartnerId("");
+      setMessages([]);
+    }
+  };
 
   return (
     <div className="flex flex-col h-full min-h-0 p-4 lg:p-6 gap-4">
       <div className="flex items-center gap-3">
         <Headset className="h-8 w-8 text-[#98E32F]" />
         <div>
-          <h1 className="text-2xl font-bold text-white">Partner support</h1>
+          <h1 className="text-2xl font-bold text-white">Support</h1>
           <p className="text-sm text-white/60">
-            Live chat with delivery partners
+            Chat with delivery partners and restaurant owners
           </p>
         </div>
+      </div>
+
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => switchTab("delivery")}
+          className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+            tab === "delivery"
+              ? "bg-[#98E32F] text-[#013644]"
+              : "bg-white/5 text-white/70 hover:bg-white/10"
+          }`}
+        >
+          Delivery partners
+        </button>
+        <button
+          type="button"
+          onClick={() => switchTab("restaurants")}
+          className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+            tab === "restaurants"
+              ? "bg-[#98E32F] text-[#013644]"
+              : "bg-white/5 text-white/70 hover:bg-white/10"
+          }`}
+        >
+          Restaurant owners
+        </button>
       </div>
 
       <div className="flex flex-1 min-h-0 gap-4 rounded-xl border border-white/10 overflow-hidden bg-[#002833]">
@@ -288,27 +374,77 @@ export default function SupportPage() {
           <div className="flex-1 overflow-y-auto">
             {loadingThreads ? (
               <p className="p-4 text-white/50 text-sm">Loading…</p>
-            ) : threads.length === 0 ? (
-              <p className="p-4 text-white/50 text-sm">No conversations yet.</p>
+            ) : tab === "delivery" ? (
+              threads.length === 0 ? (
+                <p className="p-4 text-white/50 text-sm">No conversations yet.</p>
+              ) : (
+                threads.map((t) => {
+                  const active = t.partnerId === selectedPartnerId;
+                  return (
+                    <button
+                      key={t.partnerId}
+                      type="button"
+                      onClick={() => setSelectedPartnerId(t.partnerId)}
+                      className={`w-full text-left px-4 py-3 border-b border-white/5 hover:bg-white/5 transition-colors ${
+                        active ? "bg-white/10" : ""
+                      }`}
+                    >
+                      <div className="flex justify-between gap-2 items-start">
+                        <div className="min-w-0">
+                          <p className="font-medium text-white truncate">
+                            {t.partnerName || "Partner"}
+                          </p>
+                          <p className="text-xs text-white/50 truncate">
+                            {t.partnerPhone || t.partnerId}
+                          </p>
+                          {t.lastMessagePreview ? (
+                            <p className="text-xs text-white/40 mt-1 truncate">
+                              {t.lastMessagePreview}
+                            </p>
+                          ) : null}
+                        </div>
+                        {t.unreadByAdmin > 0 ? (
+                          <span className="shrink-0 bg-[#98E32F] text-[#013644] text-xs font-bold px-2 py-0.5 rounded-full">
+                            {t.unreadByAdmin}
+                          </span>
+                        ) : null}
+                      </div>
+                    </button>
+                  );
+                })
+              )
+            ) : restaurantThreads.length === 0 ? (
+              <p className="p-4 text-white/50 text-sm">
+                No restaurant owner messages yet.
+              </p>
             ) : (
-              threads.map((t) => {
-                const active = t.partnerId === selectedPartnerId;
+              restaurantThreads.map((t) => {
+                const active = t.ownerId === selectedOwnerId;
+                const title =
+                  t.restaurantName || t.ownerName || "Restaurant owner";
                 return (
                   <button
-                    key={t.partnerId}
+                    key={t.ownerId}
                     type="button"
-                    onClick={() => setSelectedPartnerId(t.partnerId)}
+                    onClick={() => {
+                      setSelectedOwnerId(t.ownerId);
+                      setRestaurantThreads((prev) =>
+                        prev.map((row) =>
+                          row.ownerId === t.ownerId
+                            ? { ...row, unreadByAdmin: 0 }
+                            : row,
+                        ),
+                      );
+                    }}
                     className={`w-full text-left px-4 py-3 border-b border-white/5 hover:bg-white/5 transition-colors ${
                       active ? "bg-white/10" : ""
                     }`}
                   >
                     <div className="flex justify-between gap-2 items-start">
                       <div className="min-w-0">
-                        <p className="font-medium text-white truncate">
-                          {t.partnerName || "Partner"}
-                        </p>
+                        <p className="font-medium text-white truncate">{title}</p>
                         <p className="text-xs text-white/50 truncate">
-                          {t.partnerPhone || t.partnerId}
+                          {t.ownerEmail || t.ownerName || t.ownerId}
                         </p>
                         {t.lastMessagePreview ? (
                           <p className="text-xs text-white/40 mt-1 truncate">
@@ -338,7 +474,24 @@ export default function SupportPage() {
         </aside>
 
         <section className="flex-1 flex flex-col min-h-0 min-w-0">
-          {!selectedPartnerId ? (
+          {tab === "restaurants" ? (
+            !selectedOwnerId ? (
+              <div className="flex-1 flex items-center justify-center text-white/50 text-sm">
+                Select a restaurant conversation
+              </div>
+            ) : (
+              <div className="flex-1 min-h-0 p-4">
+                <RestaurantMessageThread
+                  ownerId={selectedOwnerId}
+                  restaurantName={
+                    selectedRestaurantThread?.restaurantName ||
+                    selectedRestaurantThread?.ownerName ||
+                    "Restaurant owner"
+                  }
+                />
+              </div>
+            )
+          ) : !selectedPartnerId ? (
             <div className="flex-1 flex items-center justify-center text-white/50 text-sm">
               Select a conversation
             </div>
