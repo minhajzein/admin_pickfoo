@@ -26,12 +26,24 @@ export interface RestaurantMessageThreadSummary {
 }
 
 function normalizeMessage(raw: any): RestaurantMessage {
+  const createdRaw = raw?.createdAt;
+  let createdAt = '';
+  if (typeof createdRaw === 'string' && createdRaw.trim()) {
+    createdAt = createdRaw;
+  } else if (createdRaw) {
+    const d = new Date(createdRaw);
+    createdAt = Number.isNaN(d.getTime())
+      ? new Date().toISOString()
+      : d.toISOString();
+  } else {
+    createdAt = new Date().toISOString();
+  }
   return {
     id: String(raw?.id ?? raw?._id ?? ''),
     sender: raw?.sender === 'admin' ? 'admin' : 'owner',
     text: String(raw?.text ?? ''),
     read: Boolean(raw?.read),
-    createdAt: String(raw?.createdAt ?? ''),
+    createdAt,
   };
 }
 

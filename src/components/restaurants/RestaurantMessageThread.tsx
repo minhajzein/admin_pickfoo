@@ -101,10 +101,24 @@ export function RestaurantMessageThread({ ownerId, restaurantName }: Props) {
     if (!trimmed || sending) return;
     setText("");
     setSending(true);
+    const tempId = `local-${Date.now()}`;
+    const optimistic: RestaurantMessage = {
+      id: tempId,
+      sender: "admin",
+      text: trimmed,
+      read: false,
+      createdAt: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, optimistic]);
     try {
       const msg = await sendRestaurantMessage(ownerId, trimmed);
-      setMessages((prev) => [...prev, msg]);
+      setMessages((prev) => {
+        const withoutTemp = prev.filter((m) => m.id !== tempId);
+        if (withoutTemp.some((m) => m.id === msg.id)) return withoutTemp;
+        return [...withoutTemp, msg];
+      });
     } catch (e: any) {
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
       toast.error(e.message || "Failed to send message");
       setText(trimmed); // restore on failure
     } finally {
@@ -198,7 +212,12 @@ export function RestaurantMessageThread({ ownerId, restaurantName }: Props) {
                         isAdmin ? "text-white/50 text-right" : "text-white/40"
                       }`}
                     >
-                      {format(new Date(msg.createdAt), "hh:mm a")}
+                      {(() => {
+                        const d = new Date(msg.createdAt);
+                        return Number.isNaN(d.getTime())
+                          ? ""
+                          : format(d, "hh:mm a");
+                      })()}
                     </p>
                   </div>
                 </div>
