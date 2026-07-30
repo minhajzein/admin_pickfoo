@@ -16,6 +16,18 @@ interface Props {
   restaurantName: string;
 }
 
+export type RestaurantMessageRealtimePayload = {
+  message?: {
+    id?: string;
+    ownerId?: string;
+    sender?: "owner" | "admin";
+    text?: string;
+    read?: boolean;
+    createdAt?: string;
+  };
+  thread?: { ownerId?: string };
+};
+
 function dateLabel(d: Date): string {
   if (isToday(d)) return "Today";
   if (isYesterday(d)) return "Yesterday";
@@ -33,6 +45,37 @@ export function RestaurantMessageThread({ ownerId, restaurantName }: Props) {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ownerId]);
+
+  useEffect(() => {
+    const onMessage = (event: Event) => {
+      const detail = (event as CustomEvent<RestaurantMessageRealtimePayload>)
+        .detail;
+      const msg = detail?.message;
+      if (!msg?.id || !msg.text) return;
+      if ((msg.ownerId || detail?.thread?.ownerId) !== ownerId) return;
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === msg.id)) return prev;
+        return [
+          ...prev,
+          {
+            id: String(msg.id),
+            sender: msg.sender === "admin" ? "admin" : "owner",
+            text: String(msg.text),
+            read: Boolean(msg.read),
+            createdAt: String(msg.createdAt ?? new Date().toISOString()),
+          },
+        ];
+      });
+      if (msg.sender === "owner") {
+        void markRestaurantMessagesRead(ownerId).catch(() => undefined);
+      }
+    };
+
+    window.addEventListener("admin:restaurant-message", onMessage);
+    return () => {
+      window.removeEventListener("admin:restaurant-message", onMessage);
+    };
   }, [ownerId]);
 
   useEffect(() => {

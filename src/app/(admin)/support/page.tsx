@@ -19,6 +19,7 @@ import {
 } from "@/lib/api/support";
 import {
   fetchRestaurantMessageThreads,
+  markRestaurantMessagesRead,
   type RestaurantMessageThreadSummary,
 } from "@/lib/api/restaurantMessages";
 import { ListPagination } from "@/components/ui/list-pagination";
@@ -135,6 +136,82 @@ export default function SupportPage() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  useEffect(() => {
+    const onMessage = (event: Event) => {
+      const detail = (event as CustomEvent<{
+        message?: {
+          id?: string;
+          ownerId?: string;
+          sender?: "owner" | "admin";
+          text?: string;
+        };
+        thread?: RestaurantMessageThreadSummary;
+      }>).detail;
+      if (!detail?.thread?.ownerId) return;
+      const thread = {
+        ...detail.thread,
+        unreadByAdmin: Number(detail.thread.unreadByAdmin ?? 0),
+      };
+      setRestaurantThreads((prev) => {
+        const idx = prev.findIndex((t) => t.ownerId === thread.ownerId);
+        if (idx < 0) return [thread, ...prev];
+        const copy = [...prev];
+        copy[idx] = {
+          ...copy[idx],
+          ...thread,
+          unreadByAdmin:
+            selectedOwnerId === thread.ownerId && detail.message?.sender === "owner"
+              ? 0
+              : thread.unreadByAdmin,
+        };
+        copy.sort((a, b) => {
+          const at = a.lastMessageAt ?? "";
+          const bt = b.lastMessageAt ?? "";
+          return String(bt).localeCompare(String(at));
+        });
+        return copy;
+      });
+      if (
+        detail.message?.sender === "owner" &&
+        detail.thread.ownerId !== selectedOwnerId
+      ) {
+        toast.message("New restaurant message", {
+          description:
+            detail.thread.restaurantName ||
+            detail.thread.ownerName ||
+            detail.thread.ownerId,
+        });
+      }
+      if (
+        detail.message?.sender === "owner" &&
+        detail.thread.ownerId === selectedOwnerId
+      ) {
+        void markRestaurantMessagesRead(detail.thread.ownerId);
+      }
+    };
+
+    const onThread = (event: Event) => {
+      const detail = (event as CustomEvent<{
+        thread?: RestaurantMessageThreadSummary;
+      }>).detail;
+      if (!detail?.thread?.ownerId) return;
+      setRestaurantThreads((prev) => {
+        const idx = prev.findIndex((t) => t.ownerId === detail.thread!.ownerId);
+        if (idx < 0) return [detail.thread!, ...prev];
+        const copy = [...prev];
+        copy[idx] = { ...copy[idx], ...detail.thread! };
+        return copy;
+      });
+    };
+
+    window.addEventListener("admin:restaurant-message", onMessage);
+    window.addEventListener("admin:restaurant-message-thread", onThread);
+    return () => {
+      window.removeEventListener("admin:restaurant-message", onMessage);
+      window.removeEventListener("admin:restaurant-message-thread", onThread);
+    };
+  }, [selectedOwnerId]);
 
   useEffect(() => {
     if (tab !== "delivery") return;

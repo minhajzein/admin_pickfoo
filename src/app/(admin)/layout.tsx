@@ -200,6 +200,18 @@ export default function AdminLayout({
       );
     });
 
+    socket.on("restaurant-message:new", (data: unknown) => {
+      window.dispatchEvent(
+        new CustomEvent("admin:restaurant-message", { detail: data }),
+      );
+    });
+
+    socket.on("restaurant-message:thread-updated", (data: unknown) => {
+      window.dispatchEvent(
+        new CustomEvent("admin:restaurant-message-thread", { detail: data }),
+      );
+    });
+
     socket.on("monitor:event", (data: unknown) => {
       window.dispatchEvent(
         new CustomEvent("admin:monitor-event", {
