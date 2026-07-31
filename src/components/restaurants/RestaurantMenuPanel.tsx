@@ -176,9 +176,12 @@ export function RestaurantMenuPanel({
   const [isSavingCategory, setIsSavingCategory] = useState(false);
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const [editingCategoryName, setEditingCategoryName] = useState("");
+  const [editingCategoryImage, setEditingCategoryImage] = useState("");
   const [editingCategoryParentId, setEditingCategoryParentId] = useState("");
   const [editingCategoryParentLabel, setEditingCategoryParentLabel] =
     useState("");
+  const [isUploadingEditingCategoryImage, setIsUploadingEditingCategoryImage] =
+    useState(false);
 
   const [deleteTarget, setDeleteTarget] = useState<{
     type: "item" | "category";
@@ -503,18 +506,25 @@ export function RestaurantMenuPanel({
 
   const handleCategoryImageUpload = async (
     event: React.ChangeEvent<HTMLInputElement>,
+    target: "new" | "edit" = "new",
   ) => {
     const file = event.target.files?.[0];
     if (!file) return;
+    const setUploading =
+      target === "edit"
+        ? setIsUploadingEditingCategoryImage
+        : setIsUploadingCategoryImage;
+    const setImage =
+      target === "edit" ? setEditingCategoryImage : setNewCategoryImage;
     try {
-      setIsUploadingCategoryImage(true);
+      setUploading(true);
       const url = await uploadMenuImage(file, "categories");
-      setNewCategoryImage(url);
+      setImage(url);
       toast.success("Category image uploaded");
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Upload failed");
     } finally {
-      setIsUploadingCategoryImage(false);
+      setUploading(false);
       event.target.value = "";
     }
   };
@@ -619,11 +629,13 @@ export function RestaurantMenuPanel({
       setIsSavingCategory(true);
       await updateCategory(editingCategoryId, {
         name,
+        image: editingCategoryImage || "",
         parent: editingCategoryParentId.trim() || null,
       });
       toast.success("Category updated");
       setEditingCategoryId(null);
       setEditingCategoryName("");
+      setEditingCategoryImage("");
       setEditingCategoryParentId("");
       setEditingCategoryParentLabel("");
       invalidateCategories();
@@ -642,9 +654,18 @@ export function RestaurantMenuPanel({
   const startEditCategory = (cat: AdminCategory) => {
     setEditingCategoryId(cat._id);
     setEditingCategoryName(cat.name);
+    setEditingCategoryImage(cat.image || "");
     const pid = categoryParentId(cat) ?? "";
     setEditingCategoryParentId(pid);
     setEditingCategoryParentLabel(categoryParentName(cat) ?? "");
+  };
+
+  const cancelEditCategory = () => {
+    setEditingCategoryId(null);
+    setEditingCategoryName("");
+    setEditingCategoryImage("");
+    setEditingCategoryParentId("");
+    setEditingCategoryParentLabel("");
   };
 
   return (
@@ -1498,12 +1519,73 @@ export function RestaurantMenuPanel({
                             setEditingCategoryParentLabel(selected?.name ?? "");
                           }}
                         />
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <label className="text-[10px] font-bold text-white/40 uppercase tracking-wider">
+                              Category image
+                            </label>
+                            {editingCategoryImage ? (
+                              <button
+                                type="button"
+                                onClick={() => setEditingCategoryImage("")}
+                                className="text-[10px] font-bold text-red-400"
+                              >
+                                Remove
+                              </button>
+                            ) : null}
+                          </div>
+                          <input
+                            type="file"
+                            id={`admin-edit-category-image-${cat._id}`}
+                            className="hidden"
+                            accept="image/*"
+                            onChange={(e) =>
+                              handleCategoryImageUpload(e, "edit")
+                            }
+                          />
+                          <label
+                            htmlFor={`admin-edit-category-image-${cat._id}`}
+                            className="relative block w-full h-28 border border-dashed border-white/15 rounded-xl cursor-pointer hover:border-[#98E32F]/50 overflow-hidden bg-black/20"
+                          >
+                            {isUploadingEditingCategoryImage ? (
+                              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-[#98E32F]">
+                                <Loader2 className="animate-spin" size={20} />
+                                <span className="text-xs font-bold">
+                                  Uploading...
+                                </span>
+                              </div>
+                            ) : editingCategoryImage ? (
+                              <>
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                  src={editingCategoryImage}
+                                  alt="Category preview"
+                                  className="absolute inset-0 w-full h-full object-cover"
+                                />
+                                <div className="absolute inset-0 bg-black/50 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center">
+                                  <span className="text-xs font-bold text-white bg-black/60 px-3 py-1.5 rounded-full">
+                                    Change image
+                                  </span>
+                                </div>
+                              </>
+                            ) : (
+                              <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 text-white/30">
+                                <ImageIcon size={20} />
+                                <span className="text-xs font-bold">
+                                  Add image
+                                </span>
+                              </div>
+                            )}
+                          </label>
+                        </div>
                         <div className="flex gap-2">
                           <Button
                             type="button"
                             size="sm"
                             className="bg-[#98E32F] text-[#013644] font-bold h-8"
-                            disabled={isSavingCategory}
+                            disabled={
+                              isSavingCategory || isUploadingEditingCategoryImage
+                            }
                             onClick={handleUpdateCategory}
                           >
                             {isSavingCategory ? "Saving..." : "Save"}
@@ -1511,11 +1593,7 @@ export function RestaurantMenuPanel({
                           <button
                             type="button"
                             className="text-white/40 px-2"
-                            onClick={() => {
-                              setEditingCategoryId(null);
-                              setEditingCategoryParentId("");
-                              setEditingCategoryParentLabel("");
-                            }}
+                            onClick={cancelEditCategory}
                           >
                             <X size={16} />
                           </button>
