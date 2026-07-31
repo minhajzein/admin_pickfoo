@@ -177,6 +177,9 @@ export function RestaurantMenuPanel({
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const [editingCategoryName, setEditingCategoryName] = useState("");
   const [editingCategoryImage, setEditingCategoryImage] = useState("");
+  /** Display URL when edit started; used so we only PATCH image when it changes. */
+  const [editingCategoryImageBaseline, setEditingCategoryImageBaseline] =
+    useState("");
   const [editingCategoryParentId, setEditingCategoryParentId] = useState("");
   const [editingCategoryParentLabel, setEditingCategoryParentLabel] =
     useState("");
@@ -627,15 +630,25 @@ export function RestaurantMenuPanel({
     if (isSavingCategory) return;
     try {
       setIsSavingCategory(true);
-      await updateCategory(editingCategoryId, {
+      const payload: {
+        name: string;
+        parent: string | null;
+        image?: string;
+      } = {
         name,
-        image: editingCategoryImage || "",
         parent: editingCategoryParentId.trim() || null,
-      });
+      };
+      // Only send image when uploaded/cleared — avoid writing a presigned display URL
+      // back into Mongo (would break customer-api static/presign resolution).
+      if (editingCategoryImage !== editingCategoryImageBaseline) {
+        payload.image = editingCategoryImage || "";
+      }
+      await updateCategory(editingCategoryId, payload);
       toast.success("Category updated");
       setEditingCategoryId(null);
       setEditingCategoryName("");
       setEditingCategoryImage("");
+      setEditingCategoryImageBaseline("");
       setEditingCategoryParentId("");
       setEditingCategoryParentLabel("");
       invalidateCategories();
@@ -654,7 +667,9 @@ export function RestaurantMenuPanel({
   const startEditCategory = (cat: AdminCategory) => {
     setEditingCategoryId(cat._id);
     setEditingCategoryName(cat.name);
-    setEditingCategoryImage(cat.image || "");
+    const image = cat.image || "";
+    setEditingCategoryImage(image);
+    setEditingCategoryImageBaseline(image);
     const pid = categoryParentId(cat) ?? "";
     setEditingCategoryParentId(pid);
     setEditingCategoryParentLabel(categoryParentName(cat) ?? "");
@@ -664,6 +679,7 @@ export function RestaurantMenuPanel({
     setEditingCategoryId(null);
     setEditingCategoryName("");
     setEditingCategoryImage("");
+    setEditingCategoryImageBaseline("");
     setEditingCategoryParentId("");
     setEditingCategoryParentLabel("");
   };
