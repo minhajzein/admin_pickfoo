@@ -89,6 +89,19 @@ function localAuthLabel(auth: string): string {
   return auth;
 }
 
+/** Convert a single-part MultiPolygon into an editable Polygon for Mapbox Draw. */
+function singlePartMultiToPolygon(
+  geom: Extract<ZoneGeometry, { type: "MultiPolygon" }>,
+): PolygonZoneGeometry | null {
+  if (geom.coordinates.length !== 1) return null;
+  const rings = geom.coordinates[0];
+  if (!rings) return null;
+  return {
+    type: "Polygon",
+    coordinates: rings,
+  };
+}
+
 async function loadLsgGeometryByCode(
   lsgiCode: string,
 ): Promise<ZoneGeometry | null> {
@@ -107,11 +120,8 @@ async function loadLsgGeometryByCode(
   );
   if (!feat?.geometry) return null;
   const g = feat.geometry;
-  if (g.type === "MultiPolygon" && g.coordinates.length === 1) {
-    return {
-      type: "Polygon",
-      coordinates: g.coordinates[0] as number[][][],
-    };
+  if (g.type === "MultiPolygon") {
+    return singlePartMultiToPolygon(g) ?? g;
   }
   return g;
 }
@@ -168,18 +178,16 @@ export default function ZonesPage() {
     setGeometryOverride(geom.type === "MultiPolygon" ? geom : null);
     setGeoText(JSON.stringify(geom, null, 2));
     if (geom.type === "Polygon") {
-      setDrawPolygon(geom as PolygonZoneGeometry);
-    } else if (
-      geom.type === "MultiPolygon" &&
-      geom.coordinates.length === 1
-    ) {
-      const poly: PolygonZoneGeometry = {
-        type: "Polygon",
-        coordinates: geom.coordinates[0] as number[][][],
-      };
-      setDrawPolygon(poly);
-      setGeometryOverride(null);
-      setGeoText(JSON.stringify(poly, null, 2));
+      setDrawPolygon(geom);
+    } else if (geom.type === "MultiPolygon") {
+      const poly = singlePartMultiToPolygon(geom);
+      if (poly) {
+        setDrawPolygon(poly);
+        setGeometryOverride(null);
+        setGeoText(JSON.stringify(poly, null, 2));
+      } else {
+        setDrawPolygon(null);
+      }
     } else {
       setDrawPolygon(null);
     }
@@ -221,20 +229,17 @@ export default function ZonesPage() {
     setGeoText(JSON.stringify(z.geometry, null, 2));
     setGeometryOverride(null);
     if (z.geometry.type === "Polygon") {
-      setDrawPolygon(z.geometry as PolygonZoneGeometry);
-    } else if (
-      z.geometry.type === "MultiPolygon" &&
-      z.geometry.coordinates.length === 1
-    ) {
-      setDrawPolygon({
-        type: "Polygon",
-        coordinates: z.geometry.coordinates[0] as number[][][],
-      });
-    } else {
-      setDrawPolygon(null);
-      if (z.geometry.type === "MultiPolygon") {
+      setDrawPolygon(z.geometry);
+    } else if (z.geometry.type === "MultiPolygon") {
+      const poly = singlePartMultiToPolygon(z.geometry);
+      if (poly) {
+        setDrawPolygon(poly);
+      } else {
+        setDrawPolygon(null);
         setGeometryOverride(z.geometry);
       }
+    } else {
+      setDrawPolygon(null);
     }
   }, []);
 
