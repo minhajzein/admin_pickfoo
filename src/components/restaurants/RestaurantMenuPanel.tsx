@@ -154,6 +154,10 @@ export function RestaurantMenuPanel({
   const [form, setForm] = useState(() => emptyForm(restaurantTypeDefaults));
   const [ingredientInput, setIngredientInput] = useState("");
   const [relatedItemSearch, setRelatedItemSearch] = useState("");
+  /** Category names used to filter “complete your meal” candidates (multi-select). */
+  const [relatedItemCategories, setRelatedItemCategories] = useState<string[]>(
+    [],
+  );
   const [commissionPercent, setCommissionPercent] = useState(
     DEFAULT_COMMISSION_PERCENT,
   );
@@ -260,23 +264,53 @@ export function RestaurantMenuPanel({
     );
   }, [menuItems, search]);
 
+  const relatedItemCategoryOptions = useMemo(() => {
+    const names = new Set<string>();
+    for (const item of menuItems) {
+      if (editingItemId && item._id === editingItemId) continue;
+      if (!item.isActive) continue;
+      const name = item.category?.trim();
+      if (name) names.add(name);
+    }
+    return Array.from(names).sort((a, b) =>
+      a.localeCompare(b, undefined, { sensitivity: "base" }),
+    );
+  }, [menuItems, editingItemId]);
+
   const relatedItemCandidates = useMemo(() => {
     const q = relatedItemSearch.trim().toLowerCase();
+    const categoryFilter = new Set(
+      relatedItemCategories.map((c) => c.trim().toLowerCase()).filter(Boolean),
+    );
     return menuItems.filter((item) => {
       if (editingItemId && item._id === editingItemId) return false;
       if (!item.isActive) return false;
+      if (
+        categoryFilter.size > 0 &&
+        !categoryFilter.has(item.category.trim().toLowerCase())
+      ) {
+        return false;
+      }
       if (!q) return true;
       return (
         item.name.toLowerCase().includes(q) ||
         item.category.toLowerCase().includes(q)
       );
     });
-  }, [menuItems, editingItemId, relatedItemSearch]);
+  }, [menuItems, editingItemId, relatedItemSearch, relatedItemCategories]);
 
   const selectedRelatedItems = useMemo(() => {
     const ids = new Set(form.completeMealItemIds ?? []);
     return menuItems.filter((item) => ids.has(item._id));
   }, [menuItems, form.completeMealItemIds]);
+
+  const toggleRelatedItemCategory = (category: string) => {
+    setRelatedItemCategories((prev) =>
+      prev.includes(category)
+        ? prev.filter((c) => c !== category)
+        : [...prev, category],
+    );
+  };
 
   const invalidateMenu = () => {
     queryClient.invalidateQueries({ queryKey: ["restaurant-menu", restaurantId] });
@@ -325,6 +359,7 @@ export function RestaurantMenuPanel({
     setForm(emptyForm(restaurantTypeDefaults));
     setIngredientInput("");
     setRelatedItemSearch("");
+    setRelatedItemCategories([]);
     setCommissionPercent(DEFAULT_COMMISSION_PERCENT);
     setOriginalPrice(0);
     setOriginalVariantPrices([]);
@@ -371,6 +406,7 @@ export function RestaurantMenuPanel({
     );
     setIngredientInput("");
     setRelatedItemSearch("");
+    setRelatedItemCategories([]);
     setIsItemModalOpen(true);
   };
 
@@ -575,6 +611,7 @@ export function RestaurantMenuPanel({
       setIsItemModalOpen(false);
       setEditingItemId(null);
       setRelatedItemSearch("");
+      setRelatedItemCategories([]);
       setForm(emptyForm(restaurantTypeDefaults));
     } catch (err: unknown) {
       const msg =
@@ -1145,6 +1182,52 @@ export function RestaurantMenuPanel({
                 </div>
               )}
 
+              {relatedItemCategoryOptions.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <label className="text-[10px] font-bold text-white/40 uppercase tracking-wider">
+                      Filter by categories
+                    </label>
+                    {relatedItemCategories.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setRelatedItemCategories([])}
+                        className="text-[10px] font-bold text-white/45 hover:text-white"
+                      >
+                        Clear ({relatedItemCategories.length})
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-2 max-h-24 overflow-y-auto pr-1">
+                    {relatedItemCategoryOptions.map((category) => {
+                      const selected = relatedItemCategories.includes(category);
+                      return (
+                        <button
+                          key={category}
+                          type="button"
+                          onClick={() => toggleRelatedItemCategory(category)}
+                          className={`px-2.5 py-1 rounded-full text-[11px] font-semibold border transition-colors truncate max-w-[180px] ${
+                            selected
+                              ? "bg-[#98E32F] text-[#013644] border-[#98E32F]"
+                              : "bg-white/5 text-white/55 border-white/10 hover:text-white hover:border-white/20"
+                          }`}
+                          title={category}
+                        >
+                          {category}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="text-[10px] text-white/35">
+                    {relatedItemCategories.length === 0
+                      ? "Showing all categories. Select one or more to narrow the list."
+                      : `Showing items in ${relatedItemCategories.length} selected categor${
+                          relatedItemCategories.length === 1 ? "y" : "ies"
+                        }.`}
+                  </p>
+                </div>
+              )}
+
               <div className="relative">
                 <Search
                   className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30"
@@ -1164,7 +1247,7 @@ export function RestaurantMenuPanel({
                 </p>
               ) : relatedItemCandidates.length === 0 ? (
                 <p className="text-[11px] text-white/35 italic">
-                  {relatedItemSearch.trim()
+                  {relatedItemSearch.trim() || relatedItemCategories.length > 0
                     ? "No matching items."
                     : "No other active items available."}
                 </p>
