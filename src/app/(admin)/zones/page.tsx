@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { startTransition, useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -244,15 +244,19 @@ export default function ZonesPage() {
   }, []);
 
   const openNewZoneDialog = useCallback(() => {
-    resetForm();
-    setSelectedId("new");
-    setZoneDialogOpen(true);
+    startTransition(() => {
+      resetForm();
+      setSelectedId("new");
+      setZoneDialogOpen(true);
+    });
   }, [resetForm]);
 
   const openEditZoneDialog = useCallback(
     (z: DeliveryZone) => {
-      loadZoneIntoForm(z);
-      setZoneDialogOpen(true);
+      startTransition(() => {
+        loadZoneIntoForm(z);
+        setZoneDialogOpen(true);
+      });
     },
     [loadZoneIntoForm],
   );

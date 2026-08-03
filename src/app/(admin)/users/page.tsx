@@ -1,6 +1,11 @@
 'use client';
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  keepPreviousData,
+  useQuery,
+  useMutation,
+  useQueryClient,
+} from '@tanstack/react-query';
 import api from '@/lib/axios';
 import { 
   Table, 
@@ -85,6 +90,7 @@ export default function UsersPage() {
       });
       return parsePaginatedResponse<User>(response.data);
     },
+    placeholderData: keepPreviousData,
   });
 
   const users = data?.data ?? [];

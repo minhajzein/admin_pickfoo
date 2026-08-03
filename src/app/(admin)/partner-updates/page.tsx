@@ -1,7 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Bell, Loader2, Plus, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -52,6 +57,7 @@ export default function PartnerUpdatesPage() {
         page,
         limit: DEFAULT_PAGE_SIZE,
       }),
+    placeholderData: keepPreviousData,
   });
 
   const adminRows = data?.data ?? [];

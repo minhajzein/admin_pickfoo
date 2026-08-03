@@ -1,7 +1,12 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import { startTransition, useEffect, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -71,6 +76,7 @@ export default function PartnersPage() {
         page,
         limit: DEFAULT_PAGE_SIZE,
       }),
+    placeholderData: keepPreviousData,
   });
 
   const partners = data?.data ?? [];
@@ -168,7 +174,9 @@ export default function PartnersPage() {
                 ? "bg-[#98E32F] text-[#013644] hover:bg-[#86c926]"
                 : "border-white/10 text-white hover:bg-white/5"
             }
-            onClick={() => setStatusFilter(option.value)}
+            onClick={() =>
+              startTransition(() => setStatusFilter(option.value))
+            }
           >
             {option.label}
           </Button>

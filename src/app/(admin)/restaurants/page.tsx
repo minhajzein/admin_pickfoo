@@ -1,6 +1,11 @@
 "use client";
 
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useQuery,
+  useMutation,
+  useQueryClient,
+} from "@tanstack/react-query";
 import api from "@/lib/axios";
 import {
   Table,
@@ -107,6 +112,7 @@ export default function RestaurantsPage() {
       });
       return parsePaginatedResponse<Restaurant>(response.data);
     },
+    placeholderData: keepPreviousData,
   });
 
   const restaurants = data?.data ?? [];

@@ -1,7 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -55,6 +60,7 @@ export default function OrdersPage() {
     queryFn: () =>
       fetchDispatchOrders({ page, limit: DEFAULT_PAGE_SIZE }),
     refetchInterval: 15000,
+    placeholderData: keepPreviousData,
   });
 
   const redispatchMutation = useMutation({

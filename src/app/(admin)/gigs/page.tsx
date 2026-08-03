@@ -1,7 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -69,6 +74,7 @@ export default function GigsPage() {
         page,
         limit: DEFAULT_PAGE_SIZE,
       }),
+    placeholderData: keepPreviousData,
   });
 
   const gigs = data?.data ?? [];

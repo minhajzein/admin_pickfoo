@@ -1,7 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { startTransition, useEffect, useState } from "react";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   fetchWithdrawals,
@@ -100,6 +105,7 @@ export default function WithdrawalsPage() {
         page,
         limit: DEFAULT_PAGE_SIZE,
       }),
+    placeholderData: keepPreviousData,
   });
 
   const rows = data?.data ?? [];
@@ -176,7 +182,7 @@ export default function WithdrawalsPage() {
                       ? "bg-[#98E32F] text-[#013644] hover:bg-[#98E32F]/90"
                       : "border-white/20 text-white"
                   }
-                  onClick={() => setStatus(s)}
+                  onClick={() => startTransition(() => setStatus(s))}
                 >
                   {s}
                 </Button>
