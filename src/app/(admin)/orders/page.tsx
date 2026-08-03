@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { startTransition, useMemo, useState } from "react";
 import {
   keepPreviousData,
   useMutation,
@@ -10,6 +10,14 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Table,
   TableBody,
@@ -54,11 +62,11 @@ export default function OrdersPage() {
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [redispatchingRef, setRedispatchingRef] = useState<string | null>(null);
+  const [confirmRow, setConfirmRow] = useState<AdminOrderRow | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["orders", "dispatch-orders", page],
-    queryFn: () =>
-      fetchDispatchOrders({ page, limit: DEFAULT_PAGE_SIZE }),
+    queryFn: () => fetchDispatchOrders({ page, limit: DEFAULT_PAGE_SIZE }),
     refetchInterval: 15000,
     placeholderData: keepPreviousData,
   });
@@ -70,12 +78,18 @@ export default function OrdersPage() {
     },
     onMutate: (row) => {
       setRedispatchingRef(row.pickfooId?.trim() || row.id);
+      setConfirmRow(null);
     },
     onSettled: () => {
       setRedispatchingRef(null);
     },
     onSuccess: (result) => {
-      queryClient.invalidateQueries({ queryKey: ["orders", "dispatch-orders"] });
+      // Don't block paint with a full list refetch + toast work.
+      startTransition(() => {
+        void queryClient.invalidateQueries({
+          queryKey: ["orders", "dispatch-orders"],
+        });
+      });
       if (result.redispatched && result.partner) {
         toast.success(`Redispatched to ${result.partner.fullName}`, {
           description: result.partner.phone,
@@ -103,17 +117,12 @@ export default function OrdersPage() {
   const total = data?.total ?? 0;
   const totalPages = data?.totalPages ?? 1;
 
-  const handleRedispatch = (row: AdminOrderRow) => {
-    const label = row.pickfooId || row.id;
-    const assigned = row.deliveryPartnerName || row.assignedPartner;
-    const confirmed = window.confirm(
-      assigned
-        ? `Redispatch order ${label}? This will withdraw the current offer from ${assigned} and find another partner.`
-        : `Redispatch order ${label}? This will find another delivery partner.`
-    );
-    if (!confirmed) return;
-    redispatchMutation.mutate(row);
-  };
+  const confirmLabel = confirmRow
+    ? confirmRow.pickfooId || confirmRow.id
+    : "";
+  const confirmAssigned = confirmRow
+    ? confirmRow.deliveryPartnerName || confirmRow.assignedPartner
+    : null;
 
   return (
     <div className="space-y-6">
@@ -141,13 +150,17 @@ export default function OrdersPage() {
           <CardHeader className="pb-2">
             <CardTitle className="text-sm text-white/60">Cancellations</CardTitle>
           </CardHeader>
-          <CardContent className="text-2xl font-bold">{summary.cancelled}</CardContent>
+          <CardContent className="text-2xl font-bold">
+            {summary.cancelled}
+          </CardContent>
         </Card>
         <Card className="border-white/5 bg-[#002833] text-white">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm text-white/60">Delivered</CardTitle>
           </CardHeader>
-          <CardContent className="text-2xl font-bold">{summary.delivered}</CardContent>
+          <CardContent className="text-2xl font-bold">
+            {summary.delivered}
+          </CardContent>
         </Card>
       </div>
 
@@ -178,7 +191,10 @@ export default function OrdersPage() {
                 </TableRow>
               ) : rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="py-10 text-center text-white/40">
+                  <TableCell
+                    colSpan={8}
+                    className="py-10 text-center text-white/40"
+                  >
                     No order activity events found.
                   </TableCell>
                 </TableRow>
@@ -197,11 +213,16 @@ export default function OrdersPage() {
                         {row.pickfooId || row.id}
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline" className="border-white/10 text-white/80">
+                        <Badge
+                          variant="outline"
+                          className="border-white/10 text-white/80"
+                        >
                           {row.orderType}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-white/80">{row.status}</TableCell>
+                      <TableCell className="text-white/80">
+                        {row.status}
+                      </TableCell>
                       <TableCell className="font-medium">
                         {row.platformCommission == null
                           ? "—"
@@ -214,7 +235,9 @@ export default function OrdersPage() {
                         ) : null}
                       </TableCell>
                       <TableCell className="text-white/50">
-                        {row.deliveryPartnerName || row.assignedPartner || "Unassigned"}
+                        {row.deliveryPartnerName ||
+                          row.assignedPartner ||
+                          "Unassigned"}
                       </TableCell>
                       <TableCell className="text-white/50">
                         {row.partnerDeliveryProgress || "—"}
@@ -226,8 +249,10 @@ export default function OrdersPage() {
                             size="sm"
                             variant="outline"
                             className="border-[#98E32F]/40 text-[#98E32F] hover:bg-[#98E32F]/10 hover:text-[#98E32F]"
-                            disabled={isRedispatching || redispatchMutation.isPending}
-                            onClick={() => handleRedispatch(row)}
+                            disabled={
+                              isRedispatching || redispatchMutation.isPending
+                            }
+                            onClick={() => setConfirmRow(row)}
                           >
                             {isRedispatching ? (
                               <Loader2 className="h-4 w-4 animate-spin" />
@@ -260,6 +285,49 @@ export default function OrdersPage() {
           />
         </CardContent>
       </Card>
+
+      <Dialog
+        open={!!confirmRow}
+        onOpenChange={(open) => {
+          if (!open) setConfirmRow(null);
+        }}
+      >
+        <DialogContent className="border-white/10 bg-[#002833] text-white sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Redispatch order?</DialogTitle>
+            <DialogDescription className="text-white/55">
+              {confirmAssigned
+                ? `This will withdraw the current offer from ${confirmAssigned} on order ${confirmLabel} and find another partner.`
+                : `This will find another delivery partner for order ${confirmLabel}.`}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              className="border-white/15 text-white"
+              onClick={() => setConfirmRow(null)}
+              disabled={redispatchMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              className="bg-[#98E32F] text-[#013644] hover:bg-[#86c926]"
+              disabled={!confirmRow || redispatchMutation.isPending}
+              onClick={() => {
+                if (!confirmRow) return;
+                redispatchMutation.mutate(confirmRow);
+              }}
+            >
+              {redispatchMutation.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : null}
+              Confirm redispatch
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
