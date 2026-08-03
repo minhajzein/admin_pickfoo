@@ -30,3 +30,56 @@ export async function updateRestaurantPayoutMode(
   });
   return data.data;
 }
+
+export type RestaurantProfileUpdate = {
+  name?: string;
+  description?: string;
+  contactNumber?: string;
+  brandLogo?: string;
+  image?: string;
+};
+
+export async function updateRestaurantProfile(
+  restaurantId: string,
+  payload: RestaurantProfileUpdate,
+): Promise<Restaurant> {
+  const { data } = await api.patch(`/restaurants/${restaurantId}/profile`, payload);
+  return data.data;
+}
+
+export type RestaurantImageUpload = {
+  fileUrl: string;
+  staticUrl: string;
+};
+
+export async function uploadRestaurantImage(
+  file: File,
+  folder: "restaurants" | "restaurants/logos" = "restaurants",
+): Promise<RestaurantImageUpload> {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("folder", folder);
+  const { data } = await api.post<{
+    success: boolean;
+    data?: { fileUrl?: string; staticUrl?: string };
+    message?: string;
+  }>("/restaurants/upload", form, {
+    timeout: 120_000,
+    transformRequest: [
+      (body, headers) => {
+        if (body instanceof FormData) {
+          delete headers["Content-Type"];
+        }
+        return body;
+      },
+    ],
+  });
+  if (!data.success || !(data.data?.staticUrl || data.data?.fileUrl)) {
+    throw new Error(data.message || "Upload failed");
+  }
+  const staticUrl = data.data.staticUrl ?? data.data.fileUrl!;
+  return {
+    fileUrl: data.data.fileUrl || staticUrl,
+    staticUrl,
+  };
+}

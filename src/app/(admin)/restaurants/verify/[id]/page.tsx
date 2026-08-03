@@ -41,6 +41,7 @@ import {
   updateRestaurantZone,
 } from "@/lib/api/restaurants";
 import { RestaurantMessageThread } from "@/components/restaurants/RestaurantMessageThread";
+import { RestaurantProfileEditor } from "@/components/restaurants/RestaurantProfileEditor";
 
 function zoneIdFromRestaurant(restaurant: { zone?: unknown } | null | undefined) {
   if (!restaurant) return "";
@@ -607,8 +608,13 @@ export default function VerifyRestaurantPage() {
           </Card>
         </div>
 
-        {/* Right Column: Documents & Review */}
+        {/* Right Column: Profile, Documents & Review */}
         <div className="lg:col-span-2 space-y-8">
+          <RestaurantProfileEditor
+            restaurantId={String(id)}
+            restaurant={restaurant}
+          />
+
           <section>
             <div className="flex items-center gap-4 mb-6">
               <h2 className="text-xl font-bold">Legal Documents</h2>
