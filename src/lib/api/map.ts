@@ -39,6 +39,8 @@ export interface LiveMapFeed {
     partnersMissingLocation: number;
     restaurantsMapped: number;
     restaurantsMissingLocation: number;
+    restaurantsOpen: number;
+    restaurantsClosed: number;
   };
   partners: LiveMapPartnerMarker[];
   partnersWithoutLocation: LiveMapPartnerWithoutLocation[];
@@ -58,7 +60,16 @@ export async function fetchLiveMapFeed(params?: {
   const { data } = await api.get(`/map/live${q ? `?${q}` : ""}`);
   return {
     refreshedAt: data.refreshedAt,
-    summary: data.summary,
+    summary: {
+      partnersOnline: data.summary?.partnersOnline ?? 0,
+      partnersOnDuty: data.summary?.partnersOnDuty ?? 0,
+      partnersMapped: data.summary?.partnersMapped ?? 0,
+      partnersMissingLocation: data.summary?.partnersMissingLocation ?? 0,
+      restaurantsMapped: data.summary?.restaurantsMapped ?? 0,
+      restaurantsMissingLocation: data.summary?.restaurantsMissingLocation ?? 0,
+      restaurantsOpen: data.summary?.restaurantsOpen ?? 0,
+      restaurantsClosed: data.summary?.restaurantsClosed ?? 0,
+    },
     partners: data.partners,
     partnersWithoutLocation: data.partnersWithoutLocation ?? [],
     restaurants: data.restaurants,

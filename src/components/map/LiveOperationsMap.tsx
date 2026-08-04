@@ -104,7 +104,11 @@ export default function LiveOperationsMap({
                     setSelected({ kind: "restaurant", data: restaurant })
                   }
                 >
-                  <span className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-white bg-amber-500 text-white shadow-lg">
+                  <span
+                    className={`flex h-9 w-9 items-center justify-center rounded-full border-2 border-white text-white shadow-lg ${
+                      restaurant.isOpen ? "bg-[#98E32F] text-[#013644]" : "bg-red-500"
+                    }`}
+                  >
                     <Store className="h-4 w-4" />
                   </span>
                 </MapMarkerButton>
@@ -202,7 +206,9 @@ function PartnerPopup({ partner }: { partner: LiveMapPartnerMarker }) {
 function RestaurantPopup({ restaurant }: { restaurant: LiveMapRestaurantMarker }) {
   return (
     <PopupCard title={restaurant.name} subtitle={restaurant.status}>
-      <p>{restaurant.isOpen ? "Open now" : "Closed right now"}</p>
+      <p className={restaurant.isOpen ? "text-emerald-600 font-medium" : "text-red-600 font-medium"}>
+        {restaurant.isOpen ? "Open now" : "Closed right now"}
+      </p>
       {restaurant.zone ? <p>Zone: {restaurant.zone.name}</p> : <p>No zone assigned</p>}
     </PopupCard>
   );

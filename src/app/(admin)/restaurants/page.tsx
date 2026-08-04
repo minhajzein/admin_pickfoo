@@ -73,6 +73,8 @@ interface Restaurant {
     name: string;
   };
   status: string;
+  isOpen?: boolean;
+  isManualOverride?: boolean;
   createdAt: string;
   legalDocs: {
     fssaiLicenseNumber: string;
@@ -100,7 +102,7 @@ export default function RestaurantsPage() {
     setPage(1);
   }, [debouncedSearch]);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, dataUpdatedAt, isFetching } = useQuery({
     queryKey: ["restaurants", debouncedSearch, page],
     queryFn: async () => {
       const response = await api.get(`/restaurants`, {
@@ -113,7 +115,17 @@ export default function RestaurantsPage() {
       return parsePaginatedResponse<Restaurant>(response.data);
     },
     placeholderData: keepPreviousData,
+    refetchInterval: 15_000,
   });
+
+  useEffect(() => {
+    const refresh = () => {
+      void queryClient.invalidateQueries({ queryKey: ["restaurants"] });
+    };
+    window.addEventListener("admin:restaurant-open-updated", refresh);
+    return () =>
+      window.removeEventListener("admin:restaurant-open-updated", refresh);
+  }, [queryClient]);
 
   const restaurants = data?.data ?? [];
   const total = data?.total ?? 0;
@@ -183,6 +195,42 @@ export default function RestaurantsPage() {
     }
   };
 
+  const getShopOpenBadge = (restaurant: Restaurant) => {
+    if (restaurant.status !== "active") {
+      return (
+        <Badge variant="outline" className="border-white/10 text-white/35">
+          N/A
+        </Badge>
+      );
+    }
+    if (restaurant.isOpen) {
+      return (
+        <div className="flex flex-col gap-0.5">
+          <Badge className="bg-[#98E32F] text-[#013644] hover:bg-[#98E32F]/90">
+            Open
+          </Badge>
+          {restaurant.isManualOverride ? (
+            <span className="text-[10px] text-white/40">Manual</span>
+          ) : null}
+        </div>
+      );
+    }
+    return (
+      <div className="flex flex-col gap-0.5">
+        <Badge variant="outline" className="border-red-400/40 text-red-300">
+          Closed
+        </Badge>
+        {restaurant.isManualOverride ? (
+          <span className="text-[10px] text-white/40">Manual</span>
+        ) : null}
+      </div>
+    );
+  };
+
+  const liveLabel = dataUpdatedAt
+    ? new Date(dataUpdatedAt).toLocaleTimeString()
+    : null;
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -190,6 +238,12 @@ export default function RestaurantsPage() {
           <h2 className="text-3xl font-bold tracking-tight">Restaurants</h2>
           <p className="text-white/50 text-sm">
             Manage and verify restaurant partners
+            {liveLabel ? (
+              <span className="ml-2 text-white/35">
+                · shop status live · updated {liveLabel}
+                {isFetching ? "…" : ""}
+              </span>
+            ) : null}
           </p>
         </div>
         <div className="relative w-full sm:w-72">
@@ -212,6 +266,7 @@ export default function RestaurantsPage() {
                 <TableHead className="text-white/60">Owner</TableHead>
                 <TableHead className="text-white/60">Location</TableHead>
                 <TableHead className="text-white/60">Zone</TableHead>
+                <TableHead className="text-white/60">Shop</TableHead>
                 <TableHead className="text-white/60">Status</TableHead>
                 <TableHead className="text-white/60">Joined</TableHead>
                 <TableHead className="text-right text-white/60">
@@ -222,7 +277,7 @@ export default function RestaurantsPage() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8">
+                  <TableCell colSpan={8} className="text-center py-8">
                     <div className="flex items-center justify-center gap-2">
                       <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-[#98E32F]"></div>
                       <span className="text-white/40">
@@ -234,7 +289,7 @@ export default function RestaurantsPage() {
               ) : restaurants.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={7}
+                    colSpan={8}
                     className="text-center py-8 text-white/40"
                   >
                     No restaurants found
@@ -300,6 +355,7 @@ export default function RestaurantsPage() {
                           )}
                       </div>
                     </TableCell>
+                    <TableCell>{getShopOpenBadge(restaurant)}</TableCell>
                     <TableCell>{getStatusBadge(restaurant.status)}</TableCell>
                     <TableCell className="text-white/40 font-mono text-xs">
                       {new Date(restaurant.createdAt).toLocaleDateString()}

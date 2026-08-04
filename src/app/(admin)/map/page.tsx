@@ -43,7 +43,11 @@ export default function LiveMapPage() {
       void queryClient.invalidateQueries({ queryKey: ["live-map"] });
     };
     window.addEventListener("admin:dispatch-updated", refresh);
-    return () => window.removeEventListener("admin:dispatch-updated", refresh);
+    window.addEventListener("admin:restaurant-open-updated", refresh);
+    return () => {
+      window.removeEventListener("admin:dispatch-updated", refresh);
+      window.removeEventListener("admin:restaurant-open-updated", refresh);
+    };
   }, [queryClient]);
 
   const summary = data?.summary;
@@ -84,11 +88,11 @@ export default function LiveMapPage() {
         <SummaryCard
           title="Restaurants on map"
           value={summary?.restaurantsMapped ?? 0}
-          hint={
+          hint={`${summary?.restaurantsOpen ?? 0} open · ${summary?.restaurantsClosed ?? 0} closed${
             summary?.restaurantsMissingLocation
-              ? `${summary.restaurantsMissingLocation} active without coordinates`
-              : "Active restaurants with coordinates"
-          }
+              ? ` · ${summary.restaurantsMissingLocation} missing pin`
+              : ""
+          }`}
           icon={<Store className="h-4 w-4 text-amber-400" />}
         />
         <SummaryCard
@@ -152,7 +156,8 @@ export default function LiveMapPage() {
           )}
 
           <div className="flex flex-wrap gap-4 text-xs text-white/60">
-            <LegendSwatch color="#f59e0b" label="Restaurant" />
+            <LegendSwatch color="#98E32F" label="Restaurant open" />
+            <LegendSwatch color="#ef4444" label="Restaurant closed" />
             <LegendSwatch color="#98E32F" label="Partner online" />
             <LegendSwatch color="#38bdf8" label="Partner on delivery" />
           </div>

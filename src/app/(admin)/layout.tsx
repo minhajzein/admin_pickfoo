@@ -147,6 +147,22 @@ export default function AdminLayout({
     );
 
     socket.on(
+      "restaurant:isOpen-updated",
+      (data: {
+        restaurantId?: string;
+        name?: string | null;
+        isOpen?: boolean;
+        isManualOverride?: boolean;
+      }) => {
+        window.dispatchEvent(
+          new CustomEvent("admin:restaurant-open-updated", {
+            detail: data,
+          }),
+        );
+      },
+    );
+
+    socket.on(
       "order:live:new-request",
       (data: { orderId?: string; orderType?: string }) => {
         toast.message("New live order request", {
