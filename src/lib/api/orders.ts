@@ -4,10 +4,19 @@ export interface AdminOrderRow {
   id: string;
   pickfooId?: string | null;
   status: string;
+  paymentStatus?: "pending" | "paid" | "failed" | "refunded" | string | null;
   orderType: "pickup" | "delivery" | string;
+  /** Grand total charged to the customer. */
+  totalAmount?: number | null;
+  /** Food subtotal (price × qty), excludes packing. */
+  itemTotal?: number | null;
+  /** Packing subtotal (packingCharge × qty). */
+  packingTotal?: number | null;
+  deliveryFee?: number | null;
   /** Company commission only (not restaurant item totals). */
   platformCommission?: number | null;
   commissionPercent?: number | null;
+  preparingStartedAt?: string | null;
   restaurantId?: string | null;
   restaurantName?: string | null;
   assignedPartner?: string | null;
@@ -91,10 +100,19 @@ export async function redispatchOrder(
 }
 
 function canRedispatchPickupOrder(row: AdminOrderRow): boolean {
-  return (
-    row.orderType === "pickup" &&
-    (row.status === "preparing" || row.status === "ready")
-  );
+  if (row.orderType !== "pickup") return false;
+  if (row.status !== "preparing" && row.status !== "ready") return false;
+
+  // Hide once a partner has accepted (or progressed further).
+  const progress = row.partnerDeliveryProgress?.trim() || "";
+  if (progress && progress !== "pending_accept") return false;
+
+  return true;
 }
 
-export { canRedispatchPickupOrder };
+/** Paid but restaurant has not started preparing yet. */
+function isPaidAwaitingPrep(row: AdminOrderRow): boolean {
+  return row.paymentStatus === "paid" && row.status === "confirmed";
+}
+
+export { canRedispatchPickupOrder, isPaidAwaitingPrep };

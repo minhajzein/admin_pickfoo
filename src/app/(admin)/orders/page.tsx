@@ -29,6 +29,7 @@ import {
 import {
   canRedispatchPickupOrder,
   fetchDispatchOrders,
+  isPaidAwaitingPrep,
   redispatchOrder,
   type AdminOrderRow,
 } from "@/lib/api/orders";
@@ -43,6 +44,11 @@ const money = new Intl.NumberFormat("en-IN", {
   maximumFractionDigits: 0,
 });
 
+function formatMoney(value?: number | null): string {
+  if (value == null || !Number.isFinite(value)) return "—";
+  return money.format(value);
+}
+
 function redispatchReasonLabel(reason?: string): string {
   switch (reason) {
     case "not_pickup":
@@ -53,9 +59,45 @@ function redispatchReasonLabel(reason?: string): string {
       return "Order still has an assigned partner.";
     case "no_partner_available":
       return "No eligible partner is available right now.";
+    case "Partner already accepted this order":
+      return "Partner already accepted this order.";
     default:
       return reason || "Could not assign a new partner.";
   }
+}
+
+function AmountBreakdown({ row }: { row: AdminOrderRow }) {
+  return (
+    <div className="min-w-[11rem] space-y-0.5 text-xs leading-snug">
+      <div className="flex justify-between gap-3 font-medium text-white">
+        <span className="text-white/50">Total</span>
+        <span>{formatMoney(row.totalAmount)}</span>
+      </div>
+      <div className="flex justify-between gap-3 text-white/70">
+        <span className="text-white/40">Items</span>
+        <span>{formatMoney(row.itemTotal)}</span>
+      </div>
+      <div className="flex justify-between gap-3 text-white/70">
+        <span className="text-white/40">Packing</span>
+        <span>{formatMoney(row.packingTotal)}</span>
+      </div>
+      <div className="flex justify-between gap-3 text-white/70">
+        <span className="text-white/40">Delivery</span>
+        <span>{formatMoney(row.deliveryFee)}</span>
+      </div>
+      <div className="flex justify-between gap-3 border-t border-white/10 pt-0.5 font-medium text-[#98E32F]">
+        <span className="text-white/50">
+          Commission
+          {row.commissionPercent != null && row.commissionPercent > 0 ? (
+            <span className="ml-1 text-[10px] font-normal text-white/35">
+              ({row.commissionPercent}%)
+            </span>
+          ) : null}
+        </span>
+        <span>{formatMoney(row.platformCommission)}</span>
+      </div>
+    </div>
+  );
 }
 
 export default function OrdersPage() {
@@ -116,6 +158,10 @@ export default function OrdersPage() {
   };
   const total = data?.total ?? 0;
   const totalPages = data?.totalPages ?? 1;
+  const awaitingPrepCount = useMemo(
+    () => rows.filter(isPaidAwaitingPrep).length,
+    [rows]
+  );
 
   const confirmLabel = confirmRow
     ? confirmRow.pickfooId || confirmRow.id
@@ -165,8 +211,16 @@ export default function OrdersPage() {
       </div>
 
       <Card className="overflow-hidden border-white/5 bg-[#002833] text-white">
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
           <CardTitle className="text-base">Recent orders</CardTitle>
+          {awaitingPrepCount > 0 ? (
+            <Badge
+              variant="outline"
+              className="border-amber-500/40 bg-amber-500/15 text-amber-200"
+            >
+              {awaitingPrepCount} paid · awaiting prep
+            </Badge>
+          ) : null}
         </CardHeader>
         <CardContent className="p-0">
           <Table>
@@ -175,7 +229,7 @@ export default function OrdersPage() {
                 <TableHead className="text-white/60">Order</TableHead>
                 <TableHead className="text-white/60">Type</TableHead>
                 <TableHead className="text-white/60">Status</TableHead>
-                <TableHead className="text-white/60">Commission</TableHead>
+                <TableHead className="text-white/60">Amounts</TableHead>
                 <TableHead className="text-white/60">Assigned partner</TableHead>
                 <TableHead className="text-white/60">Partner progress</TableHead>
                 <TableHead className="text-white/60">Actions</TableHead>
@@ -203,14 +257,29 @@ export default function OrdersPage() {
                   const orderRef = row.pickfooId?.trim() || row.id;
                   const showRedispatch = canRedispatchPickupOrder(row);
                   const isRedispatching = redispatchingRef === orderRef;
+                  const awaitingPrep = isPaidAwaitingPrep(row);
 
                   return (
                     <TableRow
                       key={row.id}
-                      className="border-white/5 hover:bg-white/5"
+                      className={
+                        awaitingPrep
+                          ? "border-l-2 border-l-amber-400 border-b-white/5 bg-amber-500/10 hover:bg-amber-500/15"
+                          : "border-white/5 hover:bg-white/5"
+                      }
                     >
                       <TableCell className="font-medium">
-                        {row.pickfooId || row.id}
+                        <div className="flex flex-col gap-1">
+                          <span>{row.pickfooId || row.id}</span>
+                          {awaitingPrep ? (
+                            <Badge
+                              variant="outline"
+                              className="w-fit border-amber-500/50 bg-amber-500/20 text-[10px] uppercase tracking-wide text-amber-200"
+                            >
+                              Paid · start prep
+                            </Badge>
+                          ) : null}
+                        </div>
                       </TableCell>
                       <TableCell>
                         <Badge
@@ -221,18 +290,23 @@ export default function OrdersPage() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-white/80">
-                        {row.status}
+                        <div className="flex flex-col gap-0.5">
+                          <span>{row.status}</span>
+                          {row.paymentStatus ? (
+                            <span
+                              className={
+                                row.paymentStatus === "paid"
+                                  ? "text-[11px] text-[#98E32F]/80"
+                                  : "text-[11px] text-white/40"
+                              }
+                            >
+                              payment: {row.paymentStatus}
+                            </span>
+                          ) : null}
+                        </div>
                       </TableCell>
-                      <TableCell className="font-medium">
-                        {row.platformCommission == null
-                          ? "—"
-                          : money.format(row.platformCommission)}
-                        {row.commissionPercent != null &&
-                        row.commissionPercent > 0 ? (
-                          <span className="ml-1 text-xs text-white/40">
-                            ({row.commissionPercent}%)
-                          </span>
-                        ) : null}
+                      <TableCell>
+                        <AmountBreakdown row={row} />
                       </TableCell>
                       <TableCell className="text-white/50">
                         {row.deliveryPartnerName ||

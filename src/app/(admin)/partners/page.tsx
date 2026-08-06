@@ -48,6 +48,68 @@ const statusFilterOptions: Array<{ label: string; value: "ALL" | PartnerStatusTy
   { label: "Rejected", value: "REJECTED" },
 ];
 
+function clampPriorityLevel(value: number): number {
+  return Math.max(1, Math.min(10, value));
+}
+
+/** Local draft state so typing level does not re-render the full partners table. */
+function PartnerLevelCell({
+  partnerId,
+  priorityLevel,
+  isSaving,
+  onSave,
+}: {
+  partnerId: string;
+  priorityLevel?: number | null;
+  isSaving: boolean;
+  onSave: (partnerId: string, priorityLevel: number) => void;
+}) {
+  const serverLevel = priorityLevel ?? 5;
+  const [draft, setDraft] = useState(String(serverLevel));
+
+  useEffect(() => {
+    setDraft(String(serverLevel));
+  }, [serverLevel]);
+
+  return (
+    <div className="flex items-center gap-2">
+      <Input
+        type="number"
+        min={1}
+        max={10}
+        value={draft}
+        onChange={(e) => {
+          const raw = e.target.value;
+          if (raw === "") {
+            setDraft("");
+            return;
+          }
+          const next = Number(raw);
+          if (Number.isNaN(next)) return;
+          setDraft(String(clampPriorityLevel(next)));
+        }}
+        className="h-8 w-16 border-white/10 bg-[#013644] text-white"
+      />
+      <Button
+        size="sm"
+        variant="outline"
+        className="border-[#98E32F]/40 text-[#98E32F] hover:bg-[#98E32F]/10"
+        disabled={isSaving}
+        onClick={() => {
+          const parsed = Number(draft);
+          const level = clampPriorityLevel(
+            Number.isNaN(parsed) ? serverLevel : parsed,
+          );
+          setDraft(String(level));
+          onSave(partnerId, level);
+        }}
+      >
+        Save
+      </Button>
+    </div>
+  );
+}
+
 export default function PartnersPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
@@ -56,7 +118,6 @@ export default function PartnersPage() {
   const [statusFilter, setStatusFilter] = useState<"ALL" | PartnerStatusType>("ALL");
   const [editPartner, setEditPartner] = useState<Partner | null>(null);
   const [selectedZoneIds, setSelectedZoneIds] = useState<string[]>([]);
-  const [levelDraft, setLevelDraft] = useState<Record<string, number>>({});
 
   useEffect(() => {
     const t = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
@@ -273,46 +334,21 @@ export default function PartnersPage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Input
-                          type="number"
-                          min={1}
-                          max={10}
-                          value={levelDraft[p._id ?? ""] ?? p.priorityLevel ?? 5}
-                          onChange={(e) => {
-                            const pid = p._id ?? "";
-                            const next = Number(e.target.value);
-                            if (!pid || Number.isNaN(next)) return;
-                            setLevelDraft((prev) => ({
-                              ...prev,
-                              [pid]: Math.max(1, Math.min(10, next)),
-                            }));
-                          }}
-                          className="h-8 w-16 border-white/10 bg-[#013644] text-white"
-                        />
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="border-[#98E32F]/40 text-[#98E32F] hover:bg-[#98E32F]/10"
-                          disabled={!p._id || priorityMutation.isPending}
-                          onClick={() => {
-                            if (!p._id) return;
-                            const level = Math.max(
-                              1,
-                              Math.min(
-                                10,
-                                levelDraft[p._id] ?? p.priorityLevel ?? 5,
-                              ),
-                            );
+                      {p._id ? (
+                        <PartnerLevelCell
+                          partnerId={p._id}
+                          priorityLevel={p.priorityLevel}
+                          isSaving={priorityMutation.isPending}
+                          onSave={(partnerId, priorityLevel) => {
                             priorityMutation.mutate({
-                              partnerId: p._id,
-                              priorityLevel: level,
+                              partnerId,
+                              priorityLevel,
                             });
                           }}
-                        >
-                          Save
-                        </Button>
-                      </div>
+                        />
+                      ) : (
+                        <span className="text-xs text-white/40">—</span>
+                      )}
                     </TableCell>
                     <TableCell className="max-w-[200px]">
                       <div className="flex flex-wrap gap-1">
