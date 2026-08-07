@@ -300,7 +300,11 @@ export default function PartnerLedgerPage() {
               {inr(summary.lifetimeEarnings)}
             </p>
             <p className="text-[11px] text-white/35 mt-2">
-              {summary.tripCount} trips · tips {inr(summary.tipsTotal)}
+              {summary.completedOrderCount ?? summary.tripCount} trips · tips{" "}
+              {inr(summary.tipsTotal)}
+              <span className="block mt-0.5">
+                Earnings = delivery fee + tip (not order total)
+              </span>
             </p>
           </CardContent>
         </Card>

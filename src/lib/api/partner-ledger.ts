@@ -22,6 +22,7 @@ export interface PartnerLedgerSummary {
     weekEarnings: number;
     tipsTotal: number;
     tripCount: number;
+    completedOrderCount?: number;
     totalCredits: number;
     totalDebits: number;
     openWithdrawalHold: number;

@@ -335,7 +335,8 @@ export default function PartnerOpsPage() {
               Wallet details
             </CardTitle>
             <CardDescription className="text-white/45">
-              Snapshot from partner ledger
+              Partner pocket = delivery fee + tip (not order total). Duplicate
+              trip credits are removed automatically.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
@@ -346,7 +347,7 @@ export default function PartnerOpsPage() {
             ) : (
               <>
                 <div className="flex justify-between gap-3 border-b border-white/5 py-2">
-                  <span className="text-white/45">Available</span>
+                  <span className="text-white/45">Available (spendable)</span>
                   <span className="font-medium text-[#98E32F]">
                     {money.format(wallet?.availableBalance ?? 0)}
                   </span>
@@ -356,7 +357,7 @@ export default function PartnerOpsPage() {
                   <span>{money.format(wallet?.pendingWithdrawal ?? 0)}</span>
                 </div>
                 <div className="flex justify-between gap-3 border-b border-white/5 py-2">
-                  <span className="text-white/45">Lifetime earnings</span>
+                  <span className="text-white/45">Trip earnings</span>
                   <span>{money.format(wallet?.lifetimeEarnings ?? 0)}</span>
                 </div>
                 <div className="flex justify-between gap-3 border-b border-white/5 py-2">
@@ -369,7 +370,9 @@ export default function PartnerOpsPage() {
                 </div>
                 <div className="flex justify-between gap-3 py-2">
                   <span className="text-white/45">Paid trips</span>
-                  <span>{wallet?.tripCount ?? 0}</span>
+                  <span>
+                    {wallet?.completedOrderCount ?? wallet?.tripCount ?? 0}
+                  </span>
                 </div>
                 <Button
                   asChild
