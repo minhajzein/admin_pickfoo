@@ -461,6 +461,7 @@ export default function PartnerIncentivesPage() {
               </Table>
               <ListPagination
                 page={page}
+                limit={DEFAULT_PAGE_SIZE}
                 totalPages={totalPages}
                 total={total}
                 onPageChange={setPage}
