@@ -33,7 +33,7 @@ import {
   redispatchOrder,
   type AdminOrderRow,
 } from "@/lib/api/orders";
-import { Loader2, RefreshCw } from "lucide-react";
+import { Eye, Loader2, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { ListPagination } from "@/components/ui/list-pagination";
@@ -330,29 +330,43 @@ export default function OrdersPage() {
                         {row.partnerDeliveryProgress || "—"}
                       </TableCell>
                       <TableCell>
-                        {showRedispatch ? (
+                        <div className="flex flex-wrap items-center gap-2">
                           <Button
+                            asChild
                             type="button"
                             size="sm"
                             variant="outline"
-                            className="border-[#98E32F]/40 text-[#98E32F] hover:bg-[#98E32F]/10 hover:text-[#98E32F]"
-                            disabled={
-                              isRedispatching || redispatchMutation.isPending
-                            }
-                            onClick={() => setConfirmRow(row)}
+                            className="border-white/10 text-white hover:bg-white/5"
                           >
-                            {isRedispatching ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <>
-                                <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
-                                Redispatch
-                              </>
-                            )}
+                            <Link
+                              href={`/orders/${encodeURIComponent(orderRef)}`}
+                            >
+                              <Eye className="mr-1.5 h-3.5 w-3.5" />
+                              Details
+                            </Link>
                           </Button>
-                        ) : (
-                          <span className="text-xs text-white/30">—</span>
-                        )}
+                          {showRedispatch ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="border-[#98E32F]/40 text-[#98E32F] hover:bg-[#98E32F]/10 hover:text-[#98E32F]"
+                              disabled={
+                                isRedispatching || redispatchMutation.isPending
+                              }
+                              onClick={() => setConfirmRow(row)}
+                            >
+                              {isRedispatching ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <>
+                                  <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                                  Redispatch
+                                </>
+                              )}
+                            </Button>
+                          ) : null}
+                        </div>
                       </TableCell>
                     </TableRow>
                   );
