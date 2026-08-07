@@ -49,12 +49,22 @@ export async function fetchDispatchOrders(params?: {
   limit?: number;
   page?: number;
   status?: string;
+  restaurantId?: string;
+  partnerId?: string;
+  /** YYYY-MM-DD or ISO */
+  from?: string;
+  /** YYYY-MM-DD or ISO */
+  to?: string;
 }): Promise<AdminOrdersResponse> {
   const { data } = await api.get(`/dispatch/orders`, {
     params: {
       limit: params?.limit,
       page: params?.page,
       status: params?.status || undefined,
+      restaurantId: params?.restaurantId || undefined,
+      partnerId: params?.partnerId || undefined,
+      from: params?.from || undefined,
+      to: params?.to || undefined,
     },
   });
   const page = Number(data.page) || 1;

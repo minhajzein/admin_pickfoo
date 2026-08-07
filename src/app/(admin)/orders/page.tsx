@@ -18,6 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -33,17 +34,37 @@ import {
   redispatchOrder,
   type AdminOrderRow,
 } from "@/lib/api/orders";
-import { Eye, Loader2, RefreshCw } from "lucide-react";
+import { fetchPartners } from "@/lib/api/partners";
+import api from "@/lib/axios";
+import type { Partner, Restaurant } from "@/types/models";
+import { Eye, Loader2, RefreshCw, X } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { ListPagination } from "@/components/ui/list-pagination";
-import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
+import { DEFAULT_PAGE_SIZE, parsePaginatedResponse } from "@/lib/pagination";
 
 const money = new Intl.NumberFormat("en-IN", {
   style: "currency",
   currency: "INR",
   maximumFractionDigits: 0,
 });
+
+const STATUS_FILTERS: Array<{ label: string; value: string }> = [
+  { label: "All statuses", value: "" },
+  { label: "Active", value: "active" },
+  { label: "Awaiting owner", value: "awaiting-owner" },
+  { label: "Awaiting payment", value: "accepted-awaiting-payment" },
+  { label: "Confirmed", value: "confirmed" },
+  { label: "Preparing", value: "preparing" },
+  { label: "Ready", value: "ready" },
+  { label: "Out for delivery", value: "out-for-delivery" },
+  { label: "Delivered", value: "delivered" },
+  { label: "Cancelled", value: "cancelled" },
+  { label: "Rejected", value: "rejected" },
+];
+
+const selectClassName =
+  "h-9 w-full rounded-md border border-white/15 bg-black/20 px-3 text-sm text-white outline-none focus-visible:border-[#98E32F]/50";
 
 function formatMoney(value?: number | null): string {
   if (value == null || !Number.isFinite(value)) return "—";
@@ -104,12 +125,62 @@ function AmountBreakdown({ row }: { row: AdminOrderRow }) {
 export default function OrdersPage() {
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
+  const [status, setStatus] = useState("");
+  const [restaurantId, setRestaurantId] = useState("");
+  const [partnerId, setPartnerId] = useState("");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
   const [redispatchingRef, setRedispatchingRef] = useState<string | null>(null);
   const [confirmRow, setConfirmRow] = useState<AdminOrderRow | null>(null);
 
+  const filters = useMemo(
+    () => ({
+      status: status || undefined,
+      restaurantId: restaurantId || undefined,
+      partnerId: partnerId || undefined,
+      from: from || undefined,
+      to: to || undefined,
+    }),
+    [status, restaurantId, partnerId, from, to],
+  );
+
+  const hasFilters = Boolean(
+    status || restaurantId || partnerId || from || to,
+  );
+
+  const clearFilters = () => {
+    setStatus("");
+    setRestaurantId("");
+    setPartnerId("");
+    setFrom("");
+    setTo("");
+    setPage(1);
+  };
+
+  const { data: restaurants = [] } = useQuery({
+    queryKey: ["orders", "filter-restaurants"],
+    queryFn: async () => {
+      const { data } = await api.get("/restaurants", {
+        params: { page: 1, limit: 500 },
+      });
+      return parsePaginatedResponse<Restaurant>(data).data;
+    },
+    staleTime: 60_000,
+  });
+
+  const { data: partners = [] } = useQuery({
+    queryKey: ["orders", "filter-partners"],
+    queryFn: async () => {
+      const result = await fetchPartners({ page: 1, limit: 500 });
+      return result.data;
+    },
+    staleTime: 60_000,
+  });
+
   const { data, isLoading } = useQuery({
-    queryKey: ["orders", "dispatch-orders", page],
-    queryFn: () => fetchDispatchOrders({ page, limit: DEFAULT_PAGE_SIZE }),
+    queryKey: ["orders", "dispatch-orders", page, filters],
+    queryFn: () =>
+      fetchDispatchOrders({ page, limit: DEFAULT_PAGE_SIZE, ...filters }),
     refetchInterval: 15000,
     placeholderData: keepPreviousData,
   });
@@ -210,6 +281,111 @@ export default function OrdersPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card className="border-white/5 bg-[#002833] text-white">
+        <CardContent className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold uppercase tracking-widest text-white/40">
+              Status
+            </label>
+            <select
+              className={selectClassName}
+              value={status}
+              onChange={(e) => {
+                setStatus(e.target.value);
+                setPage(1);
+              }}
+            >
+              {STATUS_FILTERS.map((opt) => (
+                <option key={opt.value || "all"} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold uppercase tracking-widest text-white/40">
+              Restaurant
+            </label>
+            <select
+              className={selectClassName}
+              value={restaurantId}
+              onChange={(e) => {
+                setRestaurantId(e.target.value);
+                setPage(1);
+              }}
+            >
+              <option value="">All restaurants</option>
+              {restaurants.map((r) => (
+                <option key={String(r._id)} value={String(r._id)}>
+                  {r.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold uppercase tracking-widest text-white/40">
+              Partner
+            </label>
+            <select
+              className={selectClassName}
+              value={partnerId}
+              onChange={(e) => {
+                setPartnerId(e.target.value);
+                setPage(1);
+              }}
+            >
+              <option value="">All partners</option>
+              {partners.map((p: Partner) => (
+                <option key={String(p._id)} value={String(p._id)}>
+                  {p.fullName}
+                  {p.phone ? ` · ${p.phone}` : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold uppercase tracking-widest text-white/40">
+              From
+            </label>
+            <Input
+              type="date"
+              value={from}
+              onChange={(e) => {
+                setFrom(e.target.value);
+                setPage(1);
+              }}
+              className="border-white/15 bg-black/20 text-white"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold uppercase tracking-widest text-white/40">
+              To
+            </label>
+            <Input
+              type="date"
+              value={to}
+              onChange={(e) => {
+                setTo(e.target.value);
+                setPage(1);
+              }}
+              className="border-white/15 bg-black/20 text-white"
+            />
+          </div>
+          <div className="flex items-end">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={!hasFilters}
+              onClick={clearFilters}
+              className="w-full border-white/15 text-white/70 disabled:opacity-40"
+            >
+              <X className="mr-1.5 h-4 w-4" />
+              Clear
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card className="overflow-hidden border-white/5 bg-[#002833] text-white">
         <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
