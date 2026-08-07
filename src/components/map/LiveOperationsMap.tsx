@@ -15,10 +15,13 @@ import Map, {
   NavigationControl,
   Popup,
   Source,
-  type MapLayerMouseEvent,
   type MapRef,
 } from "react-map-gl/mapbox";
-import type { CircleLayerSpecification, ExpressionSpecification } from "mapbox-gl";
+import type {
+  CircleLayerSpecification,
+  ExpressionSpecification,
+  MapLayerMouseEvent,
+} from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import type {
   LiveMapPartnerMarker,
