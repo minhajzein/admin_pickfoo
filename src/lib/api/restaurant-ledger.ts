@@ -29,7 +29,9 @@ export interface RestaurantLedgerSummary {
     pendingPayoutCount: number;
     payoutSettled: number;
     creditCount: number;
+    debitCount?: number;
     totalGrossSales: number;
+    totalFoodSales?: number;
     commissionEarned: number;
     commissionParsedCount: number;
     openWithdrawalHold: number;
@@ -52,6 +54,8 @@ export interface RestaurantLedgerTransaction {
   updatedAt?: string;
   commissionAmount?: number | null;
   grossAmount?: number | null;
+  foodAmount?: number | null;
+  packingAmount?: number | null;
   order?: {
     _id: string;
     pickfooId?: string;

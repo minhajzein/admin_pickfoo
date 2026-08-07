@@ -346,7 +346,8 @@ export default function RestaurantLedgerPage() {
             </div>
             <p className="text-2xl font-bold mt-2">{inr(summary.totalCredit)}</p>
             <p className="text-[11px] text-white/35 mt-2">
-              Gross sales {inr(summary.totalGrossSales)}
+              {summary.creditCount} credited · {summary.debitCount ?? 0}{" "}
+              debited · food+packing {inr(summary.totalGrossSales)}
             </p>
           </CardContent>
         </Card>
@@ -363,8 +364,8 @@ export default function RestaurantLedgerPage() {
               {inr(summary.commissionEarned)}
             </p>
             <p className="text-[11px] text-white/35 mt-2">
-              From {summary.commissionParsedCount} credited orders · rate{" "}
-              {restaurant.commissionPercent}%
+              From {summary.commissionParsedCount} credits ·{" "}
+              {restaurant.commissionPercent}% on food
             </p>
           </CardContent>
         </Card>
@@ -456,7 +457,7 @@ export default function RestaurantLedgerPage() {
                 />
               </div>
               <div className="flex gap-2 flex-wrap">
-                {(["all", "credit", "debit", "payout"] as const).map((t) => (
+                {(["all", "credit", "debit"] as const).map((t) => (
                   <Button
                     key={t}
                     type="button"
@@ -469,7 +470,11 @@ export default function RestaurantLedgerPage() {
                     }
                     onClick={() => setTxType(t)}
                   >
-                    {t === "all" ? "All" : t}
+                    {t === "all"
+                      ? "All"
+                      : t === "credit"
+                        ? "Credited"
+                        : "Debited"}
                   </Button>
                 ))}
               </div>
