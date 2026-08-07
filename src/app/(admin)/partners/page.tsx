@@ -36,7 +36,7 @@ import {
 } from "@/lib/api/partners";
 import { fetchZones } from "@/lib/api/zones";
 import type { Partner, PartnerStatusType } from "@/types/models";
-import { Eye, Loader2, MapPin, Search, Wallet } from "lucide-react";
+import { Eye, Loader2, MapPin, Search, Wallet, Activity } from "lucide-react";
 import { ListPagination } from "@/components/ui/list-pagination";
 import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 
@@ -378,6 +378,19 @@ export default function PartnersPage() {
                             <Link href={`/partners/${p._id}`}>
                               <Eye className="mr-1 h-3.5 w-3.5" />
                               Details
+                            </Link>
+                          </Button>
+                        ) : null}
+                        {p._id ? (
+                          <Button
+                            asChild
+                            size="sm"
+                            variant="outline"
+                            className="border-[#98E32F]/40 text-[#98E32F] hover:bg-[#98E32F]/10"
+                          >
+                            <Link href={`/partners/${p._id}/ops`}>
+                              <Activity className="mr-1 h-3.5 w-3.5" />
+                              Ops
                             </Link>
                           </Button>
                         ) : null}

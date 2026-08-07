@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
   fetchPartner,
+  updatePartnerDetails,
   updatePartnerPriorityLevel,
   updatePartnerSecurityDeposit,
   updatePartnerZones,
@@ -34,9 +35,29 @@ import {
   Calendar,
   ExternalLink,
   Wallet,
+  Bike,
+  Pencil,
 } from "lucide-react";
 import Link from "next/link";
 
+function apiErrorMessage(error: unknown, fallback: string): string {
+  if (
+    error &&
+    typeof error === "object" &&
+    "response" in error &&
+    (error as { response?: { data?: { message?: string } } }).response?.data
+      ?.message
+  ) {
+    return String(
+      (error as { response: { data: { message: string } } }).response.data
+        .message,
+    );
+  }
+  if (error && typeof error === "object" && "message" in error) {
+    return String((error as { message: string }).message);
+  }
+  return fallback;
+}
 function urlPathLower(url: string): string {
   try {
     const u = new URL(url);
@@ -131,6 +152,10 @@ export default function PartnerDetailsPage() {
   );
   const [priorityLevelDraft, setPriorityLevelDraft] = useState<number | null>(null);
   const [rejectionReason, setRejectionReason] = useState("");
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [fullNameDraft, setFullNameDraft] = useState("");
+  const [phoneDraft, setPhoneDraft] = useState("");
+  const [emailDraft, setEmailDraft] = useState("");
 
   const { data: partner, isLoading } = useQuery({
     queryKey: ["partner", partnerId],
@@ -212,21 +237,33 @@ export default function PartnerDetailsPage() {
       toast.success("Security deposit updated");
     },
     onError: (error: unknown) => {
-      const message =
-        error &&
-        typeof error === "object" &&
-        "response" in error &&
-        (error as { response?: { data?: { message?: string } } }).response?.data
-          ?.message
-          ? String(
-              (error as { response: { data: { message: string } } }).response
-                .data.message,
-            )
-          : "Failed to update security deposit";
-      toast.error(message);
+      toast.error(apiErrorMessage(error, "Failed to update security deposit"));
     },
   });
 
+  const detailsMutation = useMutation({
+    mutationFn: (payload: {
+      fullName: string;
+      phone: string;
+      email: string;
+    }) => updatePartnerDetails(String(partnerId), payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["partner", partnerId] });
+      queryClient.invalidateQueries({ queryKey: ["partners"] });
+      setEditingProfile(false);
+      toast.success("Partner details updated");
+    },
+    onError: (error: unknown) => {
+      toast.error(apiErrorMessage(error, "Failed to update partner details"));
+    },
+  });
+
+  const startEditProfile = () => {
+    setFullNameDraft(partner?.fullName ?? "");
+    setPhoneDraft(partner?.phone ?? "");
+    setEmailDraft(partner?.email ?? "");
+    setEditingProfile(true);
+  };
   const zoneCountLabel = useMemo(() => {
     if (selectedZoneIds.length === 0) return "No zone selected";
     if (selectedZoneIds.length === 1) return "1 zone selected";
@@ -294,34 +331,132 @@ export default function PartnerDetailsPage() {
             <p className="text-sm text-white/50">Partner profile and verification</p>
           </div>
         </div>
-        <Link href={`/partners/${partnerId}/ledger`}>
-          <Button className="bg-[#98E32F] text-[#013644] hover:brightness-110 font-bold">
-            <Wallet className="mr-2 h-4 w-4" /> Ledger & payments
-          </Button>
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link href={`/partners/${partnerId}/ops`}>
+            <Button
+              variant="outline"
+              className="border-[#98E32F]/40 text-[#98E32F] hover:bg-[#98E32F]/10"
+            >
+              <Bike className="mr-2 h-4 w-4" /> Operations
+            </Button>
+          </Link>
+          <Link href={`/partners/${partnerId}/ledger`}>
+            <Button className="bg-[#98E32F] text-[#013644] hover:brightness-110 font-bold">
+              <Wallet className="mr-2 h-4 w-4" /> Ledger & payments
+            </Button>
+          </Link>
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-1">
           <Card className="border-white/5 bg-[#002833] text-white">
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
               <CardTitle>Profile</CardTitle>
+              {!editingProfile ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="border-white/10 text-white hover:bg-white/5"
+                  onClick={startEditProfile}
+                >
+                  <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                  Edit
+                </Button>
+              ) : null}
             </CardHeader>
             <CardContent className="space-y-4 text-sm">
-              <div className="flex items-start gap-3">
-                <Phone className="mt-0.5 h-4 w-4 text-white/40" />
-                <div>
-                  <p className="text-[10px] uppercase tracking-widest text-white/40">Phone</p>
-                  <p>{partner.phone}</p>
+              {editingProfile ? (
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] uppercase tracking-widest text-white/40">
+                      Full name
+                    </label>
+                    <Input
+                      value={fullNameDraft}
+                      onChange={(e) => setFullNameDraft(e.target.value)}
+                      className="border-white/10 bg-[#013644] text-white"
+                      placeholder="Partner full name"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] uppercase tracking-widest text-white/40">
+                      Mobile number
+                    </label>
+                    <Input
+                      value={phoneDraft}
+                      onChange={(e) => setPhoneDraft(e.target.value)}
+                      className="border-white/10 bg-[#013644] text-white"
+                      placeholder="10-digit mobile"
+                      inputMode="tel"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] uppercase tracking-widest text-white/40">
+                      Email
+                    </label>
+                    <Input
+                      value={emailDraft}
+                      onChange={(e) => setEmailDraft(e.target.value)}
+                      className="border-white/10 bg-[#013644] text-white"
+                      placeholder="Optional email"
+                      type="email"
+                    />
+                  </div>
+                  <div className="flex gap-2 pt-1">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="border-white/10 text-white hover:bg-white/5"
+                      disabled={detailsMutation.isPending}
+                      onClick={() => setEditingProfile(false)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="bg-[#98E32F] text-[#013644] hover:brightness-110"
+                      disabled={detailsMutation.isPending}
+                      onClick={() => {
+                        detailsMutation.mutate({
+                          fullName: fullNameDraft.trim(),
+                          phone: phoneDraft.trim(),
+                          email: emailDraft.trim(),
+                        });
+                      }}
+                    >
+                      {detailsMutation.isPending ? (
+                        <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                      ) : null}
+                      Save
+                    </Button>
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <Mail className="mt-0.5 h-4 w-4 text-white/40" />
-                <div>
-                  <p className="text-[10px] uppercase tracking-widest text-white/40">Email</p>
-                  <p>{partner.email || "N/A"}</p>
-                </div>
-              </div>
+              ) : (
+                <>
+                  <div className="flex items-start gap-3">
+                    <Phone className="mt-0.5 h-4 w-4 text-white/40" />
+                    <div>
+                      <p className="text-[10px] uppercase tracking-widest text-white/40">
+                        Phone
+                      </p>
+                      <p>{partner.phone}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <Mail className="mt-0.5 h-4 w-4 text-white/40" />
+                    <div>
+                      <p className="text-[10px] uppercase tracking-widest text-white/40">
+                        Email
+                      </p>
+                      <p>{partner.email || "N/A"}</p>
+                    </div>
+                  </div>
+                </>
+              )}
               <div className="flex items-start gap-3">
                 <Calendar className="mt-0.5 h-4 w-4 text-white/40" />
                 <div>

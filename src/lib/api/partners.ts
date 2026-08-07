@@ -46,6 +46,18 @@ export async function updatePartnerPriorityLevel(
   return data.data;
 }
 
+export async function updatePartnerDetails(
+  partnerId: string,
+  payload: {
+    fullName?: string;
+    phone?: string;
+    email?: string;
+  },
+): Promise<Partner> {
+  const { data } = await api.patch(`/partners/${partnerId}/details`, payload);
+  return data.data;
+}
+
 export async function fetchPartnerVerifications(params?: {
   status?: string;
   search?: string;
