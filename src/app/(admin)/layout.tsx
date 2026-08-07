@@ -24,6 +24,7 @@ import {
   Headset,
   ImageIcon,
   Bell,
+  Gift,
 } from "lucide-react";
 import { io } from "socket.io-client";
 import { toast } from "sonner";
@@ -262,6 +263,7 @@ export default function AdminLayout({
     { name: "Partners", icon: Bike, href: "/partners" },
     { name: "Support", icon: Headset, href: "/support" },
     { name: "Partner updates", icon: Bell, href: "/partner-updates" },
+    { name: "Partner incentives", icon: Gift, href: "/partner-incentives" },
     { name: "Gigs", icon: ClipboardList, href: "/gigs" },
     { name: "Monitor", icon: Activity, href: "/monitor" },
     { name: "Users", icon: Users, href: "/users" },

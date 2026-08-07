@@ -271,6 +271,11 @@ export default function OrdersPage() {
                       <TableCell className="font-medium">
                         <div className="flex flex-col gap-1">
                           <span>{row.pickfooId || row.id}</span>
+                          {row.restaurantName ? (
+                            <span className="text-xs font-normal text-white/45">
+                              {row.restaurantName}
+                            </span>
+                          ) : null}
                           {awaitingPrep ? (
                             <Badge
                               variant="outline"

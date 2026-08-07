@@ -298,3 +298,54 @@ export interface AdminGigBooking {
   earnings: number;
   activeMinutes: number;
 }
+
+export type PartnerIncentiveType = 'clean_window' | 'streak' | 'daily_count';
+export type PartnerIncentiveStatus =
+  | 'draft'
+  | 'scheduled'
+  | 'active'
+  | 'ended'
+  | 'cancelled';
+export type PartnerIncentiveAudience = 'all' | 'zones' | 'partners';
+export type PartnerIncentiveProgressStatus =
+  | 'active'
+  | 'missed'
+  | 'earned'
+  | 'expired';
+
+export interface AdminPartnerIncentive {
+  id: string;
+  title: string;
+  body: string;
+  rewardAmountInr: number;
+  type: PartnerIncentiveType;
+  startsAt: string;
+  endsAt: string;
+  streakTarget?: number | null;
+  dailyTarget?: number | null;
+  requireMinDeliveries?: number;
+  audience: PartnerIncentiveAudience;
+  zoneIds: string[];
+  partnerIds: string[];
+  status: PartnerIncentiveStatus;
+  activatedAt?: string | null;
+  endedAt?: string | null;
+  progressCounts?: Record<string, number>;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface AdminPartnerIncentiveProgress {
+  id: string;
+  offerId: string;
+  partnerId: string;
+  status: PartnerIncentiveProgressStatus;
+  progressCurrent: number;
+  progressTarget: number;
+  deliveredInWindow: number;
+  missReason?: string | null;
+  missedAt?: string | null;
+  earnedAt?: string | null;
+  expiredAt?: string | null;
+  ledgerEntryId?: string | null;
+}
