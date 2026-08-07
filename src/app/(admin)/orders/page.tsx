@@ -34,6 +34,7 @@ import {
   type AdminOrderRow,
 } from "@/lib/api/orders";
 import { Loader2, RefreshCw } from "lucide-react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { ListPagination } from "@/components/ui/list-pagination";
 import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
@@ -233,20 +234,19 @@ export default function OrdersPage() {
                 <TableHead className="text-white/60">Assigned partner</TableHead>
                 <TableHead className="text-white/60">Partner progress</TableHead>
                 <TableHead className="text-white/60">Actions</TableHead>
-                <TableHead className="text-right text-white/60">Time</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="py-10 text-center">
+                  <TableCell colSpan={7} className="py-10 text-center">
                     <Loader2 className="mx-auto h-6 w-6 animate-spin text-[#98E32F]" />
                   </TableCell>
                 </TableRow>
               ) : rows.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={8}
+                    colSpan={7}
                     className="py-10 text-center text-white/40"
                   >
                     No order activity events found.
@@ -270,7 +270,15 @@ export default function OrdersPage() {
                     >
                       <TableCell className="font-medium">
                         <div className="flex flex-col gap-1">
-                          <span>{row.pickfooId || row.id}</span>
+                          <Link
+                            href={`/orders/${encodeURIComponent(orderRef)}`}
+                            className="text-white hover:text-[#98E32F] hover:underline"
+                          >
+                            {row.pickfooId || row.id}
+                          </Link>
+                          <span className="text-xs font-normal text-white/40">
+                            {new Date(row.createdAt).toLocaleString()}
+                          </span>
                           {row.restaurantName ? (
                             <span className="text-xs font-normal text-white/45">
                               {row.restaurantName}
@@ -345,9 +353,6 @@ export default function OrdersPage() {
                         ) : (
                           <span className="text-xs text-white/30">—</span>
                         )}
-                      </TableCell>
-                      <TableCell className="text-right text-xs text-white/50">
-                        {new Date(row.createdAt).toLocaleString()}
                       </TableCell>
                     </TableRow>
                   );

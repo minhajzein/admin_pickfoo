@@ -77,6 +77,112 @@ export async function fetchDispatchOrders(params?: {
   };
 }
 
+export interface AdminOrderItem {
+  menuItem?: string | null;
+  name: string;
+  quantity: number;
+  price: number;
+  packingCharge: number;
+  lineTotal: number;
+}
+
+export interface AdminOrderDetail {
+  id: string;
+  pickfooId?: string | null;
+  status: string;
+  orderType: string;
+  paymentStatus?: string | null;
+  paymentMethod?: string | null;
+  paymentProvider?: string | null;
+  razorpayOrderId?: string | null;
+  paymentReference?: string | null;
+  transactionId?: string | null;
+  items: AdminOrderItem[];
+  itemTotal: number;
+  packingTotal: number;
+  deliveryFee: number;
+  discountAmount: number;
+  tipAmount: number;
+  taxableAmount?: number | null;
+  sgstAmount: number;
+  cgstAmount: number;
+  gstAmount: number;
+  restaurantGstRegistered: boolean;
+  totalAmount?: number | null;
+  platformCommission: number;
+  commissionPercent: number;
+  cookingRequests?: string | null;
+  includeCutlery: boolean;
+  deliveryTier?: string | null;
+  deliveryInstructions?: string | null;
+  voiceInstructionUrl?: string | null;
+  addressImageUrl?: string | null;
+  deliveryAddress?: string | null;
+  deliveryLat?: number | null;
+  deliveryLng?: number | null;
+  rejectionReason?: string | null;
+  rejectionCode?: string | null;
+  customer: {
+    id: string;
+    name?: string | null;
+    email?: string | null;
+    phone?: string | null;
+    profilePicture?: string | null;
+  } | null;
+  restaurant: {
+    id?: string | null;
+    name?: string | null;
+    address?: string | null;
+    lat?: number | null;
+    lng?: number | null;
+    contactNumber?: string | null;
+    email?: string | null;
+    status?: string | null;
+    image?: string | null;
+    brandLogo?: string | null;
+    commissionPercent: number;
+  };
+  deliveryPartner: {
+    id: string;
+    name?: string | null;
+    phone?: string | null;
+    email?: string | null;
+    status?: string | null;
+    isOnline: boolean;
+    onDuty: boolean;
+    profilePhoto?: string | null;
+    assignedAt?: string | null;
+    progress?: string | null;
+    decision?: {
+      status?: string | null;
+      decidedAt?: string | null;
+      reason?: string | null;
+    } | null;
+    locationUpdatedAt?: string | null;
+  } | null;
+  timeline: {
+    orderDate?: string | null;
+    createdAt?: string | null;
+    acceptedForPaymentAt?: string | null;
+    preparingStartedAt?: string | null;
+    estimatedReadyAt?: string | null;
+    readyAt?: string | null;
+    updatedAt?: string | null;
+  };
+  assignmentVersion: number;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+}
+
+export async function fetchDispatchOrder(
+  orderRef: string
+): Promise<AdminOrderDetail> {
+  const { data } = await api.get(
+    `/dispatch/orders/${encodeURIComponent(orderRef)}`
+  );
+  return data.data;
+}
+
 export interface RedispatchOrderResponse {
   success: boolean;
   redispatched: boolean;
