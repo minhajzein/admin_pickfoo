@@ -10,7 +10,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import Map, {
+import MapGL, {
   Layer,
   NavigationControl,
   Popup,
@@ -61,12 +61,23 @@ function LiveOperationsMap({
   const [selected, setSelected] = useState<SelectedMarker | null>(null);
   const [cursor, setCursor] = useState<"grab" | "pointer">("grab");
   const hasFittedRef = useRef(false);
-  const partnersById = useRef(new Map<string, LiveMapPartnerMarker>());
-  const restaurantsById = useRef(new Map<string, LiveMapRestaurantMarker>());
 
-  partnersById.current = new Map(partners.map((p) => [p.id, p]));
-  restaurantsById.current = new Map(restaurants.map((r) => [r.id, r]));
+  const partnersById = useMemo(() => {
+    const map = new globalThis.Map<string, LiveMapPartnerMarker>();
+    for (const partner of partners) map.set(partner.id, partner);
+    return map;
+  }, [partners]);
 
+  const restaurantsById = useMemo(() => {
+    const map = new globalThis.Map<string, LiveMapRestaurantMarker>();
+    for (const restaurant of restaurants) map.set(restaurant.id, restaurant);
+    return map;
+  }, [restaurants]);
+
+  const partnersByIdRef = useRef(partnersById);
+  const restaurantsByIdRef = useRef(restaurantsById);
+  partnersByIdRef.current = partnersById;
+  restaurantsByIdRef.current = restaurantsById;
   const restaurantGeoJson = useMemo(
     () => ({
       type: "FeatureCollection" as const,
@@ -202,12 +213,12 @@ function LiveOperationsMap({
     // Defer React popup work off the map event critical path (INP).
     startTransition(() => {
       if (kind === "partner") {
-        const partner = partnersById.current.get(id);
+        const partner = partnersByIdRef.current.get(id);
         if (partner) setSelected({ kind: "partner", data: partner });
         return;
       }
       if (kind === "restaurant") {
-        const restaurant = restaurantsById.current.get(id);
+        const restaurant = restaurantsByIdRef.current.get(id);
         if (restaurant) setSelected({ kind: "restaurant", data: restaurant });
       }
     });
@@ -218,7 +229,7 @@ function LiveOperationsMap({
 
   return (
     <div className="relative h-[min(72vh,760px)] min-h-[420px] overflow-hidden rounded-xl border border-white/10">
-      <Map
+      <MapGL
         ref={mapRef}
         mapboxAccessToken={accessToken}
         initialViewState={WAYANAD_VIEW}
@@ -271,7 +282,7 @@ function LiveOperationsMap({
             )}
           </Popup>
         ) : null}
-      </Map>
+      </MapGL>
     </div>
   );
 }
