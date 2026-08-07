@@ -1,13 +1,24 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  memo,
+  startTransition,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import Map, {
-  Marker,
+  Layer,
   NavigationControl,
   Popup,
+  Source,
+  type MapLayerMouseEvent,
   type MapRef,
 } from "react-map-gl/mapbox";
-import { Bike, Store } from "lucide-react";
+import type { CircleLayerSpecification, ExpressionSpecification } from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import type {
   LiveMapPartnerMarker,
@@ -19,6 +30,10 @@ const WAYANAD_VIEW = {
   latitude: 11.685,
   zoom: 10,
 };
+
+const RESTAURANT_LAYER_ID = "live-restaurants-circle";
+const PARTNER_LAYER_ID = "live-partners-circle";
+const INTERACTIVE_LAYER_IDS = [RESTAURANT_LAYER_ID, PARTNER_LAYER_ID];
 
 type SelectedMarker =
   | { kind: "partner"; data: LiveMapPartnerMarker }
@@ -32,7 +47,7 @@ export type LiveOperationsMapProps = {
   showRestaurants: boolean;
 };
 
-export default function LiveOperationsMap({
+function LiveOperationsMap({
   accessToken,
   partners,
   restaurants,
@@ -41,7 +56,91 @@ export default function LiveOperationsMap({
 }: LiveOperationsMapProps) {
   const mapRef = useRef<MapRef>(null);
   const [selected, setSelected] = useState<SelectedMarker | null>(null);
+  const [cursor, setCursor] = useState<"grab" | "pointer">("grab");
   const hasFittedRef = useRef(false);
+  const partnersById = useRef(new Map<string, LiveMapPartnerMarker>());
+  const restaurantsById = useRef(new Map<string, LiveMapRestaurantMarker>());
+
+  partnersById.current = new Map(partners.map((p) => [p.id, p]));
+  restaurantsById.current = new Map(restaurants.map((r) => [r.id, r]));
+
+  const restaurantGeoJson = useMemo(
+    () => ({
+      type: "FeatureCollection" as const,
+      features: showRestaurants
+        ? restaurants.map((restaurant) => ({
+            type: "Feature" as const,
+            id: restaurant.id,
+            properties: {
+              id: restaurant.id,
+              kind: "restaurant",
+              name: restaurant.name,
+              isOpen: restaurant.isOpen ? 1 : 0,
+            },
+            geometry: {
+              type: "Point" as const,
+              coordinates: [restaurant.lng, restaurant.lat],
+            },
+          }))
+        : [],
+    }),
+    [restaurants, showRestaurants],
+  );
+
+  const partnerGeoJson = useMemo(
+    () => ({
+      type: "FeatureCollection" as const,
+      features: showPartners
+        ? partners.map((partner) => ({
+            type: "Feature" as const,
+            id: partner.id,
+            properties: {
+              id: partner.id,
+              kind: "partner",
+              name: partner.fullName,
+              onDuty: partner.onDuty ? 1 : 0,
+            },
+            geometry: {
+              type: "Point" as const,
+              coordinates: [partner.lng, partner.lat],
+            },
+          }))
+        : [],
+    }),
+    [partners, showPartners],
+  );
+
+  const restaurantCirclePaint = useMemo(
+    () =>
+      ({
+        "circle-radius": 9,
+        "circle-color": [
+          "case",
+          ["==", ["get", "isOpen"], 1],
+          "#98E32F",
+          "#ef4444",
+        ] as ExpressionSpecification,
+        "circle-stroke-width": 2,
+        "circle-stroke-color": "#ffffff",
+      }) satisfies CircleLayerSpecification["paint"],
+    [],
+  );
+
+  const partnerCirclePaint = useMemo(
+    () =>
+      ({
+        "circle-radius": 8,
+        "circle-color": [
+          "case",
+          ["==", ["get", "onDuty"], 1],
+          "#38bdf8",
+          "#98E32F",
+        ] as ExpressionSpecification,
+        "circle-stroke-width": 2,
+        "circle-stroke-color": "#002833",
+      }) satisfies CircleLayerSpecification["paint"],
+    [],
+  );
 
   useEffect(() => {
     const map = mapRef.current?.getMap();
@@ -64,19 +163,55 @@ export default function LiveOperationsMap({
       maxLat = Math.max(maxLat, lat);
     }
 
-    if (minLng === maxLng && minLat === maxLat) {
-      map.flyTo({ center: [minLng, minLat], zoom: 13, duration: 800 });
-    } else {
-      map.fitBounds(
-        [
-          [minLng, minLat],
-          [maxLng, maxLat],
-        ],
-        { padding: 72, maxZoom: 13, duration: 800 },
-      );
-    }
-    hasFittedRef.current = true;
+    // Fit after the current interaction frame so map event handlers stay light.
+    requestAnimationFrame(() => {
+      const live = mapRef.current?.getMap();
+      if (!live || hasFittedRef.current) return;
+      if (minLng === maxLng && minLat === maxLat) {
+        live.flyTo({ center: [minLng, minLat], zoom: 13, duration: 600 });
+      } else {
+        live.fitBounds(
+          [
+            [minLng, minLat],
+            [maxLng, maxLat],
+          ],
+          { padding: 72, maxZoom: 13, duration: 600 },
+        );
+      }
+      hasFittedRef.current = true;
+    });
   }, [partners, restaurants]);
+
+  const clearSelection = useCallback(() => {
+    startTransition(() => setSelected(null));
+  }, []);
+
+  const handleMapClick = useCallback((event: MapLayerMouseEvent) => {
+    const feature = event.features?.[0];
+    if (!feature) {
+      startTransition(() => setSelected(null));
+      return;
+    }
+
+    const id = String(feature.properties?.id ?? "");
+    const kind = String(feature.properties?.kind ?? "");
+
+    // Defer React popup work off the map event critical path (INP).
+    startTransition(() => {
+      if (kind === "partner") {
+        const partner = partnersById.current.get(id);
+        if (partner) setSelected({ kind: "partner", data: partner });
+        return;
+      }
+      if (kind === "restaurant") {
+        const restaurant = restaurantsById.current.get(id);
+        if (restaurant) setSelected({ kind: "restaurant", data: restaurant });
+      }
+    });
+  }, []);
+
+  const handleMouseEnter = useCallback(() => setCursor("pointer"), []);
+  const handleMouseLeave = useCallback(() => setCursor("grab"), []);
 
   return (
     <div className="relative h-[min(72vh,760px)] min-h-[420px] overflow-hidden rounded-xl border border-white/10">
@@ -85,69 +220,46 @@ export default function LiveOperationsMap({
         mapboxAccessToken={accessToken}
         initialViewState={WAYANAD_VIEW}
         mapStyle="mapbox://styles/mapbox/streets-v12"
-        onClick={() => setSelected(null)}
+        interactiveLayerIds={INTERACTIVE_LAYER_IDS}
+        cursor={cursor}
+        onClick={handleMapClick}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+        dragRotate={false}
+        pitchWithRotate={false}
+        reuseMaps
+        attributionControl={false}
+        fadeDuration={0}
+        renderWorldCopies={false}
         style={{ width: "100%", height: "100%" }}
       >
         <NavigationControl position="top-right" showCompass={false} />
 
-        {showRestaurants
-          ? restaurants.map((restaurant) => (
-              <Marker
-                key={`restaurant-${restaurant.id}`}
-                longitude={restaurant.lng}
-                latitude={restaurant.lat}
-                anchor="bottom"
-              >
-                <MapMarkerButton
-                  label={restaurant.name}
-                  onClick={() =>
-                    setSelected({ kind: "restaurant", data: restaurant })
-                  }
-                >
-                  <span
-                    className={`flex h-9 w-9 items-center justify-center rounded-full border-2 border-white text-white shadow-lg ${
-                      restaurant.isOpen ? "bg-[#98E32F] text-[#013644]" : "bg-red-500"
-                    }`}
-                  >
-                    <Store className="h-4 w-4" />
-                  </span>
-                </MapMarkerButton>
-              </Marker>
-            ))
-          : null}
+        <Source id="live-restaurants" type="geojson" data={restaurantGeoJson}>
+          <Layer
+            id={RESTAURANT_LAYER_ID}
+            type="circle"
+            paint={restaurantCirclePaint}
+          />
+        </Source>
 
-        {showPartners
-          ? partners.map((partner) => (
-              <Marker
-                key={`partner-${partner.id}`}
-                longitude={partner.lng}
-                latitude={partner.lat}
-                anchor="bottom"
-              >
-                <MapMarkerButton
-                  label={partner.fullName}
-                  onClick={() => setSelected({ kind: "partner", data: partner })}
-                >
-                  <span
-                    className={`flex h-9 w-9 items-center justify-center rounded-full border-2 border-[#002833] text-[#002833] shadow-lg ${
-                      partner.onDuty ? "bg-sky-300" : "bg-[#98E32F]"
-                    }`}
-                  >
-                    <Bike className="h-4 w-4" />
-                  </span>
-                </MapMarkerButton>
-              </Marker>
-            ))
-          : null}
+        <Source id="live-partners" type="geojson" data={partnerGeoJson}>
+          <Layer
+            id={PARTNER_LAYER_ID}
+            type="circle"
+            paint={partnerCirclePaint}
+          />
+        </Source>
 
         {selected ? (
           <Popup
             longitude={selected.data.lng}
             latitude={selected.data.lat}
             closeOnClick={false}
-            onClose={() => setSelected(null)}
+            onClose={clearSelection}
             anchor="top"
             offset={16}
+            maxWidth="280px"
           >
             {selected.kind === "partner" ? (
               <PartnerPopup partner={selected.data} />
@@ -161,37 +273,15 @@ export default function LiveOperationsMap({
   );
 }
 
-function MapMarkerButton({
-  label,
-  onClick,
-  children,
-}: {
-  label: string;
-  onClick: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={(event) => {
-        event.stopPropagation();
-        onClick();
-      }}
-      className="group flex -translate-x-1/2 flex-col items-center gap-1 border-0 bg-transparent p-0"
-    >
-      {children}
-      <span className="max-w-[160px] truncate rounded-md bg-[#002833]/95 px-2 py-0.5 text-[11px] font-medium text-white shadow-md ring-1 ring-white/10">
-        {label}
-      </span>
-    </button>
-  );
-}
-
 function PartnerPopup({ partner }: { partner: LiveMapPartnerMarker }) {
   return (
     <PopupCard title={partner.fullName} subtitle={partner.phone}>
       <p>
-        {partner.onDuty ? "On delivery" : partner.isOnline ? "Online" : "Offline"}
+        {partner.onDuty
+          ? "On delivery"
+          : partner.isOnline
+            ? "Online"
+            : "Offline"}
       </p>
       <p>Priority level {partner.priorityLevel}</p>
       {partner.zones.length ? (
@@ -203,13 +293,27 @@ function PartnerPopup({ partner }: { partner: LiveMapPartnerMarker }) {
   );
 }
 
-function RestaurantPopup({ restaurant }: { restaurant: LiveMapRestaurantMarker }) {
+function RestaurantPopup({
+  restaurant,
+}: {
+  restaurant: LiveMapRestaurantMarker;
+}) {
   return (
     <PopupCard title={restaurant.name} subtitle={restaurant.status}>
-      <p className={restaurant.isOpen ? "text-emerald-600 font-medium" : "text-red-600 font-medium"}>
+      <p
+        className={
+          restaurant.isOpen
+            ? "font-medium text-emerald-600"
+            : "font-medium text-red-600"
+        }
+      >
         {restaurant.isOpen ? "Open now" : "Closed right now"}
       </p>
-      {restaurant.zone ? <p>Zone: {restaurant.zone.name}</p> : <p>No zone assigned</p>}
+      {restaurant.zone ? (
+        <p>Zone: {restaurant.zone.name}</p>
+      ) : (
+        <p>No zone assigned</p>
+      )}
     </PopupCard>
   );
 }
@@ -231,3 +335,5 @@ function PopupCard({
     </div>
   );
 }
+
+export default memo(LiveOperationsMap);

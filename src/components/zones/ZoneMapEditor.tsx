@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { startTransition, useCallback, useEffect, useRef, useState } from "react";
 import Map, {
   Layer,
   NavigationControl,
@@ -172,12 +172,24 @@ export default function ZoneMapEditor({
     const fc = draw.getAll();
     const feat = fc.features.find((f) => f.geometry?.type === "Polygon");
     const g = feat?.geometry;
-    if (g && g.type === "Polygon") {
-      onDrawPolygonChangeRef.current(g as PolygonZoneGeometry);
-    } else {
-      onDrawPolygonChangeRef.current(null);
-    }
+    // Defer parent state updates so Mapbox draw drag stays responsive (INP).
+    startTransition(() => {
+      if (g && g.type === "Polygon") {
+        onDrawPolygonChangeRef.current(g as PolygonZoneGeometry);
+      } else {
+        onDrawPolygonChangeRef.current(null);
+      }
+    });
   }, []);
+
+  const emitDrawRafRef = useRef<number | null>(null);
+  const scheduleEmitDraw = useCallback(() => {
+    if (emitDrawRafRef.current != null) return;
+    emitDrawRafRef.current = requestAnimationFrame(() => {
+      emitDrawRafRef.current = null;
+      emitDraw();
+    });
+  }, [emitDraw]);
 
   const handleLoad = useCallback(
     (e: { target: MapboxMap }) => {
@@ -197,12 +209,13 @@ export default function ZoneMapEditor({
       drawRef.current = draw;
 
       map.on("draw.create", emitDraw);
-      map.on("draw.update", emitDraw);
+      // Throttle continuous vertex-drag updates.
+      map.on("draw.update", scheduleEmitDraw);
       map.on("draw.delete", emitDraw);
 
       setMapReady(true);
     },
-    [emitDraw],
+    [emitDraw, scheduleEmitDraw],
   );
 
   useEffect(() => {

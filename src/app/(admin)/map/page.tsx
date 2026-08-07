@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, startTransition, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bike, Loader2, MapPinned, RefreshCw, Store } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -212,7 +212,7 @@ function ToggleChip({
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={() => startTransition(onClick)}
       className={`rounded-full border px-3 py-1.5 text-xs transition ${
         active
           ? "border-[#98E32F]/40 bg-[#98E32F]/15 text-[#98E32F]"
