@@ -3,12 +3,13 @@
 import { useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { pageRangeLabel } from "@/lib/pagination";
+import { DEFAULT_PAGE_SIZE, pageRangeLabel } from "@/lib/pagination";
 import { cn } from "@/lib/utils";
 
 type Props = {
   page: number;
-  limit: number;
+  /** Page size for range label; defaults to DEFAULT_PAGE_SIZE */
+  limit?: number;
   total: number;
   totalPages?: number;
   onPageChange: (page: number) => void;
@@ -19,7 +20,7 @@ type Props = {
 
 export function ListPagination({
   page,
-  limit,
+  limit = DEFAULT_PAGE_SIZE,
   total,
   totalPages: totalPagesProp,
   onPageChange,
