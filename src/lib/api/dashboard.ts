@@ -24,6 +24,8 @@ export interface DashboardOverview {
   pendingRestaurantVerifications: number;
   activeUsers: number;
   totalOrders: number;
+  /** Delivered / completed orders. */
+  completedOrders: number;
   /** Platform / company commission income only. */
   platformCommission: number;
   onlinePartners: number;
@@ -60,6 +62,7 @@ export async function fetchDashboardOverview(): Promise<DashboardOverview> {
     pendingRestaurantVerifications: pendingMeta.total,
     activeUsers: usersMeta.total,
     totalOrders: orderSummary?.total ?? orders.length,
+    completedOrders: orderSummary?.delivered ?? 0,
     platformCommission: orderSummary?.platformCommission ?? 0,
     onlinePartners,
     recentActivity: events.slice(0, 6).map((event) => ({

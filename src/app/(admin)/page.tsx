@@ -54,6 +54,14 @@ export default function AdminDashboard() {
       bg: "bg-[#98E32F]/10",
     },
     {
+      title: "Completed Orders",
+      value: data?.completedOrders ?? 0,
+      helper: "Delivered successfully",
+      icon: CheckCircle2,
+      color: "text-emerald-400",
+      bg: "bg-emerald-400/10",
+    },
+    {
       title: "Platform commission",
       value: money.format(data?.platformCommission ?? 0),
       helper: `${data?.onlinePartners ?? 0} partners online`,
@@ -73,7 +81,7 @@ export default function AdminDashboard() {
         </p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         {stats.map((stat) => (
           <Card
             key={stat.title}
