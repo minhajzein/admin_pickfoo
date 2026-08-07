@@ -169,9 +169,13 @@ export default function OrdersPage() {
   });
 
   const { data: partners = [] } = useQuery({
-    queryKey: ["orders", "filter-partners"],
+    queryKey: ["orders", "filter-partners", "VERIFIED"],
     queryFn: async () => {
-      const result = await fetchPartners({ page: 1, limit: 500 });
+      const result = await fetchPartners({
+        page: 1,
+        limit: 500,
+        status: "VERIFIED",
+      });
       return result.data;
     },
     staleTime: 60_000,
