@@ -244,14 +244,28 @@ export default function AdminLayout({
 
   if (!isInitialized) {
     return (
-      <div className="min-h-screen bg-[#013644] flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#98E32F]" />
+      <div className="flex min-h-screen items-center justify-center bg-[#013644] text-white">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-12 w-12 animate-spin rounded-full border-t-2 border-b-2 border-[#98E32F]" />
+          <p className="text-sm text-white/50">Loading admin…</p>
+        </div>
       </div>
     );
   }
 
   if (!isAuthenticated || !user || user.role !== "admin") {
-    return null;
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-[#013644] px-4 text-white">
+        <div className="h-10 w-10 animate-spin rounded-full border-t-2 border-b-2 border-[#98E32F]" />
+        <p className="text-sm text-white/70">Redirecting to login…</p>
+        <Link
+          href="/login"
+          className="text-sm text-[#98E32F] underline-offset-2 hover:underline"
+        >
+          Continue to login
+        </Link>
+      </div>
+    );
   }
 
   const navItems = [
