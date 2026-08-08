@@ -30,6 +30,7 @@ import {
   type AdminPartnerWithdrawal,
   type PartnerWithdrawalStatus,
 } from "@/lib/api/partner-withdrawals";
+import { WithdrawalAccountDetails } from "@/components/withdrawals/WithdrawalAccountDetails";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -518,7 +519,7 @@ export default function PartnerLedgerPage() {
                     <TableHead className="text-white/40">Requested</TableHead>
                     <TableHead className="text-white/40">Amount</TableHead>
                     <TableHead className="text-white/40">Trigger</TableHead>
-                    <TableHead className="text-white/40">Bank</TableHead>
+                    <TableHead className="text-white/40">Account details</TableHead>
                     <TableHead className="text-white/40">Status</TableHead>
                     <TableHead className="text-white/40 text-right">
                       Actions
@@ -539,14 +540,8 @@ export default function PartnerLedgerPage() {
                         <TableCell className="text-xs capitalize text-white/50">
                           {w.trigger || "—"}
                         </TableCell>
-                        <TableCell className="text-xs text-white/55">
-                          <div>{bank?.bankName || "—"}</div>
-                          <div className="text-white/35">
-                            {bank?.accountHolderName}{" "}
-                            {bank?.accountNumberLast4
-                              ? `•••• ${bank.accountNumberLast4}`
-                              : ""}
-                          </div>
+                        <TableCell className="text-xs text-white/55 align-top">
+                          <WithdrawalAccountDetails bank={bank} />
                         </TableCell>
                         <TableCell>{statusBadge(w.status)}</TableCell>
                         <TableCell className="text-right">

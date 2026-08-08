@@ -27,6 +27,7 @@ export interface AdminWithdrawal {
     bankName?: string;
     accountNumber?: string;
     ifscCode?: string;
+    upiId?: string;
   };
 }
 

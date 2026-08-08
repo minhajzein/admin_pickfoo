@@ -31,6 +31,7 @@ import {
   type AdminWithdrawal,
   type WithdrawalStatus,
 } from "@/lib/api/withdrawals";
+import { WithdrawalAccountDetails } from "@/components/withdrawals/WithdrawalAccountDetails";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -117,13 +118,6 @@ function orderLabel(tx: RestaurantLedgerTransaction) {
   if (!order) return "—";
   if (typeof order === "string") return order.slice(-6);
   return order.pickfooId || String(order._id).slice(-6);
-}
-
-function maskAccount(num?: string) {
-  if (!num) return "—";
-  const clean = num.replace(/\s/g, "");
-  if (clean.length <= 4) return clean;
-  return `•••• ${clean.slice(-4)}`;
 }
 
 type Tab = "transactions" | "withdrawals";
@@ -595,7 +589,7 @@ export default function RestaurantLedgerPage() {
                   <TableRow className="border-white/5 hover:bg-transparent">
                     <TableHead className="text-white/40">Requested</TableHead>
                     <TableHead className="text-white/40">Amount</TableHead>
-                    <TableHead className="text-white/40">Bank</TableHead>
+                    <TableHead className="text-white/40">Account details</TableHead>
                     <TableHead className="text-white/40">Status</TableHead>
                     <TableHead className="text-white/40">Notes</TableHead>
                     <TableHead className="text-white/40 text-right">
@@ -612,12 +606,8 @@ export default function RestaurantLedgerPage() {
                       <TableCell className="font-semibold">
                         {inr(w.amount)}
                       </TableCell>
-                      <TableCell className="text-xs text-white/55">
-                        <div>{w.bankAccount?.bankName || "—"}</div>
-                        <div className="text-white/35">
-                          {w.bankAccount?.accountHolderName}{" "}
-                          {maskAccount(w.bankAccount?.accountNumber)}
-                        </div>
+                      <TableCell className="text-xs text-white/55 align-top">
+                        <WithdrawalAccountDetails bank={w.bankAccount} />
                       </TableCell>
                       <TableCell>{statusBadge(w.status)}</TableCell>
                       <TableCell className="max-w-[180px] truncate text-xs text-white/40">

@@ -44,6 +44,7 @@ import { Label } from "@/components/ui/label";
 import { MoreHorizontal, Search } from "lucide-react";
 import { ListPagination } from "@/components/ui/list-pagination";
 import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
+import { WithdrawalAccountDetails } from "@/components/withdrawals/WithdrawalAccountDetails";
 
 const STATUS_FILTERS: Array<PartnerWithdrawalStatus | "all"> = [
   "all",
@@ -68,14 +69,6 @@ function statusBadge(status: PartnerWithdrawalStatus) {
       {status}
     </Badge>
   );
-}
-
-function maskAccount(num?: string, last4?: string) {
-  if (last4) return `•••• ${last4}`;
-  if (!num) return "—";
-  const clean = num.replace(/\s/g, "");
-  if (clean.length <= 4) return clean;
-  return `•••• ${clean.slice(-4)}`;
 }
 
 export default function PartnerWithdrawalsPage() {
@@ -210,7 +203,7 @@ export default function PartnerWithdrawalsPage() {
               <TableHeader>
                 <TableRow className="border-white/10 hover:bg-transparent">
                   <TableHead className="text-white/70">Partner</TableHead>
-                  <TableHead className="text-white/70">Bank</TableHead>
+                  <TableHead className="text-white/70">Account details</TableHead>
                   <TableHead className="text-white/70">Amount</TableHead>
                   <TableHead className="text-white/70">Status</TableHead>
                   <TableHead className="text-white/70">Requested</TableHead>
@@ -244,18 +237,8 @@ export default function PartnerWithdrawalsPage() {
                           {w.partnerId?.email}
                         </div>
                       </TableCell>
-                      <TableCell className="text-white/80 text-sm">
-                        <div>{w.bankAccountId?.bankName ?? "—"}</div>
-                        <div className="text-xs text-white/45">
-                          {w.bankAccountId?.accountHolderName} ·{" "}
-                          {maskAccount(
-                            w.bankAccountId?.accountNumber,
-                            w.bankAccountId?.accountNumberLast4,
-                          )}
-                        </div>
-                        <div className="text-xs text-white/45">
-                          {w.bankAccountId?.ifscCode}
-                        </div>
+                      <TableCell className="text-white/80 text-sm align-top">
+                        <WithdrawalAccountDetails bank={w.bankAccountId} />
                       </TableCell>
                       <TableCell className="text-[#98E32F] font-semibold">
                         ₹{Number(w.amount || 0).toFixed(2)}
