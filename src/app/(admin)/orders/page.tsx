@@ -409,6 +409,7 @@ export default function OrdersPage() {
             <TableHeader className="bg-white/5">
               <TableRow className="border-white/5 hover:bg-transparent">
                 <TableHead className="text-white/60">Order</TableHead>
+                <TableHead className="text-white/60">Restaurant</TableHead>
                 <TableHead className="text-white/60">Type</TableHead>
                 <TableHead className="text-white/60">Status</TableHead>
                 <TableHead className="text-white/60">Amounts</TableHead>
@@ -420,14 +421,14 @@ export default function OrdersPage() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="py-10 text-center">
+                  <TableCell colSpan={8} className="py-10 text-center">
                     <Loader2 className="mx-auto h-6 w-6 animate-spin text-[#98E32F]" />
                   </TableCell>
                 </TableRow>
               ) : rows.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={7}
+                    colSpan={8}
                     className="py-10 text-center text-white/40"
                   >
                     No order activity events found.
@@ -461,11 +462,6 @@ export default function OrdersPage() {
                           <span className="text-xs font-normal text-white/40">
                             {new Date(row.createdAt).toLocaleString()}
                           </span>
-                          {row.restaurantName ? (
-                            <span className="text-xs font-normal text-white/45">
-                              {row.restaurantName}
-                            </span>
-                          ) : null}
                           {awaitingPrep ? (
                             <Badge
                               variant="outline"
@@ -475,6 +471,11 @@ export default function OrdersPage() {
                             </Badge>
                           ) : null}
                         </div>
+                      </TableCell>
+                      <TableCell className="max-w-[180px] text-white/80">
+                        <span className="line-clamp-2">
+                          {row.restaurantName || "—"}
+                        </span>
                       </TableCell>
                       <TableCell>
                         <Badge
