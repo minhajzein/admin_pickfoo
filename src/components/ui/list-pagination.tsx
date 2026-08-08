@@ -6,13 +6,19 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { DEFAULT_PAGE_SIZE, pageRangeLabel } from "@/lib/pagination";
 import { cn } from "@/lib/utils";
 
-type Props = {
+/**
+ * Page size (`limit` / `pageSize`) is OPTIONAL and defaults to DEFAULT_PAGE_SIZE.
+ * Do not make it required — admin list pages often omit it and rely on the default.
+ */
+export type ListPaginationProps = {
   page: number;
-  /** Page size for range label; defaults to DEFAULT_PAGE_SIZE */
-  limit?: number;
   total: number;
-  totalPages?: number;
   onPageChange: (page: number) => void;
+  /** Page size for the range label. Defaults to DEFAULT_PAGE_SIZE. */
+  pageSize?: number;
+  /** Alias of pageSize (kept for existing call sites). Defaults to DEFAULT_PAGE_SIZE. */
+  limit?: number;
+  totalPages?: number;
   className?: string;
   /** Compact footer for dense tables */
   dense?: boolean;
@@ -20,16 +26,18 @@ type Props = {
 
 export function ListPagination({
   page,
-  limit = DEFAULT_PAGE_SIZE,
+  pageSize,
+  limit,
   total,
   totalPages: totalPagesProp,
   onPageChange,
   className = "",
   dense = false,
-}: Props) {
+}: ListPaginationProps) {
   const [isPending, startTransition] = useTransition();
+  const size = pageSize ?? limit ?? DEFAULT_PAGE_SIZE;
   const totalPages =
-    totalPagesProp ?? Math.max(1, Math.ceil(Math.max(0, total) / limit) || 1);
+    totalPagesProp ?? Math.max(1, Math.ceil(Math.max(0, total) / size) || 1);
   const canPrev = page > 1;
   const canNext = page < totalPages;
 
@@ -64,7 +72,7 @@ export function ListPagination({
       <p className="text-xs text-white/40">
         Showing{" "}
         <span className="text-white/70 font-medium">
-          {pageRangeLabel(page, limit, total)}
+          {pageRangeLabel(page, size, total)}
         </span>
       </p>
       <div className="flex items-center gap-2">
@@ -97,3 +105,16 @@ export function ListPagination({
     </div>
   );
 }
+
+/**
+ * Compile-time lock: if `limit` or `pageSize` is ever made required again,
+ * this assignment fails and the admin build breaks immediately — not only on
+ * pages that forgot to pass the prop.
+ */
+type _PageSizeOptional = undefined extends ListPaginationProps["limit"]
+  ? undefined extends ListPaginationProps["pageSize"]
+    ? true
+    : never
+  : never;
+const _pageSizeMustStayOptional: _PageSizeOptional = true;
+void _pageSizeMustStayOptional;

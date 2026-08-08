@@ -1,0 +1,28 @@
+---
+description: ListPagination page size must stay optional to avoid recurring Vercel build failures
+globs: src/components/ui/list-pagination.tsx,src/app/(admin)/**/*.tsx
+alwaysApply: false
+---
+
+# ListPagination
+
+`ListPagination` lives at `src/components/ui/list-pagination.tsx`.
+
+## Required rules
+
+- `limit` and `pageSize` are **optional**. They default to `DEFAULT_PAGE_SIZE`.
+- Never change them to required (`limit: number`). That breaks admin pages that omit the prop and fails Vercel builds.
+- Valid minimal usage:
+
+```tsx
+<ListPagination
+  page={page}
+  total={total}
+  totalPages={totalPages}
+  onPageChange={setPage}
+/>
+```
+
+- Passing `limit={DEFAULT_PAGE_SIZE}` (or a real page size from the API) is fine but not required.
+- When adding pagination to a new admin list page, prefer the minimal usage above.
+- Do not rewrite `list-pagination.tsx` Props to make page size required.
