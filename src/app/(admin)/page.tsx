@@ -38,9 +38,9 @@ export default function AdminDashboard() {
       bg: "bg-blue-400/10",
     },
     {
-      title: "Active Users",
+      title: "Customers",
       value: data?.activeUsers ?? 0,
-      helper: "Verified customer accounts",
+      helper: "Customer accounts only",
       icon: Users,
       color: "text-purple-400",
       bg: "bg-purple-400/10",

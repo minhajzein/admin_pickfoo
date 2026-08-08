@@ -40,7 +40,9 @@ export async function fetchDashboardOverview(): Promise<DashboardOverview> {
       api.get("/restaurants", {
         params: { page: 1, limit: 5, status: "pending" },
       }),
-      api.get("/users", { params: { role: "user", page: 1, limit: 1 } }),
+      api.get("/users", {
+        params: { role: "user", customersOnly: true, page: 1, limit: 1 },
+      }),
       fetchPartners({ page: 1, limit: 100 }),
       api.get<{ data?: AdminMonitorEvent[] }>("/monitor/events?limit=120"),
       fetchDispatchOrders({ page: 1, limit: 300 }),
