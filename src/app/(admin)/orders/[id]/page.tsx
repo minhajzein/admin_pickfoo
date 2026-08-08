@@ -22,6 +22,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  cancelSourceLabel,
   fetchDispatchOrder,
   isPaidAwaitingPrep,
   type AdminOrderDetail,
@@ -188,6 +189,7 @@ export default function OrderDetailPage() {
     createdAt: order.createdAt || new Date().toISOString(),
   });
   const title = order.pickfooId || order.id;
+  const cancelSource = cancelSourceLabel(order);
 
   return (
     <div className="space-y-6">
@@ -208,13 +210,20 @@ export default function OrderDetailPage() {
               {order.restaurant.name || "Restaurant"} · {formatDate(order.createdAt)}
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Badge variant="outline" className="border-white/10 text-white/80">
               {order.orderType}
             </Badge>
-            <Badge variant="outline" className="border-white/10 text-white/80">
-              {order.status}
-            </Badge>
+            <div className="flex flex-col gap-0.5">
+              <Badge variant="outline" className="border-white/10 text-white/80">
+                {order.status}
+              </Badge>
+              {cancelSource ? (
+                <span className="pl-0.5 text-[11px] font-medium text-red-300/90">
+                  {cancelSource}
+                </span>
+              ) : null}
+            </div>
             {order.paymentStatus ? (
               <Badge
                 variant="outline"
@@ -521,6 +530,9 @@ export default function OrderDetailPage() {
                   </a>
                 }
               />
+            ) : null}
+            {cancelSource ? (
+              <DetailRow label="Canceled by" value={cancelSource} />
             ) : null}
             {order.rejectionReason ? (
               <DetailRow label="Rejection" value={order.rejectionReason} />

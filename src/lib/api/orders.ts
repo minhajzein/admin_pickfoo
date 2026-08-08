@@ -26,6 +26,8 @@ export interface AdminOrderRow {
   deliveryPartnerName?: string | null;
   deliveryPartnerPhone?: string | null;
   assignmentVersion?: number | null;
+  rejectionReason?: string | null;
+  rejectionCode?: string | null;
   createdAt: string;
 }
 
@@ -231,4 +233,50 @@ function isPaidAwaitingPrep(row: AdminOrderRow): boolean {
   return row.paymentStatus === "paid" && row.status === "confirmed";
 }
 
-export { canRedispatchPickupOrder, isPaidAwaitingPrep };
+/**
+ * Who ended a rejected/cancelled request — shown under status in admin orders.
+ * Matches restaurant / customer app labels.
+ */
+function cancelSourceLabel(input: {
+  status?: string | null;
+  rejectionCode?: string | null;
+  rejectionReason?: string | null;
+}): string | null {
+  const status = (input.status ?? "").trim().toLowerCase();
+  if (status !== "rejected" && status !== "cancelled") return null;
+
+  const code = (input.rejectionCode ?? "").trim().toLowerCase();
+  switch (code) {
+    case "customer_cancelled":
+      return "Canceled by customer";
+    case "owner_rejected":
+      return "Canceled by restaurant";
+    case "owner_not_responding":
+      return "No response from restaurant";
+    case "restaurant_closed":
+    case "owner_unavailable":
+    case "restaurant_not_accepting":
+    case "item_not_active":
+      return "Canceled by restaurant";
+    default:
+      break;
+  }
+
+  const reason = (input.rejectionReason ?? "").toLowerCase();
+  if (
+    reason.includes("canceled by customer") ||
+    reason.includes("cancelled by customer") ||
+    reason.includes("request canceled by customer")
+  ) {
+    return "Canceled by customer";
+  }
+  if (reason.includes("not responding")) {
+    return "No response from restaurant";
+  }
+  if ((input.rejectionReason ?? "").trim() || status === "rejected") {
+    return "Canceled by restaurant";
+  }
+  return null;
+}
+
+export { canRedispatchPickupOrder, isPaidAwaitingPrep, cancelSourceLabel };

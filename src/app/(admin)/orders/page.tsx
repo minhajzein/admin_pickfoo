@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/table";
 import {
   canRedispatchPickupOrder,
+  cancelSourceLabel,
   fetchDispatchOrders,
   isPaidAwaitingPrep,
   redispatchOrder,
@@ -438,6 +439,7 @@ export default function OrdersPage() {
                   const showRedispatch = canRedispatchPickupOrder(row);
                   const isRedispatching = redispatchingRef === orderRef;
                   const awaitingPrep = isPaidAwaitingPrep(row);
+                  const cancelSource = cancelSourceLabel(row);
 
                   return (
                     <TableRow
@@ -485,6 +487,11 @@ export default function OrdersPage() {
                       <TableCell className="text-white/80">
                         <div className="flex flex-col gap-0.5">
                           <span>{row.status}</span>
+                          {cancelSource ? (
+                            <span className="text-[11px] font-medium text-red-300/90">
+                              {cancelSource}
+                            </span>
+                          ) : null}
                           {row.paymentStatus ? (
                             <span
                               className={
