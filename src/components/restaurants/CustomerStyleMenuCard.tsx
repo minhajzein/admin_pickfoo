@@ -1,7 +1,7 @@
 "use client";
 
 import NextImage from "next/image";
-import { Clock, Edit2, ImageIcon, Star, Trash2 } from "lucide-react";
+import { Clock, Edit2, ImageIcon, Loader2, Star, Trash2 } from "lucide-react";
 import type { AdminMenuItem } from "@/lib/api/menu";
 
 function displayPrice(item: AdminMenuItem) {
@@ -25,11 +25,15 @@ export function CustomerStyleMenuCard({
   restaurantName,
   onEdit,
   onDelete,
+  onToggleActive,
+  isTogglingActive = false,
 }: {
   item: AdminMenuItem;
   restaurantName?: string;
   onEdit?: () => void;
   onDelete?: () => void;
+  onToggleActive?: (next: boolean) => void;
+  isTogglingActive?: boolean;
 }) {
   const prep = item.preparationTime ?? 0;
   const rating = ratingLabel(item);
@@ -163,6 +167,33 @@ export function CustomerStyleMenuCard({
             )}
           </div>
         </div>
+
+        {onToggleActive && (
+          <div className="mt-2 flex items-center justify-between gap-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">
+              Status
+            </span>
+            <button
+              type="button"
+              disabled={isTogglingActive}
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleActive(!item.isActive);
+              }}
+              className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide transition-colors disabled:opacity-60 ${
+                item.isActive
+                  ? "bg-[#98E32F] text-[#013644]"
+                  : "bg-neutral-200 text-neutral-600"
+              }`}
+              title={item.isActive ? "Set inactive" : "Set active"}
+            >
+              {isTogglingActive ? (
+                <Loader2 size={12} className="animate-spin" />
+              ) : null}
+              {item.isActive ? "Active" : "Off"}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

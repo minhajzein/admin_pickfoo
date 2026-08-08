@@ -337,6 +337,55 @@ export function RestaurantMenuPanel({
     },
   });
 
+  const toggleActiveMutation = useMutation({
+    mutationFn: ({
+      itemId,
+      isActive,
+    }: {
+      itemId: string;
+      isActive: boolean;
+    }) => updateRestaurantMenuItem(restaurantId, itemId, { isActive }),
+    onMutate: async ({ itemId, isActive }) => {
+      await queryClient.cancelQueries({
+        queryKey: ["restaurant-menu", restaurantId],
+      });
+      const previous = queryClient.getQueryData<AdminMenuItem[]>([
+        "restaurant-menu",
+        restaurantId,
+      ]);
+      queryClient.setQueryData<AdminMenuItem[]>(
+        ["restaurant-menu", restaurantId],
+        (current) =>
+          (current ?? []).map((item) =>
+            item._id === itemId ? { ...item, isActive } : item,
+          ),
+      );
+      return { previous };
+    },
+    onSuccess: (_data, variables) => {
+      toast.success(
+        variables.isActive ? "Menu item activated" : "Menu item set to off",
+      );
+    },
+    onError: (err: unknown, _variables, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(
+          ["restaurant-menu", restaurantId],
+          context.previous,
+        );
+      }
+      const msg =
+        err && typeof err === "object" && "response" in err
+          ? (err as { response?: { data?: { message?: string } } }).response?.data
+              ?.message
+          : undefined;
+      toast.error(msg || "Failed to update menu status");
+    },
+    onSettled: () => {
+      invalidateMenu();
+    },
+  });
+
   const deleteCategoryMutation = useMutation({
     mutationFn: (categoryId: string) => deleteCategory(categoryId),
     onSuccess: () => {
@@ -804,6 +853,16 @@ export function RestaurantMenuPanel({
                   id: item._id,
                   name: item.name,
                 })
+              }
+              onToggleActive={(next) =>
+                toggleActiveMutation.mutate({
+                  itemId: item._id,
+                  isActive: next,
+                })
+              }
+              isTogglingActive={
+                toggleActiveMutation.isPending &&
+                toggleActiveMutation.variables?.itemId === item._id
               }
             />
           ))}
