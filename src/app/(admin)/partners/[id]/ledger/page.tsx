@@ -329,10 +329,39 @@ export default function PartnerLedgerPage() {
               {inr(summary.withdrawalsByStatus.paid?.total ?? 0)}
             </p>
             <p className="text-[11px] text-white/35 mt-2">
-              Open {inr(summary.openWithdrawalHold)}
+              Open {inr(summary.openWithdrawalHold)} ·{" "}
+              {(summary.withdrawalsByStatus.pending?.count ?? 0) +
+                (summary.withdrawalsByStatus.approved?.count ?? 0)}{" "}
+              pending/approved
             </p>
           </CardContent>
         </Card>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {(
+          [
+            ["Pending", summary.withdrawalsByStatus.pending],
+            ["Approved", summary.withdrawalsByStatus.approved],
+            ["Paid", summary.withdrawalsByStatus.paid],
+            ["Rejected", summary.withdrawalsByStatus.rejected],
+          ] as const
+        ).map(([label, row]) => (
+          <div
+            key={label}
+            className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3"
+          >
+            <p className="text-[10px] uppercase tracking-wider text-white/35 font-bold">
+              {label} withdrawals
+            </p>
+            <p className="text-lg font-semibold mt-1">
+              {row?.count ?? 0}{" "}
+              <span className="text-sm text-white/40 font-normal">
+                · {inr(row?.total ?? 0)}
+              </span>
+            </p>
+          </div>
+        ))}
       </div>
 
       <div className="flex gap-2 border-b border-white/10">
@@ -420,6 +449,7 @@ export default function PartnerLedgerPage() {
                     <TableHead className="text-white/40 text-right">
                       Amount
                     </TableHead>
+                    <TableHead className="text-white/40">Status</TableHead>
                     <TableHead className="text-white/40">Notes</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -460,6 +490,13 @@ export default function PartnerLedgerPage() {
                       >
                         {tx.direction === "credit" ? "+" : "−"}
                         {inr(tx.amount)}
+                      </TableCell>
+                      <TableCell>
+                        {tx.withdrawalStatus ? (
+                          statusBadge(tx.withdrawalStatus)
+                        ) : (
+                          <span className="text-xs text-white/25">—</span>
+                        )}
                       </TableCell>
                       <TableCell className="max-w-[200px] truncate text-xs text-white/40">
                         {tx.meta?.note || "—"}

@@ -451,7 +451,7 @@ export default function RestaurantLedgerPage() {
                 />
               </div>
               <div className="flex gap-2 flex-wrap">
-                {(["all", "credit", "debit"] as const).map((t) => (
+                {(["all", "credit", "debit", "payout"] as const).map((t) => (
                   <Button
                     key={t}
                     type="button"
@@ -468,7 +468,9 @@ export default function RestaurantLedgerPage() {
                       ? "All"
                       : t === "credit"
                         ? "Credited"
-                        : "Debited"}
+                        : t === "debit"
+                          ? "Debited"
+                          : "Withdrawals"}
                   </Button>
                 ))}
               </div>
@@ -538,7 +540,13 @@ export default function RestaurantLedgerPage() {
                       <TableCell className="text-right font-semibold">
                         {inr(tx.amount)}
                       </TableCell>
-                      <TableCell>{statusBadge(tx.status)}</TableCell>
+                      <TableCell>
+                        {statusBadge(
+                          (tx.displayStatus ||
+                            tx.withdrawalStatus ||
+                            tx.status) as string,
+                        )}
+                      </TableCell>
                       <TableCell className="max-w-[220px] truncate text-xs text-white/40">
                         {tx.notes || "—"}
                       </TableCell>

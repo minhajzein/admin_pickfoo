@@ -45,6 +45,8 @@ export interface PartnerLedgerEntry {
   orderId?: string;
   withdrawalId?: string;
   pickfooId?: string;
+  /** Exact linked withdrawal status when present. */
+  withdrawalStatus?: string | null;
   meta?: {
     deliveryFee?: number;
     tipAmount?: number;

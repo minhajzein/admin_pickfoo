@@ -7,7 +7,10 @@ export type LedgerTxStatus =
   | "success"
   | "failed"
   | "refunded"
-  | "captured";
+  | "captured"
+  | "approved"
+  | "paid"
+  | "rejected";
 
 export interface RestaurantLedgerSummary {
   restaurant: {
@@ -56,6 +59,9 @@ export interface RestaurantLedgerTransaction {
   grossAmount?: number | null;
   foodAmount?: number | null;
   packingAmount?: number | null;
+  /** Linked withdrawal lifecycle status for payout rows. */
+  withdrawalStatus?: WithdrawalStatus | string | null;
+  displayStatus?: string | null;
   order?: {
     _id: string;
     pickfooId?: string;
