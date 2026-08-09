@@ -288,7 +288,7 @@ export default function AdminLayout({
     { name: "Monitor", icon: Activity, href: "/monitor" },
     { name: "Users", icon: Users, href: "/users" },
     { name: "Orders", icon: ClipboardList, href: "/orders" },
-    { name: "Company income", icon: Wallet, href: "/revenue" },
+    { name: "Platform ledger", icon: Wallet, href: "/revenue" },
     { name: "Withdrawals", icon: Banknote, href: "/withdrawals" },
     {
       name: "Partner payouts",
