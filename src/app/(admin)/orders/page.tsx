@@ -72,6 +72,27 @@ function formatMoney(value?: number | null): string {
   return money.format(value);
 }
 
+function partnerProgressLabel(progress?: string | null): string | null {
+  const raw = progress?.trim();
+  if (!raw) return null;
+  switch (raw) {
+    case "pending_accept":
+      return "Awaiting accept";
+    case "accepted":
+      return "Accepted";
+    case "arrived_at_restaurant":
+      return "At restaurant";
+    case "picked_up":
+      return "Picked up";
+    case "arrived":
+      return "Arrived at customer";
+    case "delivered":
+      return "Delivered";
+    default:
+      return raw.replace(/_/g, " ");
+  }
+}
+
 function redispatchReasonLabel(reason?: string): string {
   switch (reason) {
     case "not_pickup":
@@ -413,22 +434,21 @@ export default function OrdersPage() {
                 <TableHead className="text-white/60">Type</TableHead>
                 <TableHead className="text-white/60">Status</TableHead>
                 <TableHead className="text-white/60">Amounts</TableHead>
-                <TableHead className="text-white/60">Assigned partner</TableHead>
-                <TableHead className="text-white/60">Partner progress</TableHead>
+                <TableHead className="text-white/60">Partner</TableHead>
                 <TableHead className="text-white/60">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="py-10 text-center">
+                  <TableCell colSpan={7} className="py-10 text-center">
                     <Loader2 className="mx-auto h-6 w-6 animate-spin text-[#98E32F]" />
                   </TableCell>
                 </TableRow>
               ) : rows.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={8}
+                    colSpan={7}
                     className="py-10 text-center text-white/40"
                   >
                     No order activity events found.
@@ -441,6 +461,11 @@ export default function OrdersPage() {
                   const isRedispatching = redispatchingRef === orderRef;
                   const awaitingPrep = isPaidAwaitingPrep(row);
                   const cancelSource = cancelSourceLabel(row);
+                  const partnerName =
+                    row.deliveryPartnerName || row.assignedPartner || null;
+                  const progressLabel = partnerProgressLabel(
+                    row.partnerDeliveryProgress,
+                  );
 
                   return (
                     <TableRow
@@ -509,13 +534,32 @@ export default function OrdersPage() {
                       <TableCell>
                         <AmountBreakdown row={row} />
                       </TableCell>
-                      <TableCell className="text-white/50">
-                        {row.deliveryPartnerName ||
-                          row.assignedPartner ||
-                          "Unassigned"}
-                      </TableCell>
-                      <TableCell className="text-white/50">
-                        {row.partnerDeliveryProgress || "—"}
+                      <TableCell>
+                        <div className="flex min-w-[9rem] flex-col gap-0.5">
+                          <span
+                            className={
+                              partnerName
+                                ? "text-sm text-white/85"
+                                : "text-sm text-white/40"
+                            }
+                          >
+                            {partnerName || "Unassigned"}
+                          </span>
+                          {row.deliveryPartnerPhone ? (
+                            <span className="text-[11px] text-white/40">
+                              {row.deliveryPartnerPhone}
+                            </span>
+                          ) : null}
+                          {progressLabel ? (
+                            <span className="text-[11px] font-medium text-[#98E32F]/90">
+                              {progressLabel}
+                            </span>
+                          ) : partnerName ? (
+                            <span className="text-[11px] text-white/35">
+                              No progress yet
+                            </span>
+                          ) : null}
+                        </div>
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-wrap items-center gap-2">
