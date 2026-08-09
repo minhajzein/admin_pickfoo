@@ -1,4 +1,4 @@
-import api from "@/lib/axios";
+import api, { getApiErrorMessage } from "@/lib/axios";
 import type { Restaurant } from "@/types/models";
 
 export async function updateRestaurantZone(
@@ -59,27 +59,23 @@ export async function uploadRestaurantImage(
   const form = new FormData();
   form.append("file", file);
   form.append("folder", folder);
-  const { data } = await api.post<{
-    success: boolean;
-    data?: { fileUrl?: string; staticUrl?: string };
-    message?: string;
-  }>("/restaurants/upload", form, {
-    timeout: 120_000,
-    transformRequest: [
-      (body, headers) => {
-        if (body instanceof FormData) {
-          delete headers["Content-Type"];
-        }
-        return body;
-      },
-    ],
-  });
-  if (!data.success || !(data.data?.staticUrl || data.data?.fileUrl)) {
-    throw new Error(data.message || "Upload failed");
+  try {
+    const { data } = await api.post<{
+      success: boolean;
+      data?: { fileUrl?: string; staticUrl?: string };
+      message?: string;
+    }>("/restaurants/upload", form, {
+      timeout: 120_000,
+    });
+    if (!data.success || !(data.data?.staticUrl || data.data?.fileUrl)) {
+      throw new Error(data.message || "Upload failed");
+    }
+    const staticUrl = data.data.staticUrl ?? data.data.fileUrl!;
+    return {
+      fileUrl: data.data.fileUrl || staticUrl,
+      staticUrl,
+    };
+  } catch (err) {
+    throw new Error(getApiErrorMessage(err, "Upload failed"));
   }
-  const staticUrl = data.data.staticUrl ?? data.data.fileUrl!;
-  return {
-    fileUrl: data.data.fileUrl || staticUrl,
-    staticUrl,
-  };
 }

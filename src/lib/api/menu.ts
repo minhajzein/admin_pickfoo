@@ -1,4 +1,4 @@
-import api from "@/lib/axios";
+import api, { getApiErrorMessage } from "@/lib/axios";
 
 export interface AdminMenuVariant {
   name: string;
@@ -132,23 +132,19 @@ export async function uploadMenuImage(
   const form = new FormData();
   form.append("file", file);
   form.append("folder", folder);
-  const { data } = await api.post<{
-    success: boolean;
-    data?: { fileUrl?: string; staticUrl?: string };
-    message?: string;
-  }>("/menu/upload", form, {
-    timeout: 120_000,
-    transformRequest: [
-      (body, headers) => {
-        if (body instanceof FormData) {
-          delete headers["Content-Type"];
-        }
-        return body;
-      },
-    ],
-  });
-  if (!data.success || !(data.data?.staticUrl || data.data?.fileUrl)) {
-    throw new Error(data.message || "Upload failed");
+  try {
+    const { data } = await api.post<{
+      success: boolean;
+      data?: { fileUrl?: string; staticUrl?: string };
+      message?: string;
+    }>("/menu/upload", form, {
+      timeout: 120_000,
+    });
+    if (!data.success || !(data.data?.staticUrl || data.data?.fileUrl)) {
+      throw new Error(data.message || "Upload failed");
+    }
+    return data.data.staticUrl ?? data.data.fileUrl!;
+  } catch (err) {
+    throw new Error(getApiErrorMessage(err, "Upload failed"));
   }
-  return data.data.staticUrl ?? data.data.fileUrl!;
 }

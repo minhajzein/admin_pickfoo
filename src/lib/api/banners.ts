@@ -1,5 +1,5 @@
 import axios from "axios";
-import api from "@/lib/axios";
+import api, { getApiErrorMessage } from "@/lib/axios";
 import { uploadSupportMedia } from "@/lib/api/support";
 import {
   DEFAULT_PAGE_SIZE,
@@ -131,15 +131,6 @@ async function postMultipartUpload(url: string, file: File): Promise<UploadPaylo
     message?: string;
   }>(url, form, {
     timeout: 120_000,
-    // Let axios set multipart boundary — manual Content-Type breaks multer parsing.
-    transformRequest: [
-      (body, headers) => {
-        if (body instanceof FormData) {
-          delete headers["Content-Type"];
-        }
-        return body;
-      },
-    ],
   });
   if (!data.success || !data.data?.staticUrl) {
     throw new Error(data.message || "Upload failed");
@@ -166,20 +157,12 @@ export async function uploadBannerImage(file: File): Promise<UploadPayload> {
       }
       throw new Error("Only image files are allowed for banners");
     }
-    if (axios.isAxiosError(error)) {
-      if (error.response?.status === 413) {
-        throw new Error(
-          "Image file is too large for the server (max 50 MB). Ask ops to set nginx client_max_body_size to 50m and redeploy admin-api.",
-        );
-      }
-      const msg =
-        typeof error.response?.data?.message === "string"
-          ? error.response.data.message
-          : error.message;
-      throw new Error(msg || "Upload failed");
+    if (axios.isAxiosError(error) && error.response?.status === 413) {
+      throw new Error(
+        "Image file is too large for the server (max 50 MB). Ask ops to set nginx client_max_body_size to 50m and redeploy admin-api.",
+      );
     }
-    if (error instanceof Error) throw error;
-    throw new Error("Upload failed");
+    throw new Error(getApiErrorMessage(error, "Upload failed"));
   }
 }
 

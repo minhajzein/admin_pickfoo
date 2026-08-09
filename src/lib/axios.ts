@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 
 const defaultBase =
   process.env.NODE_ENV === 'production'
@@ -9,9 +9,8 @@ const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL || defaultBase,
   withCredentials: true,
   timeout: 10000,
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  // Intentionally no global Content-Type. A default of application/json makes
+  // Axios JSON-serialize FormData, so multer never sees "file" and returns 400.
 });
 
 api.interceptors.request.use(
@@ -23,6 +22,12 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+
+    if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
+      // Omit Content-Type so the browser sets multipart/form-data + boundary.
+      config.headers.set('Content-Type', false);
+    }
+
     return config;
   },
   (error) => Promise.reject(error),
@@ -45,5 +50,19 @@ api.interceptors.response.use(
     return Promise.reject(error);
   },
 );
+
+export function getApiErrorMessage(
+  err: unknown,
+  fallback = 'Request failed',
+): string {
+  if (axios.isAxiosError(err)) {
+    const ax = err as AxiosError<{ message?: string }>;
+    const msg = ax.response?.data?.message;
+    if (typeof msg === 'string' && msg.trim()) return msg;
+    return ax.message || fallback;
+  }
+  if (err instanceof Error && err.message) return err.message;
+  return fallback;
+}
 
 export default api;

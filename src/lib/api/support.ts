@@ -1,5 +1,4 @@
-import api from '../axios';
-import type { AxiosError } from 'axios';
+import api, { getApiErrorMessage } from '../axios';
 import {
   DEFAULT_PAGE_SIZE,
   parsePaginatedResponse,
@@ -51,11 +50,6 @@ export interface SupportMediaUpload {
   fileType?: string;
 }
 
-function apiErrorMessage(err: unknown, fallback: string): string {
-  const ax = err as AxiosError<{ message?: string }>;
-  return ax.response?.data?.message || ax.message || fallback;
-}
-
 export async function fetchSupportThreads(params?: {
   page?: number;
   limit?: number;
@@ -102,32 +96,28 @@ export async function fetchSupportThread(partnerId: string): Promise<{
 export async function uploadSupportMedia(file: File): Promise<SupportMediaUpload> {
   const form = new FormData();
   form.append('file', file);
-  const { data } = await api.post<{
-    success: boolean;
-    data?: SupportMediaUpload & { fileType?: string };
-    message?: string;
-  }>('/support/upload', form, {
-    timeout: 120000,
-    transformRequest: [
-      (body, headers) => {
-        if (body instanceof FormData) {
-          delete headers['Content-Type'];
-        }
-        return body;
-      },
-    ],
-  });
-  if (!data.success || !data.data?.staticUrl) {
-    throw new Error(data.message || 'Failed to upload file');
+  try {
+    const { data } = await api.post<{
+      success: boolean;
+      data?: SupportMediaUpload & { fileType?: string };
+      message?: string;
+    }>('/support/upload', form, {
+      timeout: 120000,
+    });
+    if (!data.success || !data.data?.staticUrl) {
+      throw new Error(data.message || 'Failed to upload file');
+    }
+    return {
+      staticUrl: data.data.staticUrl,
+      fileUrl: data.data.fileUrl,
+      messageType: (data.data.messageType as SupportMessageType) || 'image',
+      fileName: data.data.fileName,
+      fileSize: data.data.fileSize,
+      fileType: data.data.fileType,
+    };
+  } catch (err) {
+    throw new Error(getApiErrorMessage(err, 'Failed to upload file'));
   }
-  return {
-    staticUrl: data.data.staticUrl,
-    fileUrl: data.data.fileUrl,
-    messageType: (data.data.messageType as SupportMessageType) || 'image',
-    fileName: data.data.fileName,
-    fileSize: data.data.fileSize,
-    fileType: data.data.fileType,
-  };
 }
 
 export interface SendSupportMessageInput {
@@ -155,7 +145,7 @@ export async function sendSupportMessage(
     }
     return data.data;
   } catch (err) {
-    throw new Error(apiErrorMessage(err, 'Failed to send message'));
+    throw new Error(getApiErrorMessage(err, 'Failed to send message'));
   }
 }
 
