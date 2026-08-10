@@ -627,6 +627,7 @@ export default function RevenuePage() {
 
           <ListPagination
             page={page}
+            limit={DEFAULT_PAGE_SIZE}
             total={total}
             totalPages={totalPages}
             onPageChange={setPage}
