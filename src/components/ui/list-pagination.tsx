@@ -7,22 +7,33 @@ import { DEFAULT_PAGE_SIZE, pageRangeLabel } from "@/lib/pagination";
 import { cn } from "@/lib/utils";
 
 /**
- * Page size (`limit` / `pageSize`) is OPTIONAL and defaults to DEFAULT_PAGE_SIZE.
- * Do not make it required — admin list pages often omit it and rely on the default.
+ * Shared admin list footer.
+ *
+ * `limit` / `pageSize` are ALWAYS optional and default to DEFAULT_PAGE_SIZE.
+ * Do not make them required — call sites (and future pages) often omit them.
  */
 export type ListPaginationProps = {
   page: number;
   total: number;
   onPageChange: (page: number) => void;
-  /** Page size for the range label. Defaults to DEFAULT_PAGE_SIZE. */
-  pageSize?: number;
-  /** Alias of pageSize (kept for existing call sites). Defaults to DEFAULT_PAGE_SIZE. */
-  limit?: number;
-  totalPages?: number;
-  className?: string;
+  /**
+   * Page size for the "Showing X–Y" label.
+   * Optional — defaults to DEFAULT_PAGE_SIZE when omitted.
+   */
+  pageSize?: number | undefined;
+  /**
+   * Alias of `pageSize` (legacy call sites).
+   * Optional — defaults to DEFAULT_PAGE_SIZE when omitted.
+   */
+  limit?: number | undefined;
+  totalPages?: number | undefined;
+  className?: string | undefined;
   /** Compact footer for dense tables */
-  dense?: boolean;
+  dense?: boolean | undefined;
 };
+
+/** @deprecated Prefer ListPaginationProps — kept so older imports/types stay optional. */
+export type Props = ListPaginationProps;
 
 export function ListPagination({
   page,
@@ -107,14 +118,31 @@ export function ListPagination({
 }
 
 /**
- * Compile-time lock: if `limit` or `pageSize` is ever made required again,
- * this assignment fails and the admin build breaks immediately — not only on
- * pages that forgot to pass the prop.
+ * Compile-time lock: `limit` and `pageSize` must remain optional.
+ * If either is made required, this file fails typecheck during `next build`.
  */
-type _PageSizeOptional = undefined extends ListPaginationProps["limit"]
-  ? undefined extends ListPaginationProps["pageSize"]
-    ? true
-    : never
+type AssertOptional<T, K extends keyof T> = undefined extends T[K]
+  ? true
   : never;
-const _pageSizeMustStayOptional: _PageSizeOptional = true;
-void _pageSizeMustStayOptional;
+
+const _limitOptional: AssertOptional<ListPaginationProps, "limit"> = true;
+const _pageSizeOptional: AssertOptional<ListPaginationProps, "pageSize"> = true;
+const _propsAliasOptional: AssertOptional<Props, "limit"> = true;
+
+/** Usage without `limit` must remain assignable (mirrors partner-incentives / list pages). */
+const _usageWithoutLimit: ListPaginationProps = {
+  page: 1,
+  total: 0,
+  onPageChange: () => {},
+};
+const _usageWithoutLimitViaPropsAlias: Props = {
+  page: 1,
+  total: 0,
+  onPageChange: () => {},
+};
+
+void _limitOptional;
+void _pageSizeOptional;
+void _propsAliasOptional;
+void _usageWithoutLimit;
+void _usageWithoutLimitViaPropsAlias;

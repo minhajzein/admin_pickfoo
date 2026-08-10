@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev --webpack -p 3000",
     "build:geo": "node scripts/build-wayanad-geo.mjs",
+    "typecheck": "tsc --noEmit",
     "build": "next build --webpack",
     "start": "next start -p 3000",
     "lint": "eslint"
