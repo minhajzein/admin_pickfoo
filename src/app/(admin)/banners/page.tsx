@@ -1,6 +1,14 @@
 "use client";
 
-import { memo, useCallback, useMemo, useRef, useState } from "react";
+import {
+  memo,
+  startTransition,
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import dynamic from "next/dynamic";
 import axios from "axios";
 import {
   keepPreviousData,
@@ -27,9 +35,25 @@ import {
   type AdminHomeBanner,
   type HomeBannerLinkType,
 } from "@/lib/api/banners";
-import { BannerEditorCard } from "@/components/banners/BannerEditorCard";
 import { ListPagination } from "@/components/ui/list-pagination";
 import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
+
+const BannerEditorCard = dynamic(
+  () =>
+    import("@/components/banners/BannerEditorCard").then(
+      (m) => m.BannerEditorCard,
+    ),
+  {
+    ssr: false,
+    loading: () => (
+      <Card className="bg-[#002833] border-white/10 ring-1 ring-[#98E32F]/30">
+        <CardContent className="flex justify-center py-10">
+          <Loader2 className="h-8 w-8 animate-spin text-[#98E32F]" />
+        </CardContent>
+      </Card>
+    ),
+  },
+);
 
 const linkTypeLabels: Record<HomeBannerLinkType, string> = {
   none: "No link",
@@ -275,7 +299,9 @@ export default function BannersPage() {
   );
 
   const openCreate = useCallback(() => {
-    setEditor({ mode: "create" });
+    startTransition(() => {
+      setEditor({ mode: "create" });
+    });
   }, []);
 
   const startEdit = useCallback((banner: AdminHomeBanner) => {
@@ -284,13 +310,22 @@ export default function BannersPage() {
       toast.error("This banner has no id — refresh the list and try again.");
       return;
     }
-    setEditor({ mode: "edit", id, banner });
+    // Defer heavy editor mount so the Edit click doesn't block paint.
+    startTransition(() => {
+      setEditor({ mode: "edit", id, banner });
+    });
   }, []);
 
-  const closeEditor = useCallback(() => setEditor(null), []);
+  const closeEditor = useCallback(() => {
+    startTransition(() => setEditor(null));
+  }, []);
 
   const handleDelete = useCallback((id: string) => {
     deleteMutateRef.current(id);
+  }, []);
+
+  const handlePageChange = useCallback((next: number) => {
+    startTransition(() => setPage(next));
   }, []);
 
   const editingId = editor?.mode === "edit" ? editor.id : null;
@@ -356,7 +391,7 @@ export default function BannersPage() {
         totalPages={totalPages}
         deletePending={deleteMutation.isPending}
         showForm={showForm}
-        onPageChange={setPage}
+        onPageChange={handlePageChange}
         onCreate={openCreate}
         onEdit={startEdit}
         onDelete={handleDelete}

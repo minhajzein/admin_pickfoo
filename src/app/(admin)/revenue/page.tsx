@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { startTransition, useMemo, useState, type ReactNode } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import {
@@ -27,6 +27,7 @@ import { ListPagination } from "@/components/ui/list-pagination";
 import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import {
   fetchPlatformLedger,
+  fetchPlatformWallet,
   type PlatformLedgerEntry,
   type PlatformLedgerKind,
 } from "@/lib/api/platform-ledger";
@@ -244,7 +245,7 @@ export default function RevenuePage() {
   const [preset, setPreset] = useState<DatePreset>("today");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
-  const [kind, setKind] = useState<PlatformLedgerKind>("all");
+  const [kind, setKind] = useState<PlatformLedgerKind>("commission");
 
   const dateRange = useMemo(() => {
     if (preset === "custom") {
@@ -267,6 +268,37 @@ export default function RevenuePage() {
     return PRESETS.find((p) => p.id === preset)?.label ?? "Period";
   }, [preset, customFrom, customTo]);
 
+  // Heavy wallet aggregates — independent of date/kind filters so clicks stay snappy.
+  const {
+    data: wallet,
+    isLoading: isWalletLoading,
+    isFetching: isWalletFetching,
+  } = useQuery({
+    queryKey: ["platform-ledger-wallet"],
+    queryFn: fetchPlatformWallet,
+    staleTime: 60_000,
+    refetchInterval: 60_000,
+  });
+
+  // All-time commission — changes rarely; keep off the filter click path.
+  const { data: allTimeData, isLoading: isAllTimeLoading } = useQuery({
+    queryKey: ["platform-ledger-all-time"],
+    queryFn: () =>
+      fetchPlatformLedger({
+        page: 1,
+        limit: 1,
+        kind: "commission",
+        includeWallet: false,
+        includeAllTime: true,
+        includeFilteredCommission: false,
+      }),
+    staleTime: 120_000,
+    select: (res) => res.summary.allTime,
+  });
+
+  const needsPeriodCommission =
+    kind === "commission" || kind === "all" || preset !== "all";
+
   const { data, isLoading, isFetching } = useQuery({
     queryKey: ["platform-ledger", page, dateRange.from, dateRange.to, kind],
     queryFn: () =>
@@ -276,34 +308,45 @@ export default function RevenuePage() {
         from: dateRange.from,
         to: dateRange.to,
         kind,
+        includeWallet: false,
+        includeAllTime: false,
+        includeFilteredCommission: needsPeriodCommission,
       }),
-    refetchInterval: 30000,
+    refetchInterval: 30_000,
     placeholderData: keepPreviousData,
   });
 
   const filtered = data?.summary.filtered;
-  const allTime = data?.summary.allTime;
-  const wallet = data?.summary.wallet;
+  const allTime = allTimeData;
   const rows = data?.data ?? [];
   const total = data?.total ?? 0;
   const totalPages = data?.totalPages ?? 1;
+  const showListFetching = isFetching && !isLoading;
 
   const selectPreset = (next: DatePreset) => {
-    setPreset(next);
-    setPage(1);
-    if (next !== "custom") {
-      setCustomFrom("");
-      setCustomTo("");
-    } else if (!customFrom && !customTo) {
-      const today = toYmd(startOfLocalDay(new Date()));
-      setCustomFrom(today);
-      setCustomTo(today);
-    }
+    startTransition(() => {
+      setPreset(next);
+      setPage(1);
+      if (next !== "custom") {
+        setCustomFrom("");
+        setCustomTo("");
+      } else if (!customFrom && !customTo) {
+        const today = toYmd(startOfLocalDay(new Date()));
+        setCustomFrom(today);
+        setCustomTo(today);
+      }
+    });
   };
 
   const selectKind = (next: PlatformLedgerKind) => {
-    setKind(next);
-    setPage(1);
+    startTransition(() => {
+      setKind(next);
+      setPage(1);
+    });
+  };
+
+  const onPageChange = (next: number) => {
+    startTransition(() => setPage(next));
   };
 
   return (
@@ -316,7 +359,7 @@ export default function RevenuePage() {
             partner payouts — with wallet available and payout pending.
           </p>
         </div>
-        {isFetching && !isLoading ? (
+        {showListFetching || isWalletFetching ? (
           <Loader2 className="h-4 w-4 animate-spin text-[#98E32F]" />
         ) : null}
       </div>
@@ -329,7 +372,7 @@ export default function RevenuePage() {
               Available in wallet
             </p>
             <p className="mt-2 text-3xl font-black">
-              {isLoading ? (
+              {isWalletLoading ? (
                 <Loader2 className="h-7 w-7 animate-spin" />
               ) : (
                 formatMoney(wallet?.availableBalance)
@@ -351,7 +394,7 @@ export default function RevenuePage() {
               </p>
             </div>
             <p className="mt-2 text-2xl font-bold text-amber-200">
-              {isLoading ? (
+              {isWalletLoading ? (
                 <Loader2 className="h-6 w-6 animate-spin text-[#98E32F]" />
               ) : (
                 formatMoney(wallet?.pendingPayouts)
@@ -377,7 +420,7 @@ export default function RevenuePage() {
               </p>
             </div>
             <p className="mt-2 text-2xl font-bold">
-              {isLoading ? (
+              {isWalletLoading ? (
                 <Loader2 className="h-6 w-6 animate-spin text-[#98E32F]" />
               ) : (
                 formatMoney(wallet?.totalCredits)
@@ -399,7 +442,7 @@ export default function RevenuePage() {
               </p>
             </div>
             <p className="mt-2 text-2xl font-bold">
-              {isLoading ? (
+              {isWalletLoading ? (
                 <Loader2 className="h-6 w-6 animate-spin text-[#98E32F]" />
               ) : (
                 formatMoney(wallet?.totalDebits)
@@ -419,14 +462,14 @@ export default function RevenuePage() {
           label="Restaurant withdrawals paid"
           value={formatMoney(wallet?.restaurant.withdrawalsPaid)}
           hint={`${wallet?.restaurant.withdrawalsByStatus.paid?.count ?? 0} paid`}
-          loading={isLoading}
+          loading={isWalletLoading}
           icon={<Banknote size={14} className="text-sky-300" />}
         />
         <MiniStat
           label="Partner payouts paid"
           value={formatMoney(wallet?.partner.payoutsPaid)}
           hint={`${wallet?.partner.withdrawalsByStatus.paid?.count ?? 0} paid`}
-          loading={isLoading}
+          loading={isWalletLoading}
           icon={<Banknote size={14} className="text-violet-300" />}
         />
         <MiniStat
@@ -440,7 +483,7 @@ export default function RevenuePage() {
           label="Commission · All time"
           value={formatMoney(allTime?.totalCommission)}
           hint={`${allTime?.orderCount ?? 0} orders · avg ${formatMoney(allTime?.avgCommission)}`}
-          loading={isLoading}
+          loading={isAllTimeLoading}
           icon={<ArrowUpRight size={14} className="text-amber-300" />}
         />
       </div>
@@ -472,8 +515,11 @@ export default function RevenuePage() {
               type="date"
               value={customFrom}
               onChange={(e) => {
-                setCustomFrom(e.target.value);
-                setPage(1);
+                const value = e.target.value;
+                startTransition(() => {
+                  setCustomFrom(value);
+                  setPage(1);
+                });
               }}
               className="h-9 w-[11rem] border-white/15 bg-black/20 text-white"
             />
@@ -484,8 +530,11 @@ export default function RevenuePage() {
               type="date"
               value={customTo}
               onChange={(e) => {
-                setCustomTo(e.target.value);
-                setPage(1);
+                const value = e.target.value;
+                startTransition(() => {
+                  setCustomTo(value);
+                  setPage(1);
+                });
               }}
               className="h-9 w-[11rem] border-white/15 bg-black/20 text-white"
             />
@@ -630,7 +679,7 @@ export default function RevenuePage() {
             limit={DEFAULT_PAGE_SIZE}
             total={total}
             totalPages={totalPages}
-            onPageChange={setPage}
+            onPageChange={onPageChange}
           />
         </CardContent>
       </Card>

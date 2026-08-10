@@ -77,7 +77,7 @@ export interface PlatformLedgerResponse {
     to: string | null;
     filtered: PlatformLedgerTotals;
     allTime: PlatformLedgerTotals;
-    wallet: PlatformWalletSummary;
+    wallet: PlatformWalletSummary | null;
   };
   kind: PlatformLedgerKind;
   data: PlatformLedgerEntry[];
@@ -141,6 +141,24 @@ function mapWalletSide(raw: unknown): PlatformWalletSide {
   };
 }
 
+function mapWallet(raw: unknown): PlatformWalletSummary {
+  if (!raw || typeof raw !== "object") return emptyWallet();
+  const walletRaw = raw as Record<string, unknown>;
+  return {
+    availableBalance: Number(walletRaw.availableBalance) || 0,
+    pendingPayouts: Number(walletRaw.pendingPayouts) || 0,
+    totalCredits: Number(walletRaw.totalCredits) || 0,
+    totalDebits: Number(walletRaw.totalDebits) || 0,
+    restaurant: mapWalletSide(walletRaw.restaurant),
+    partner: mapWalletSide(walletRaw.partner),
+  };
+}
+
+export async function fetchPlatformWallet(): Promise<PlatformWalletSummary> {
+  const { data } = await api.get(`/platform-ledger/wallet`);
+  return mapWallet(data.wallet);
+}
+
 export async function fetchPlatformLedger(params?: {
   page?: number;
   limit?: number;
@@ -149,6 +167,9 @@ export async function fetchPlatformLedger(params?: {
   /** YYYY-MM-DD or ISO */
   to?: string;
   kind?: PlatformLedgerKind;
+  includeWallet?: boolean;
+  includeAllTime?: boolean;
+  includeFilteredCommission?: boolean;
 }): Promise<PlatformLedgerResponse> {
   const { data } = await api.get(`/platform-ledger`, {
     params: {
@@ -157,6 +178,9 @@ export async function fetchPlatformLedger(params?: {
       from: params?.from || undefined,
       to: params?.to || undefined,
       kind: params?.kind || "all",
+      includeWallet: params?.includeWallet ?? false,
+      includeAllTime: params?.includeAllTime ?? false,
+      includeFilteredCommission: params?.includeFilteredCommission ?? true,
     },
   });
 
@@ -181,16 +205,7 @@ export async function fetchPlatformLedger(params?: {
         orderCount: Number(allTime.orderCount) || 0,
         avgCommission: Number(allTime.avgCommission) || 0,
       },
-      wallet: walletRaw
-        ? {
-            availableBalance: Number(walletRaw.availableBalance) || 0,
-            pendingPayouts: Number(walletRaw.pendingPayouts) || 0,
-            totalCredits: Number(walletRaw.totalCredits) || 0,
-            totalDebits: Number(walletRaw.totalDebits) || 0,
-            restaurant: mapWalletSide(walletRaw.restaurant),
-            partner: mapWalletSide(walletRaw.partner),
-          }
-        : emptyWallet(),
+      wallet: walletRaw ? mapWallet(walletRaw) : null,
     },
     kind: (data.kind as PlatformLedgerKind) || params?.kind || "all",
     data: data.data ?? [],
