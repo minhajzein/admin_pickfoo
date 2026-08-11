@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useState } from "react";
+import {
+  startTransition,
+  useEffect,
+  useLayoutEffect,
+  useState,
+  type ComponentType,
+} from "react";
 import Image from "next/image";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuthStore } from "@/store/useAuthStore";
@@ -31,6 +37,31 @@ import { io } from "socket.io-client";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
 
+const NAV_ITEMS: Array<{
+  name: string;
+  href: string;
+  icon: ComponentType<{ size?: number; className?: string }>;
+}> = [
+  { name: "Dashboard", icon: LayoutDashboard, href: "/" },
+  { name: "Restaurants", icon: Store, href: "/restaurants" },
+  { name: "Banners", icon: ImageIcon, href: "/banners" },
+  { name: "Zones", icon: MapPinned, href: "/zones" },
+  { name: "Live map", icon: Map, href: "/map" },
+  { name: "Partners", icon: Bike, href: "/partners" },
+  { name: "Support", icon: Headset, href: "/support" },
+  { name: "Partner updates", icon: Bell, href: "/partner-updates" },
+  { name: "Partner incentives", icon: Gift, href: "/partner-incentives" },
+  { name: "Delivery charges", icon: IndianRupee, href: "/delivery-charges" },
+  { name: "Gigs", icon: ClipboardList, href: "/gigs" },
+  { name: "Monitor", icon: Activity, href: "/monitor" },
+  { name: "Users", icon: Users, href: "/users" },
+  { name: "Orders", icon: ClipboardList, href: "/orders" },
+  { name: "Platform ledger", icon: Wallet, href: "/revenue" },
+  { name: "Withdrawals", icon: Banknote, href: "/withdrawals" },
+  { name: "Partner payouts", icon: Banknote, href: "/partner-withdrawals" },
+  { name: "Reviews", icon: Star, href: "/reviews" },
+];
+
 export default function AdminLayout({
   children,
 }: {
@@ -42,6 +73,18 @@ export default function AdminLayout({
   const pathname = usePathname();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  const closeMobileMenu = () => {
+    startTransition(() => setIsMobileMenuOpen(false));
+  };
+
+  const openMobileMenu = () => {
+    startTransition(() => setIsMobileMenuOpen(true));
+  };
+
+  const toggleSidebar = () => {
+    startTransition(() => setIsSidebarOpen((open) => !open));
+  };
 
   useEffect(() => {
     if (!isInitialized) {
@@ -57,7 +100,9 @@ export default function AdminLayout({
   }, [isInitialized, isAuthenticated, user, router]);
 
   useEffect(() => {
-    const timer = setTimeout(() => setIsMobileMenuOpen(false), 0);
+    const timer = setTimeout(() => {
+      startTransition(() => setIsMobileMenuOpen(false));
+    }, 0);
     return () => clearTimeout(timer);
   }, [pathname]);
 
@@ -269,34 +314,8 @@ export default function AdminLayout({
     );
   }
 
-  const navItems = [
-    { name: "Dashboard", icon: LayoutDashboard, href: "/" },
-    { name: "Restaurants", icon: Store, href: "/restaurants" },
-    { name: "Banners", icon: ImageIcon, href: "/banners" },
-    { name: "Zones", icon: MapPinned, href: "/zones" },
-    { name: "Live map", icon: Map, href: "/map" },
-    { name: "Partners", icon: Bike, href: "/partners" },
-    { name: "Support", icon: Headset, href: "/support" },
-    { name: "Partner updates", icon: Bell, href: "/partner-updates" },
-    { name: "Partner incentives", icon: Gift, href: "/partner-incentives" },
-    {
-      name: "Delivery charges",
-      icon: IndianRupee,
-      href: "/delivery-charges",
-    },
-    { name: "Gigs", icon: ClipboardList, href: "/gigs" },
-    { name: "Monitor", icon: Activity, href: "/monitor" },
-    { name: "Users", icon: Users, href: "/users" },
-    { name: "Orders", icon: ClipboardList, href: "/orders" },
-    { name: "Platform ledger", icon: Wallet, href: "/revenue" },
-    { name: "Withdrawals", icon: Banknote, href: "/withdrawals" },
-    {
-      name: "Partner payouts",
-      icon: Banknote,
-      href: "/partner-withdrawals",
-    },
-    { name: "Reviews", icon: Star, href: "/reviews" },
-  ];
+  const pageTitle =
+    NAV_ITEMS.find((item) => item.href === pathname)?.name || "Admin Panel";
 
   return (
     <div className="h-dvh bg-[#013644] text-white flex overflow-hidden dark">
@@ -305,7 +324,7 @@ export default function AdminLayout({
       {isMobileMenuOpen && (
         <div
           className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden"
-          onClick={() => setIsMobileMenuOpen(false)}
+          onClick={closeMobileMenu}
         />
       )}
 
@@ -358,7 +377,8 @@ export default function AdminLayout({
           {/* Mobile close button */}
           {isMobileMenuOpen && (
             <button
-              onClick={() => setIsMobileMenuOpen(false)}
+              type="button"
+              onClick={closeMobileMenu}
               className="lg:hidden p-2 absolute right-6 hover:bg-white/5 rounded-lg text-[#98E32F]"
             >
               <X size={20} />
@@ -367,12 +387,14 @@ export default function AdminLayout({
         </div>
 
         <nav className="flex-1 px-4 space-y-2 py-4 overflow-y-auto">
-          {navItems.map((item) => {
+          {NAV_ITEMS.map((item) => {
             const isActive = pathname === item.href;
             return (
               <Link
                 key={item.name}
                 href={item.href}
+                prefetch
+                onClick={closeMobileMenu}
                 className={`flex items-center p-3 rounded-xl transition-all duration-300 group relative ${
                   isActive
                     ? "bg-[#98E32F] text-[#013644] shadow-[0_0_20px_rgba(152,227,47,0.2)]"
@@ -403,7 +425,8 @@ export default function AdminLayout({
 
         <div className="p-4 border-t border-white/5">
           <button
-            onClick={() => logout()}
+            type="button"
+            onClick={() => startTransition(() => logout())}
             className="w-full flex items-center p-3 rounded-xl hover:bg-red-500/10 text-red-400 transition-all duration-300"
           >
             <div
@@ -429,21 +452,22 @@ export default function AdminLayout({
         <header className="h-16 border-b border-white/5 bg-[#013644]/50 backdrop-blur-md sticky top-0 z-10 px-4 sm:px-8 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button
-              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              type="button"
+              onClick={toggleSidebar}
               className="hidden lg:flex p-2 -ml-2 hover:bg-white/5 rounded-lg text-[#98E32F]"
             >
               <MenuIcon size={24} />
             </button>
 
             <button
-              onClick={() => setIsMobileMenuOpen(true)}
+              type="button"
+              onClick={openMobileMenu}
               className="lg:hidden p-2 -ml-2 hover:bg-white/5 rounded-lg text-[#98E32F]"
             >
               <MenuIcon size={24} />
             </button>
             <h1 className="text-lg sm:text-xl font-semibold truncate">
-              {navItems.find((item) => item.href === pathname)?.name ||
-                "Admin Panel"}
+              {pageTitle}
             </h1>
           </div>
 

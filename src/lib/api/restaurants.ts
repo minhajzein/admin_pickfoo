@@ -47,6 +47,17 @@ export async function updateRestaurantProfile(
   return data.data;
 }
 
+export async function updateRestaurantAvailability(
+  restaurantId: string,
+  payload: { isOpen: boolean } | { resetOverride: true },
+): Promise<Restaurant> {
+  const { data } = await api.patch(
+    `/restaurants/${restaurantId}/availability`,
+    payload,
+  );
+  return data.data;
+}
+
 export type RestaurantImageUpload = {
   fileUrl: string;
   staticUrl: string;

@@ -46,14 +46,18 @@ import {
   UtensilsCrossed,
   Wallet,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, startTransition } from "react";
 import { toast } from "sonner";
 import Link from "next/link";
 import { ShieldCheck } from "lucide-react";
 import { fetchZones } from "@/lib/api/zones";
-import { updateRestaurantZone } from "@/lib/api/restaurants";
+import {
+  updateRestaurantAvailability,
+  updateRestaurantZone,
+} from "@/lib/api/restaurants";
 import { ListPagination } from "@/components/ui/list-pagination";
 import { DEFAULT_PAGE_SIZE, parsePaginatedResponse } from "@/lib/pagination";
+import { cn } from "@/lib/utils";
 
 interface Restaurant {
   _id: string;
@@ -168,6 +172,32 @@ export default function RestaurantsPage() {
     },
   });
 
+  const availabilityMutation = useMutation({
+    mutationFn: async ({
+      id,
+      action,
+    }: {
+      id: string;
+      action: { isOpen: boolean } | { resetOverride: true };
+    }) => updateRestaurantAvailability(id, action),
+    onSuccess: (_data, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["restaurants"] });
+      if ("resetOverride" in vars.action) {
+        toast.success("Returned to schedule");
+      } else {
+        toast.success(
+          vars.action.isOpen ? "Restaurant marked open" : "Restaurant marked closed",
+        );
+      }
+    },
+    onError: () => toast.error("Failed to update shop status"),
+  });
+
+  const pendingAvailabilityId =
+    availabilityMutation.isPending && availabilityMutation.variables
+      ? availabilityMutation.variables.id
+      : null;
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "active":
@@ -195,7 +225,7 @@ export default function RestaurantsPage() {
     }
   };
 
-  const getShopOpenBadge = (restaurant: Restaurant) => {
+  const renderShopControls = (restaurant: Restaurant) => {
     if (restaurant.status !== "active") {
       return (
         <Badge variant="outline" className="border-white/10 text-white/35">
@@ -203,30 +233,76 @@ export default function RestaurantsPage() {
         </Badge>
       );
     }
-    if (restaurant.isOpen) {
-      return (
-        <div className="flex flex-col gap-0.5">
-          <Badge className="bg-[#98E32F] text-[#013644] hover:bg-[#98E32F]/90">
-            Open
-          </Badge>
-          {restaurant.isManualOverride ? (
-            <span className="text-[10px] text-white/40">Manual</span>
-          ) : null}
-        </div>
-      );
-    }
+
+    const busy = pendingAvailabilityId === restaurant._id;
+    const isOpen = Boolean(restaurant.isOpen);
+
     return (
-      <div className="flex flex-col gap-0.5">
-        <Badge variant="outline" className="border-red-400/40 text-red-300">
-          Closed
-        </Badge>
+      <div className="flex flex-col gap-1.5 min-w-[7.5rem]">
+        <div className="flex items-center gap-1 rounded-md border border-white/10 bg-black/20 p-0.5">
+          <button
+            type="button"
+            disabled={busy || isOpen}
+            onClick={() => {
+              startTransition(() => {
+                availabilityMutation.mutate({
+                  id: restaurant._id,
+                  action: { isOpen: true },
+                });
+              });
+            }}
+            className={cn(
+              "flex-1 rounded px-2 py-1 text-[11px] font-semibold transition-colors disabled:opacity-50",
+              isOpen
+                ? "bg-[#98E32F] text-[#013644]"
+                : "text-white/55 hover:bg-white/5 hover:text-white",
+            )}
+          >
+            Open
+          </button>
+          <button
+            type="button"
+            disabled={busy || !isOpen}
+            onClick={() => {
+              startTransition(() => {
+                availabilityMutation.mutate({
+                  id: restaurant._id,
+                  action: { isOpen: false },
+                });
+              });
+            }}
+            className={cn(
+              "flex-1 rounded px-2 py-1 text-[11px] font-semibold transition-colors disabled:opacity-50",
+              !isOpen
+                ? "bg-red-500/90 text-white"
+                : "text-white/55 hover:bg-white/5 hover:text-white",
+            )}
+          >
+            Close
+          </button>
+        </div>
         {restaurant.isManualOverride ? (
-          <span className="text-[10px] text-white/40">Manual</span>
-        ) : null}
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              startTransition(() => {
+                availabilityMutation.mutate({
+                  id: restaurant._id,
+                  action: { resetOverride: true },
+                });
+              });
+            }}
+            className="text-left text-[10px] text-[#98E32F]/80 hover:text-[#98E32F] hover:underline disabled:opacity-50"
+          >
+            Manual · use schedule
+          </button>
+        ) : (
+          <span className="text-[10px] text-white/35">Schedule</span>
+        )}
       </div>
     );
   };
-
   const liveLabel = dataUpdatedAt
     ? new Date(dataUpdatedAt).toLocaleTimeString()
     : null;
@@ -355,7 +431,7 @@ export default function RestaurantsPage() {
                           )}
                       </div>
                     </TableCell>
-                    <TableCell>{getShopOpenBadge(restaurant)}</TableCell>
+                    <TableCell>{renderShopControls(restaurant)}</TableCell>
                     <TableCell>{getStatusBadge(restaurant.status)}</TableCell>
                     <TableCell className="text-white/40 font-mono text-xs">
                       {new Date(restaurant.createdAt).toLocaleDateString()}

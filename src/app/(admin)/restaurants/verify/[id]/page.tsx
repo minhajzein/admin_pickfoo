@@ -30,18 +30,20 @@ import {
   Percent,
   Wallet,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, startTransition } from "react";
 import { toast } from "sonner";
 import Link from "next/link";
 import NextImage from "next/image";
 import { fetchZones, suggestZoneForPoint } from "@/lib/api/zones";
 import {
+  updateRestaurantAvailability,
   updateRestaurantCommission,
   updateRestaurantPayoutMode,
   updateRestaurantZone,
 } from "@/lib/api/restaurants";
 import { RestaurantMessageThread } from "@/components/restaurants/RestaurantMessageThread";
 import { RestaurantProfileEditor } from "@/components/restaurants/RestaurantProfileEditor";
+import { cn } from "@/lib/utils";
 
 function zoneIdFromRestaurant(restaurant: { zone?: unknown } | null | undefined) {
   if (!restaurant) return "";
@@ -246,6 +248,24 @@ export default function VerifyRestaurantPage() {
     },
   });
 
+  const availabilityMutation = useMutation({
+    mutationFn: (
+      action: { isOpen: boolean } | { resetOverride: true },
+    ) => updateRestaurantAvailability(String(id), action),
+    onSuccess: (_data, action) => {
+      queryClient.invalidateQueries({ queryKey: ["restaurant", id] });
+      queryClient.invalidateQueries({ queryKey: ["restaurants"] });
+      if ("resetOverride" in action) {
+        toast.success("Returned to schedule");
+      } else {
+        toast.success(
+          action.isOpen ? "Restaurant marked open" : "Restaurant marked closed",
+        );
+      }
+    },
+    onError: () => toast.error("Failed to update shop status"),
+  });
+
   if (isLoading) {
     return (
       <div className="h-[60vh] flex flex-col items-center justify-center gap-4 text-white/40">
@@ -306,11 +326,73 @@ export default function VerifyRestaurantPage() {
             </p>
           </div>
         </div>
-        <Link href={`/restaurants/${id}/ledger`}>
-          <Button className="bg-[#98E32F] text-[#013644] hover:brightness-110 font-bold">
-            <Wallet className="mr-2 h-4 w-4" /> Ledger & payments
-          </Button>
-        </Link>
+        <div className="flex flex-wrap items-center gap-3">
+          {restaurant.status === "active" ? (
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-1 rounded-md border border-white/10 bg-black/20 p-0.5">
+                <button
+                  type="button"
+                  disabled={
+                    availabilityMutation.isPending || Boolean(restaurant.isOpen)
+                  }
+                  onClick={() => {
+                    startTransition(() => {
+                      availabilityMutation.mutate({ isOpen: true });
+                    });
+                  }}
+                  className={cn(
+                    "rounded px-3 py-1.5 text-xs font-bold transition-colors disabled:opacity-50",
+                    restaurant.isOpen
+                      ? "bg-[#98E32F] text-[#013644]"
+                      : "text-white/60 hover:bg-white/5 hover:text-white",
+                  )}
+                >
+                  Open
+                </button>
+                <button
+                  type="button"
+                  disabled={
+                    availabilityMutation.isPending || !restaurant.isOpen
+                  }
+                  onClick={() => {
+                    startTransition(() => {
+                      availabilityMutation.mutate({ isOpen: false });
+                    });
+                  }}
+                  className={cn(
+                    "rounded px-3 py-1.5 text-xs font-bold transition-colors disabled:opacity-50",
+                    !restaurant.isOpen
+                      ? "bg-red-500/90 text-white"
+                      : "text-white/60 hover:bg-white/5 hover:text-white",
+                  )}
+                >
+                  Close
+                </button>
+              </div>
+              {restaurant.isManualOverride ? (
+                <button
+                  type="button"
+                  disabled={availabilityMutation.isPending}
+                  onClick={() => {
+                    startTransition(() => {
+                      availabilityMutation.mutate({ resetOverride: true });
+                    });
+                  }}
+                  className="text-left text-[10px] text-[#98E32F]/80 hover:text-[#98E32F] hover:underline disabled:opacity-50"
+                >
+                  Manual · use schedule
+                </button>
+              ) : (
+                <span className="text-[10px] text-white/35">On schedule</span>
+              )}
+            </div>
+          ) : null}
+          <Link href={`/restaurants/${id}/ledger`}>
+            <Button className="bg-[#98E32F] text-[#013644] hover:brightness-110 font-bold">
+              <Wallet className="mr-2 h-4 w-4" /> Ledger & payments
+            </Button>
+          </Link>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
