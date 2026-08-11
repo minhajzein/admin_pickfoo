@@ -9,6 +9,7 @@ import {
   Banknote,
   Clock,
   Loader2,
+  Percent,
   Wallet,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -137,10 +138,58 @@ function formatMoney(value?: number | null) {
 }
 
 function entryAmount(row: PlatformLedgerEntry): number {
-  if (row.kind === "commission" || row.platformCommission != null) {
-    return Number(row.platformCommission ?? row.amount) || 0;
+  // Prefer full transaction total; fall back to amount / rebuilt parts.
+  const total = Number(row.totalAmount);
+  if (Number.isFinite(total) && total > 0) return total;
+  const amount = Number(row.amount);
+  if (Number.isFinite(amount) && amount > 0) {
+    // Older API returned commission in `amount` — if platformCommission matches, rebuild.
+    const commission = Number(row.platformCommission);
+    if (
+      Number.isFinite(commission) &&
+      Math.abs(amount - commission) < 0.005
+    ) {
+      const rebuilt =
+        (Number(row.itemTotal) || 0) +
+        (Number(row.packingTotal) || 0) +
+        (Number(row.deliveryFee) || 0) +
+        (Number(row.tipAmount) || 0) +
+        (Number(row.gstAmount) || 0);
+      if (rebuilt > 0) return rebuilt;
+    }
+    return amount;
   }
-  return Number(row.amount) || 0;
+  return (
+    (Number(row.itemTotal) || 0) +
+    (Number(row.packingTotal) || 0) +
+    (Number(row.deliveryFee) || 0) +
+    (Number(row.tipAmount) || 0) +
+    (Number(row.gstAmount) || 0)
+  );
+}
+
+function entryCommission(row: PlatformLedgerEntry): number | null {
+  if (entryKind(row) !== "commission") return null;
+  const c = Number(row.platformCommission);
+  if (Number.isFinite(c)) return c;
+  return null;
+}
+
+function entryGst(row: PlatformLedgerEntry): number | null {
+  if (entryKind(row) !== "commission") return null;
+  const g = Number(row.gstAmount);
+  if (Number.isFinite(g) && g > 0) return g;
+  const split =
+    (Number(row.sgstAmount) || 0) + (Number(row.cgstAmount) || 0);
+  if (split > 0) return split;
+  return 0;
+}
+
+function entryPlatformGst(row: PlatformLedgerEntry): number | null {
+  if (entryKind(row) !== "commission") return null;
+  const g = Number(row.platformGst);
+  if (Number.isFinite(g) && g > 0) return g;
+  return null;
 }
 
 function entryKind(row: PlatformLedgerEntry): Exclude<PlatformLedgerKind, "all"> {
@@ -457,7 +506,7 @@ export default function RevenuePage() {
         </Card>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
         <MiniStat
           label="Restaurant withdrawals paid"
           value={formatMoney(wallet?.restaurant.withdrawalsPaid)}
@@ -480,11 +529,25 @@ export default function RevenuePage() {
           icon={<ArrowUpRight size={14} className="text-[#98E32F]" />}
         />
         <MiniStat
+          label={`GST on orders · ${periodLabel}`}
+          value={formatMoney(filtered?.totalGst)}
+          hint={`Platform retained ${formatMoney(filtered?.platformGstRetained)}`}
+          loading={isLoading}
+          icon={<Percent size={14} className="text-amber-300" />}
+        />
+        <MiniStat
           label="Commission · All time"
           value={formatMoney(allTime?.totalCommission)}
           hint={`${allTime?.orderCount ?? 0} orders · avg ${formatMoney(allTime?.avgCommission)}`}
           loading={isAllTimeLoading}
           icon={<ArrowUpRight size={14} className="text-amber-300" />}
+        />
+        <MiniStat
+          label="GST · All time"
+          value={formatMoney(allTime?.totalGst)}
+          hint={`Platform retained ${formatMoney(allTime?.platformGstRetained)}`}
+          loading={isAllTimeLoading}
+          icon={<Percent size={14} className="text-sky-300" />}
         />
       </div>
 
@@ -565,7 +628,7 @@ export default function RevenuePage() {
           <CardTitle className="text-base">
             Ledger entries
             <span className="ml-2 text-sm font-normal text-white/45">
-              {periodLabel} · credit / debit
+              {periodLabel} · full amount · GST · commission
             </span>
           </CardTitle>
         </CardHeader>
@@ -583,19 +646,25 @@ export default function RevenuePage() {
                   <TableHead className="text-right text-white/50">
                     Amount
                   </TableHead>
+                  <TableHead className="text-right text-white/50">
+                    GST
+                  </TableHead>
+                  <TableHead className="text-right text-white/50">
+                    Commission
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? (
                   <TableRow className="border-white/5 hover:bg-transparent">
-                    <TableCell colSpan={7} className="py-10 text-center">
+                    <TableCell colSpan={9} className="py-10 text-center">
                       <Loader2 className="mx-auto h-6 w-6 animate-spin text-[#98E32F]" />
                     </TableCell>
                   </TableRow>
                 ) : rows.length === 0 ? (
                   <TableRow className="border-white/5 hover:bg-transparent">
                     <TableCell
-                      colSpan={7}
+                      colSpan={9}
                       className="py-10 text-center text-white/45"
                     >
                       No ledger entries for this filter.
@@ -605,6 +674,9 @@ export default function RevenuePage() {
                   rows.map((row) => {
                     const direction = entryDirection(row);
                     const amount = entryAmount(row);
+                    const commission = entryCommission(row);
+                    const gst = entryGst(row);
+                    const platformGst = entryPlatformGst(row);
                     const kindKey = entryKind(row);
                     const href = entryHref(row);
                     const amountClass =
@@ -666,6 +738,23 @@ export default function RevenuePage() {
                           {direction === "debit" ? "−" : "+"}
                           {formatMoney(amount)}
                         </TableCell>
+                        <TableCell className="text-right text-sm tabular-nums text-sky-200/90">
+                          {gst != null ? (
+                            <div className="flex flex-col items-end gap-0.5">
+                              <span>{formatMoney(gst)}</span>
+                              {platformGst != null ? (
+                                <span className="text-[10px] text-amber-200/80">
+                                  platform {formatMoney(platformGst)}
+                                </span>
+                              ) : null}
+                            </div>
+                          ) : (
+                            "—"
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right text-sm tabular-nums text-amber-200/90">
+                          {commission != null ? formatMoney(commission) : "—"}
+                        </TableCell>
                       </TableRow>
                     );
                   })
@@ -686,8 +775,10 @@ export default function RevenuePage() {
 
       <p className="text-xs text-white/40">
         Available = restaurant + partner wallet balances still unpaid. Payout
-        pending = open restaurant withdrawals + open partner payouts.
-        Commission credits exclude cancelled/rejected orders.
+        pending = open restaurant withdrawals + open partner payouts. Amount is
+        the full customer payment (includes GST). Platform GST is retained when
+        the restaurant is not GST-registered; otherwise GST stays with the
+        restaurant. Commission is food × restaurant %.
       </p>
     </div>
   );

@@ -29,6 +29,12 @@ export interface PlatformLedgerEntry {
   itemTotal?: number;
   packingTotal?: number;
   deliveryFee?: number;
+  tipAmount?: number;
+  gstAmount?: number;
+  sgstAmount?: number;
+  cgstAmount?: number;
+  /** GST retained by platform when restaurant is not GST-registered */
+  platformGst?: number;
   totalAmount?: number | null;
   commissionPercent?: number;
   platformCommission?: number;
@@ -39,6 +45,8 @@ export interface PlatformLedgerTotals {
   totalCommission: number;
   orderCount: number;
   avgCommission: number;
+  totalGst: number;
+  platformGstRetained: number;
 }
 
 export interface WalletStatusBucket {
@@ -199,11 +207,15 @@ export async function fetchPlatformLedger(params?: {
         totalCommission: Number(filtered.totalCommission) || 0,
         orderCount: Number(filtered.orderCount) || 0,
         avgCommission: Number(filtered.avgCommission) || 0,
+        totalGst: Number(filtered.totalGst) || 0,
+        platformGstRetained: Number(filtered.platformGstRetained) || 0,
       },
       allTime: {
         totalCommission: Number(allTime.totalCommission) || 0,
         orderCount: Number(allTime.orderCount) || 0,
         avgCommission: Number(allTime.avgCommission) || 0,
+        totalGst: Number(allTime.totalGst) || 0,
+        platformGstRetained: Number(allTime.platformGstRetained) || 0,
       },
       wallet: walletRaw ? mapWallet(walletRaw) : null,
     },
