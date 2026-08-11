@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { startTransition, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
@@ -61,6 +61,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { MoreHorizontal } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 function inr(n: number | undefined | null) {
   const v = Number(n) || 0;
@@ -79,6 +80,76 @@ function formatDate(iso?: string) {
     });
   } catch {
     return iso;
+  }
+}
+
+type DatePreset =
+  | "all"
+  | "today"
+  | "yesterday"
+  | "this_week"
+  | "this_month"
+  | "this_year"
+  | "custom";
+
+const DATE_PRESETS: Array<{ id: DatePreset; label: string }> = [
+  { id: "all", label: "All time" },
+  { id: "today", label: "Today" },
+  { id: "yesterday", label: "Yesterday" },
+  { id: "this_week", label: "This week" },
+  { id: "this_month", label: "This month" },
+  { id: "this_year", label: "This year" },
+  { id: "custom", label: "Custom" },
+];
+
+function toYmd(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function startOfLocalDay(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+/** Monday as start of week (local calendar). */
+function startOfWeekMonday(d: Date): Date {
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  return startOfLocalDay(
+    new Date(d.getFullYear(), d.getMonth(), d.getDate() + diff),
+  );
+}
+
+function rangeForPreset(preset: DatePreset): { from?: string; to?: string } {
+  const now = new Date();
+  const today = startOfLocalDay(now);
+
+  switch (preset) {
+    case "all":
+      return {};
+    case "today":
+      return { from: toYmd(today), to: toYmd(today) };
+    case "yesterday": {
+      const y = new Date(today);
+      y.setDate(y.getDate() - 1);
+      return { from: toYmd(y), to: toYmd(y) };
+    }
+    case "this_week": {
+      const start = startOfWeekMonday(today);
+      return { from: toYmd(start), to: toYmd(today) };
+    }
+    case "this_month": {
+      const start = new Date(today.getFullYear(), today.getMonth(), 1);
+      return { from: toYmd(start), to: toYmd(today) };
+    }
+    case "this_year": {
+      const start = new Date(today.getFullYear(), 0, 1);
+      return { from: toYmd(start), to: toYmd(today) };
+    }
+    default:
+      return {};
   }
 }
 
@@ -132,12 +203,50 @@ export default function RestaurantLedgerPage() {
   const [txType, setTxType] = useState<LedgerTxType | "all">("all");
   const [txSearch, setTxSearch] = useState("");
   const [wdStatus, setWdStatus] = useState<WithdrawalStatus | "all">("all");
+  const [datePreset, setDatePreset] = useState<DatePreset>("all");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
   const [notesOpen, setNotesOpen] = useState(false);
   const [notes, setNotes] = useState("");
   const [pendingAction, setPendingAction] = useState<{
     id: string;
     status: WithdrawalStatus;
   } | null>(null);
+
+  const dateRange = useMemo(() => {
+    if (datePreset === "custom") {
+      return {
+        from: customFrom || undefined,
+        to: customTo || undefined,
+      };
+    }
+    return rangeForPreset(datePreset);
+  }, [datePreset, customFrom, customTo]);
+
+  const periodLabel = useMemo(() => {
+    if (datePreset === "all") return "All time";
+    if (datePreset === "custom") {
+      if (customFrom && customTo) return `${customFrom} → ${customTo}`;
+      if (customFrom) return `From ${customFrom}`;
+      if (customTo) return `Until ${customTo}`;
+      return "Custom range";
+    }
+    return DATE_PRESETS.find((p) => p.id === datePreset)?.label ?? "Period";
+  }, [datePreset, customFrom, customTo]);
+
+  const selectDatePreset = (next: DatePreset) => {
+    startTransition(() => {
+      setDatePreset(next);
+      if (next !== "custom") {
+        setCustomFrom("");
+        setCustomTo("");
+      } else if (!customFrom && !customTo) {
+        const today = toYmd(startOfLocalDay(new Date()));
+        setCustomFrom(today);
+        setCustomTo(today);
+      }
+    });
+  };
 
   const { data: restaurantMeta } = useQuery({
     queryKey: ["restaurant", restaurantId],
@@ -159,20 +268,37 @@ export default function RestaurantLedgerPage() {
   });
 
   const { data: transactions = [], isLoading: isTxLoading } = useQuery({
-    queryKey: ["restaurant-ledger-tx", restaurantId, txType, txSearch],
+    queryKey: [
+      "restaurant-ledger-tx",
+      restaurantId,
+      txType,
+      txSearch,
+      dateRange.from,
+      dateRange.to,
+    ],
     queryFn: () =>
       fetchRestaurantLedgerTransactions(restaurantId, {
         type: txType === "all" ? undefined : txType,
         search: txSearch.trim() || undefined,
+        from: dateRange.from,
+        to: dateRange.to,
       }),
     enabled: !!restaurantId && tab === "transactions",
   });
 
   const { data: withdrawals = [], isLoading: isWdLoading } = useQuery({
-    queryKey: ["restaurant-ledger-wd", restaurantId, wdStatus],
+    queryKey: [
+      "restaurant-ledger-wd",
+      restaurantId,
+      wdStatus,
+      dateRange.from,
+      dateRange.to,
+    ],
     queryFn: () =>
       fetchRestaurantLedgerWithdrawals(restaurantId, {
         status: wdStatus === "all" ? undefined : wdStatus,
+        from: dateRange.from,
+        to: dateRange.to,
       }),
     enabled: !!restaurantId && tab === "withdrawals",
   });
@@ -412,6 +538,62 @@ export default function RestaurantLedgerPage() {
         ))}
       </div>
 
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-semibold uppercase tracking-wider text-white/40">
+            Period
+          </span>
+          {DATE_PRESETS.map((p) => (
+            <Button
+              key={p.id}
+              type="button"
+              size="sm"
+              variant={datePreset === p.id ? "default" : "outline"}
+              className={cn(
+                datePreset === p.id
+                  ? "bg-[#98E32F] text-[#013644] hover:bg-[#98E32F]/90"
+                  : "border-white/15 bg-transparent text-white/80 hover:bg-white/5 hover:text-white",
+              )}
+              onClick={() => selectDatePreset(p.id)}
+            >
+              {p.label}
+            </Button>
+          ))}
+        </div>
+        {datePreset === "custom" ? (
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="space-y-1">
+              <label className="text-xs text-white/50">From</label>
+              <Input
+                type="date"
+                value={customFrom}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  startTransition(() => setCustomFrom(value));
+                }}
+                className="h-9 w-[11rem] border-white/15 bg-black/20 text-white"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-white/50">To</label>
+              <Input
+                type="date"
+                value={customTo}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  startTransition(() => setCustomTo(value));
+                }}
+                className="h-9 w-[11rem] border-white/15 bg-black/20 text-white"
+              />
+            </div>
+          </div>
+        ) : null}
+        <p className="text-xs text-white/40">
+          Filtering {tab === "transactions" ? "transactions" : "withdrawals"} ·{" "}
+          {periodLabel}
+        </p>
+      </div>
+
       <div className="flex gap-2 border-b border-white/10 pb-0">
         {(
           [
@@ -482,7 +664,7 @@ export default function RestaurantLedgerPage() {
               </div>
             ) : transactions.length === 0 ? (
               <div className="py-16 text-center text-white/35 text-sm">
-                No transactions found
+                No transactions found for {periodLabel.toLowerCase()}
               </div>
             ) : (
               <Table>
@@ -589,7 +771,7 @@ export default function RestaurantLedgerPage() {
               </div>
             ) : withdrawals.length === 0 ? (
               <div className="py-16 text-center text-white/35 text-sm">
-                No withdrawal requests
+                No withdrawal requests for {periodLabel.toLowerCase()}
               </div>
             ) : (
               <Table>

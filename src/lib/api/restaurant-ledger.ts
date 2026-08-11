@@ -86,22 +86,52 @@ export async function fetchRestaurantLedger(
 
 export async function fetchRestaurantLedgerTransactions(
   restaurantId: string,
-  params?: { type?: string; status?: string; search?: string; limit?: number },
+  params?: {
+    type?: string;
+    status?: string;
+    search?: string;
+    limit?: number;
+    /** YYYY-MM-DD or ISO */
+    from?: string;
+    /** YYYY-MM-DD or ISO */
+    to?: string;
+  },
 ): Promise<RestaurantLedgerTransaction[]> {
   const { data } = await api.get(
     `/restaurants/${restaurantId}/ledger/transactions`,
-    { params },
+    {
+      params: {
+        type: params?.type,
+        status: params?.status,
+        search: params?.search,
+        limit: params?.limit,
+        from: params?.from || undefined,
+        to: params?.to || undefined,
+      },
+    },
   );
   return data.data ?? [];
 }
 
 export async function fetchRestaurantLedgerWithdrawals(
   restaurantId: string,
-  params?: { status?: string },
+  params?: {
+    status?: string;
+    /** YYYY-MM-DD or ISO */
+    from?: string;
+    /** YYYY-MM-DD or ISO */
+    to?: string;
+  },
 ): Promise<AdminWithdrawal[]> {
   const { data } = await api.get(
     `/restaurants/${restaurantId}/ledger/withdrawals`,
-    { params },
+    {
+      params: {
+        status: params?.status,
+        from: params?.from || undefined,
+        to: params?.to || undefined,
+      },
+    },
   );
   return data.data ?? [];
 }

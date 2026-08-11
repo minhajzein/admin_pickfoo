@@ -43,6 +43,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { ListPagination } from "@/components/ui/list-pagination";
 import { DEFAULT_PAGE_SIZE, parsePaginatedResponse } from "@/lib/pagination";
+import { cn } from "@/lib/utils";
 
 const money = new Intl.NumberFormat("en-IN", {
   style: "currency",
@@ -64,8 +65,78 @@ const STATUS_FILTERS: Array<{ label: string; value: string }> = [
   { label: "Rejected", value: "rejected" },
 ];
 
+type DatePreset =
+  | "all"
+  | "today"
+  | "yesterday"
+  | "this_week"
+  | "this_month"
+  | "this_year"
+  | "custom";
+
+const DATE_PRESETS: Array<{ id: DatePreset; label: string }> = [
+  { id: "all", label: "All time" },
+  { id: "today", label: "Today" },
+  { id: "yesterday", label: "Yesterday" },
+  { id: "this_week", label: "This week" },
+  { id: "this_month", label: "This month" },
+  { id: "this_year", label: "This year" },
+  { id: "custom", label: "Custom" },
+];
+
 const selectClassName =
   "h-9 w-full rounded-md border border-white/15 bg-black/20 px-3 text-sm text-white outline-none focus-visible:border-[#98E32F]/50";
+
+function toYmd(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function startOfLocalDay(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+/** Monday as start of week (local calendar). */
+function startOfWeekMonday(d: Date): Date {
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  return startOfLocalDay(
+    new Date(d.getFullYear(), d.getMonth(), d.getDate() + diff),
+  );
+}
+
+function rangeForPreset(preset: DatePreset): { from?: string; to?: string } {
+  const now = new Date();
+  const today = startOfLocalDay(now);
+
+  switch (preset) {
+    case "all":
+      return {};
+    case "today":
+      return { from: toYmd(today), to: toYmd(today) };
+    case "yesterday": {
+      const y = new Date(today);
+      y.setDate(y.getDate() - 1);
+      return { from: toYmd(y), to: toYmd(y) };
+    }
+    case "this_week": {
+      const start = startOfWeekMonday(today);
+      return { from: toYmd(start), to: toYmd(today) };
+    }
+    case "this_month": {
+      const start = new Date(today.getFullYear(), today.getMonth(), 1);
+      return { from: toYmd(start), to: toYmd(today) };
+    }
+    case "this_year": {
+      const start = new Date(today.getFullYear(), 0, 1);
+      return { from: toYmd(start), to: toYmd(today) };
+    }
+    default:
+      return {};
+  }
+}
 
 function formatMoney(value?: number | null): string {
   if (value == null || !Number.isFinite(value)) return "—";
@@ -150,33 +221,73 @@ export default function OrdersPage() {
   const [status, setStatus] = useState("");
   const [restaurantId, setRestaurantId] = useState("");
   const [partnerId, setPartnerId] = useState("");
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
+  const [datePreset, setDatePreset] = useState<DatePreset>("all");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
   const [redispatchingRef, setRedispatchingRef] = useState<string | null>(null);
   const [confirmRow, setConfirmRow] = useState<AdminOrderRow | null>(null);
+
+  const dateRange = useMemo(() => {
+    if (datePreset === "custom") {
+      return {
+        from: customFrom || undefined,
+        to: customTo || undefined,
+      };
+    }
+    return rangeForPreset(datePreset);
+  }, [datePreset, customFrom, customTo]);
+
+  const periodLabel = useMemo(() => {
+    if (datePreset === "all") return "All time";
+    if (datePreset === "custom") {
+      if (customFrom && customTo) return `${customFrom} → ${customTo}`;
+      if (customFrom) return `From ${customFrom}`;
+      if (customTo) return `Until ${customTo}`;
+      return "Custom range";
+    }
+    return DATE_PRESETS.find((p) => p.id === datePreset)?.label ?? "Period";
+  }, [datePreset, customFrom, customTo]);
 
   const filters = useMemo(
     () => ({
       status: status || undefined,
       restaurantId: restaurantId || undefined,
       partnerId: partnerId || undefined,
-      from: from || undefined,
-      to: to || undefined,
+      from: dateRange.from,
+      to: dateRange.to,
     }),
-    [status, restaurantId, partnerId, from, to],
+    [status, restaurantId, partnerId, dateRange.from, dateRange.to],
   );
 
   const hasFilters = Boolean(
-    status || restaurantId || partnerId || from || to,
+    status || restaurantId || partnerId || dateRange.from || dateRange.to,
   );
 
   const clearFilters = () => {
-    setStatus("");
-    setRestaurantId("");
-    setPartnerId("");
-    setFrom("");
-    setTo("");
-    setPage(1);
+    startTransition(() => {
+      setStatus("");
+      setRestaurantId("");
+      setPartnerId("");
+      setDatePreset("all");
+      setCustomFrom("");
+      setCustomTo("");
+      setPage(1);
+    });
+  };
+
+  const selectDatePreset = (next: DatePreset) => {
+    startTransition(() => {
+      setDatePreset(next);
+      setPage(1);
+      if (next !== "custom") {
+        setCustomFrom("");
+        setCustomTo("");
+      } else if (!customFrom && !customTo) {
+        const today = toYmd(startOfLocalDay(new Date()));
+        setCustomFrom(today);
+        setCustomTo(today);
+      }
+    });
   };
 
   const { data: restaurants = [] } = useQuery({
@@ -309,113 +420,151 @@ export default function OrdersPage() {
       </div>
 
       <Card className="border-white/5 bg-[#002833] text-white">
-        <CardContent className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-          <div className="space-y-1.5">
+        <CardContent className="space-y-4 p-4">
+          <div className="space-y-2">
             <label className="text-[10px] font-bold uppercase tracking-widest text-white/40">
-              Status
+              Period
             </label>
-            <select
-              className={selectClassName}
-              value={status}
-              onChange={(e) => {
-                setStatus(e.target.value);
-                setPage(1);
-              }}
-            >
-              {STATUS_FILTERS.map((opt) => (
-                <option key={opt.value || "all"} value={opt.value}>
-                  {opt.label}
-                </option>
+            <div className="flex flex-wrap gap-2">
+              {DATE_PRESETS.map((p) => (
+                <Button
+                  key={p.id}
+                  type="button"
+                  size="sm"
+                  variant={datePreset === p.id ? "default" : "outline"}
+                  className={cn(
+                    datePreset === p.id
+                      ? "bg-[#98E32F] text-[#013644] hover:bg-[#98E32F]/90"
+                      : "border-white/15 bg-transparent text-white/80 hover:bg-white/5 hover:text-white",
+                  )}
+                  onClick={() => selectDatePreset(p.id)}
+                >
+                  {p.label}
+                </Button>
               ))}
-            </select>
+            </div>
+            {datePreset === "custom" ? (
+              <div className="flex flex-wrap items-end gap-3 pt-1">
+                <div className="space-y-1">
+                  <label className="text-xs text-white/50">From</label>
+                  <Input
+                    type="date"
+                    value={customFrom}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      startTransition(() => {
+                        setCustomFrom(value);
+                        setPage(1);
+                      });
+                    }}
+                    className="h-9 w-[11rem] border-white/15 bg-black/20 text-white"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-white/50">To</label>
+                  <Input
+                    type="date"
+                    value={customTo}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      startTransition(() => {
+                        setCustomTo(value);
+                        setPage(1);
+                      });
+                    }}
+                    className="h-9 w-[11rem] border-white/15 bg-black/20 text-white"
+                  />
+                </div>
+              </div>
+            ) : null}
+            <p className="text-xs text-white/40">Showing · {periodLabel}</p>
           </div>
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-bold uppercase tracking-widest text-white/40">
-              Restaurant
-            </label>
-            <select
-              className={selectClassName}
-              value={restaurantId}
-              onChange={(e) => {
-                setRestaurantId(e.target.value);
-                setPage(1);
-              }}
-            >
-              <option value="">All restaurants</option>
-              {restaurants.map((r) => (
-                <option key={String(r._id)} value={String(r._id)}>
-                  {r.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-bold uppercase tracking-widest text-white/40">
-              Partner
-            </label>
-            <select
-              className={selectClassName}
-              value={partnerId}
-              onChange={(e) => {
-                setPartnerId(e.target.value);
-                setPage(1);
-              }}
-            >
-              <option value="">All partners</option>
-              {partners.map((p: Partner) => (
-                <option key={String(p._id)} value={String(p._id)}>
-                  {p.fullName}
-                  {p.phone ? ` · ${p.phone}` : ""}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-bold uppercase tracking-widest text-white/40">
-              From
-            </label>
-            <Input
-              type="date"
-              value={from}
-              onChange={(e) => {
-                setFrom(e.target.value);
-                setPage(1);
-              }}
-              className="border-white/15 bg-black/20 text-white"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-bold uppercase tracking-widest text-white/40">
-              To
-            </label>
-            <Input
-              type="date"
-              value={to}
-              onChange={(e) => {
-                setTo(e.target.value);
-                setPage(1);
-              }}
-              className="border-white/15 bg-black/20 text-white"
-            />
-          </div>
-          <div className="flex items-end">
-            <Button
-              type="button"
-              variant="outline"
-              disabled={!hasFilters}
-              onClick={clearFilters}
-              className="w-full border-white/15 text-white/70 disabled:opacity-40"
-            >
-              <X className="mr-1.5 h-4 w-4" />
-              Clear
-            </Button>
+
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold uppercase tracking-widest text-white/40">
+                Status
+              </label>
+              <select
+                className={selectClassName}
+                value={status}
+                onChange={(e) => {
+                  setStatus(e.target.value);
+                  setPage(1);
+                }}
+              >
+                {STATUS_FILTERS.map((opt) => (
+                  <option key={opt.value || "all"} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold uppercase tracking-widest text-white/40">
+                Restaurant
+              </label>
+              <select
+                className={selectClassName}
+                value={restaurantId}
+                onChange={(e) => {
+                  setRestaurantId(e.target.value);
+                  setPage(1);
+                }}
+              >
+                <option value="">All restaurants</option>
+                {restaurants.map((r) => (
+                  <option key={String(r._id)} value={String(r._id)}>
+                    {r.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold uppercase tracking-widest text-white/40">
+                Partner
+              </label>
+              <select
+                className={selectClassName}
+                value={partnerId}
+                onChange={(e) => {
+                  setPartnerId(e.target.value);
+                  setPage(1);
+                }}
+              >
+                <option value="">All partners</option>
+                {partners.map((p: Partner) => (
+                  <option key={String(p._id)} value={String(p._id)}>
+                    {p.fullName}
+                    {p.phone ? ` · ${p.phone}` : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex items-end">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={!hasFilters}
+                onClick={clearFilters}
+                className="w-full border-white/15 text-white/70 disabled:opacity-40"
+              >
+                <X className="mr-1.5 h-4 w-4" />
+                Clear
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
 
       <Card className="overflow-hidden border-white/5 bg-[#002833] text-white">
         <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
-          <CardTitle className="text-base">Recent orders</CardTitle>
+          <CardTitle className="text-base">
+            Orders
+            <span className="ml-2 text-sm font-normal text-white/45">
+              {periodLabel}
+            </span>
+          </CardTitle>
           {awaitingPrepCount > 0 ? (
             <Badge
               variant="outline"
