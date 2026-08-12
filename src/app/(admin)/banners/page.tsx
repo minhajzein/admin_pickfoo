@@ -27,6 +27,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -155,15 +156,7 @@ const BannerRow = memo(function BannerRow({
             variant="outline"
             className="text-red-400 hover:text-red-300"
             disabled={deletePending}
-            onClick={() => {
-              if (
-                confirm(
-                  `Delete banner "${banner.title?.trim() || "this banner"}"?`,
-                )
-              ) {
-                onDelete(banner.id);
-              }
-            }}
+            onClick={() => onDelete(banner.id)}
             aria-label={`Delete ${banner.title?.trim() || "banner"}`}
           >
             <Trash2 className="h-4 w-4" />
@@ -355,6 +348,10 @@ export default function BannersPage() {
   const [page, setPage] = useState(1);
   const [editor, setEditor] = useState<EditorState | null>(null);
   const [editorBusy, setEditorBusy] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{
+    id: string;
+    title: string;
+  } | null>(null);
   const [, startUiTransition] = useTransition();
   const deleteMutateRef = useRef<(id: string) => void>(() => {});
   const bannersByIdRef = useRef<Map<string, AdminHomeBanner>>(new Map());
@@ -374,11 +371,14 @@ export default function BannersPage() {
   const deleteMutation = useMutation({
     mutationFn: deleteBanner,
     onSuccess: (_data, deletedId) => {
-      queryClient.invalidateQueries({ queryKey: ["admin-banners"] });
+      // Defer cache work so the confirm click paints first.
+      startTransition(() => {
+        queryClient.invalidateQueries({ queryKey: ["admin-banners"] });
+        setEditor((cur) =>
+          cur?.mode === "edit" && cur.id === deletedId ? null : cur,
+        );
+      });
       toast.success("Banner deleted");
-      setEditor((cur) =>
-        cur?.mode === "edit" && cur.id === deletedId ? null : cur,
-      );
     },
     onError: (error: unknown) => {
       const message =
@@ -448,9 +448,28 @@ export default function BannersPage() {
     startTransition(() => setEditor(null));
   }, []);
 
-  const handleDelete = useCallback((id: string) => {
-    deleteMutateRef.current(id);
+  /** Opens a non-blocking dialog — never use window.confirm (blocks INP). */
+  const requestDelete = useCallback((id: string) => {
+    const banner = bannersByIdRef.current.get(id);
+    setDeleteTarget({
+      id,
+      title: banner?.title?.trim() || "this banner",
+    });
   }, []);
+
+  const cancelDelete = useCallback(() => {
+    setDeleteTarget(null);
+  }, []);
+
+  const confirmDelete = useCallback(() => {
+    if (!deleteTarget) return;
+    const id = deleteTarget.id;
+    setDeleteTarget(null);
+    // Leave the click task before starting the mutation / refetch.
+    window.setTimeout(() => {
+      deleteMutateRef.current(id);
+    }, 0);
+  }, [deleteTarget]);
 
   const handlePageChange = useCallback((next: number) => {
     startTransition(() => setPage(next));
@@ -492,10 +511,51 @@ export default function BannersPage() {
         deletePending={deleteMutation.isPending}
         onPageChange={handlePageChange}
         onEdit={startEdit}
-        onDelete={handleDelete}
+        onDelete={requestDelete}
       />
 
       <BannerEditorDialog editor={editor} onClose={closeEditor} />
+
+      <Dialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) cancelDelete();
+        }}
+      >
+        <DialogContent className="border-white/10 bg-[#002833] text-white sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-white">Delete banner?</DialogTitle>
+            <DialogDescription className="text-white/50">
+              This permanently removes{" "}
+              <span className="text-white/80">
+                &ldquo;{deleteTarget?.title}&rdquo;
+              </span>
+              . This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={cancelDelete}
+              disabled={deleteMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={confirmDelete}
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : null}
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
