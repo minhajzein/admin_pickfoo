@@ -46,6 +46,11 @@ import {
 } from "@/lib/api/banners";
 import { ListPagination } from "@/components/ui/list-pagination";
 
+/**
+ * Real problem: promo banners are multi‑MB full‑bleed images.
+ * Decoding them in the list freezes the main thread (INP / hang).
+ * List uses a lightweight placeholder; the dialog loads one preview.
+ */
 const BannerEditorCard = dynamic(
   () =>
     import("@/components/banners/BannerEditorCard").then(
@@ -54,11 +59,9 @@ const BannerEditorCard = dynamic(
   {
     ssr: false,
     loading: () => (
-      <Card className="border-white/10 bg-[#002833] ring-1 ring-[#98E32F]/30">
-        <CardContent className="flex justify-center py-10">
-          <Loader2 className="h-8 w-8 animate-spin text-[#98E32F]" />
-        </CardContent>
-      </Card>
+      <div className="flex justify-center py-12 text-white/40">
+        <Loader2 className="h-8 w-8 animate-spin text-[#98E32F]" />
+      </div>
     ),
   },
 );
@@ -93,51 +96,23 @@ function formatSchedule(banner: AdminHomeBanner): string {
   return parts.join(" · ");
 }
 
-function scheduleDeferred(work: () => void) {
-  requestAnimationFrame(() => {
-    window.setTimeout(work, 0);
-  });
-}
-
-const BannerThumb = memo(function BannerThumb({
-  src,
-  priority,
-}: {
-  src: string;
-  priority?: boolean;
-}) {
-  return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={src}
-      alt=""
-      width={96}
-      height={56}
-      loading={priority ? "eager" : "lazy"}
-      decoding="async"
-      fetchPriority={priority ? "high" : "low"}
-      className="h-14 w-24 rounded bg-black/20 object-cover"
-    />
-  );
-});
-
 const BannerRow = memo(function BannerRow({
   banner,
-  priority,
   deletePending,
   onEdit,
   onDelete,
 }: {
   banner: AdminHomeBanner;
-  priority: boolean;
   deletePending: boolean;
-  onEdit: (banner: AdminHomeBanner) => void;
+  onEdit: (id: string) => void;
   onDelete: (id: string) => void;
 }) {
   return (
     <TableRow>
       <TableCell>
-        <BannerThumb src={banner.imageUrl} priority={priority} />
+        <div className="flex h-14 w-24 items-center justify-center rounded border border-white/10 bg-black/30 text-[#98E32F]/70">
+          <ImageIcon className="h-5 w-5" />
+        </div>
       </TableCell>
       <TableCell>
         <div className="font-medium">
@@ -168,7 +143,7 @@ const BannerRow = memo(function BannerRow({
             type="button"
             size="sm"
             variant="outline"
-            onClick={() => onEdit(banner)}
+            onClick={() => onEdit(banner.id)}
             aria-label={`Edit ${banner.title?.trim() || "banner"}`}
           >
             <Pencil className="mr-1 h-4 w-4" />
@@ -217,7 +192,7 @@ const BannersListCard = memo(function BannersListCard({
   totalPages: number;
   deletePending: boolean;
   onPageChange: (page: number) => void;
-  onEdit: (banner: AdminHomeBanner) => void;
+  onEdit: (id: string) => void;
   onDelete: (id: string) => void;
 }) {
   return (
@@ -252,11 +227,10 @@ const BannersListCard = memo(function BannersListCard({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {banners.map((banner, index) => (
+              {banners.map((banner) => (
                 <BannerRow
                   key={banner.id}
                   banner={banner}
-                  priority={index < 3}
                   deletePending={deletePending}
                   onEdit={onEdit}
                   onDelete={onDelete}
@@ -315,8 +289,19 @@ function BannerEditorDialog({
   onClose: () => void;
 }) {
   const open = editor !== null;
-  const title =
-    editor?.mode === "edit" ? "Edit banner" : "Create banner";
+  /** Mount form only after dialog paint — avoids blocking the Edit click. */
+  const [formReady, setFormReady] = useState(false);
+
+  useEffect(() => {
+    if (!open) {
+      setFormReady(false);
+      return;
+    }
+    const id = window.setTimeout(() => setFormReady(true), 50);
+    return () => window.clearTimeout(id);
+  }, [open, editor?.mode, editor && editor.mode === "edit" ? editor.id : null]);
+
+  const title = editor?.mode === "edit" ? "Edit banner" : "Create banner";
 
   return (
     <Dialog
@@ -328,6 +313,7 @@ function BannerEditorDialog({
       <DialogContent
         showCloseButton
         className="max-h-[90vh] w-full max-w-[calc(100%-1.5rem)] overflow-y-auto border-white/10 bg-[#002833] text-white sm:max-w-3xl"
+        onOpenAutoFocus={(e) => e.preventDefault()}
       >
         <DialogHeader>
           <DialogTitle className="text-white">{title}</DialogTitle>
@@ -337,7 +323,11 @@ function BannerEditorDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {editor?.mode === "create" ? (
+        {!formReady || !editor ? (
+          <div className="flex justify-center py-12 text-white/40">
+            <Loader2 className="h-8 w-8 animate-spin text-[#98E32F]" />
+          </div>
+        ) : editor.mode === "create" ? (
           <BannerEditorCard
             key="create"
             editingId={null}
@@ -345,8 +335,7 @@ function BannerEditorDialog({
             onCancel={onClose}
             onSaved={onClose}
           />
-        ) : null}
-        {editor?.mode === "edit" ? (
+        ) : (
           <BannerEditorCard
             key={editor.id}
             editingId={editor.id}
@@ -355,7 +344,7 @@ function BannerEditorDialog({
             onCancel={onClose}
             onSaved={onClose}
           />
-        ) : null}
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -368,17 +357,7 @@ export default function BannersPage() {
   const [editorBusy, setEditorBusy] = useState(false);
   const [, startUiTransition] = useTransition();
   const deleteMutateRef = useRef<(id: string) => void>(() => {});
-
-  useEffect(() => {
-    let cancelled = false;
-    const timeoutId = window.setTimeout(() => {
-      if (!cancelled) void import("@/components/banners/BannerEditorCard");
-    }, 250);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timeoutId);
-    };
-  }, []);
+  const bannersByIdRef = useRef<Map<string, AdminHomeBanner>>(new Map());
 
   const { data, isLoading } = useQuery({
     queryKey: ["admin-banners", page],
@@ -389,6 +368,8 @@ export default function BannersPage() {
   const banners = data?.data ?? [];
   const total = data?.total ?? 0;
   const totalPages = data?.totalPages ?? 1;
+
+  bannersByIdRef.current = new Map(banners.map((b) => [b.id, b]));
 
   const deleteMutation = useMutation({
     mutationFn: deleteBanner,
@@ -420,44 +401,45 @@ export default function BannersPage() {
 
   const openCreate = useCallback(() => {
     setEditorBusy(true);
-    scheduleDeferred(() => {
+    // Leave the click task before opening dialog.
+    window.setTimeout(() => {
       startUiTransition(() => {
         setEditor({ mode: "create" });
         setEditorBusy(false);
       });
-    });
+    }, 32);
   }, [startUiTransition]);
 
   const startEdit = useCallback(
-    (banner: AdminHomeBanner) => {
-      const id = String(banner.id ?? "").trim();
-      if (!id) {
-        toast.error("This banner has no id — refresh the list and try again.");
+    (id: string) => {
+      const banner = bannersByIdRef.current.get(id);
+      if (!banner) {
+        toast.error("Banner not found — refresh and try again.");
         return;
       }
-      // Clone a lean snapshot so the list row object isn't held by the editor.
-      const snapshot: AdminHomeBanner = {
-        id,
-        title: banner.title,
-        subtitle: banner.subtitle,
-        imageUrl: banner.imageUrl,
-        imageStaticUrl: banner.imageStaticUrl,
-        linkType: banner.linkType,
-        restaurantId: banner.restaurantId,
-        menuItemId: banner.menuItemId,
-        menuItemIds: [...(banner.menuItemIds ?? [])],
-        sortOrder: banner.sortOrder,
-        isActive: banner.isActive,
-        startsAt: banner.startsAt,
-        endsAt: banner.endsAt,
-      };
       setEditorBusy(true);
-      scheduleDeferred(() => {
+      // Snapshot after click returns — do not clone heavy work in the handler.
+      window.setTimeout(() => {
+        const snapshot: AdminHomeBanner = {
+          id: banner.id,
+          title: banner.title,
+          subtitle: banner.subtitle,
+          imageUrl: banner.imageUrl,
+          imageStaticUrl: banner.imageStaticUrl,
+          linkType: banner.linkType,
+          restaurantId: banner.restaurantId,
+          menuItemId: banner.menuItemId,
+          menuItemIds: [...(banner.menuItemIds ?? [])],
+          sortOrder: banner.sortOrder,
+          isActive: banner.isActive,
+          startsAt: banner.startsAt,
+          endsAt: banner.endsAt,
+        };
         startUiTransition(() => {
-          setEditor({ mode: "edit", id, banner: snapshot });
+          setEditor({ mode: "edit", id: snapshot.id, banner: snapshot });
           setEditorBusy(false);
         });
-      });
+      }, 32);
     },
     [startUiTransition],
   );
