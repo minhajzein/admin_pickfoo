@@ -489,8 +489,11 @@ export default function OrdersPage() {
                 className={selectClassName}
                 value={status}
                 onChange={(e) => {
-                  setStatus(e.target.value);
-                  setPage(1);
+                  const value = e.target.value;
+                  startTransition(() => {
+                    setStatus(value);
+                    setPage(1);
+                  });
                 }}
               >
                 {STATUS_FILTERS.map((opt) => (
@@ -508,8 +511,11 @@ export default function OrdersPage() {
                 className={selectClassName}
                 value={restaurantId}
                 onChange={(e) => {
-                  setRestaurantId(e.target.value);
-                  setPage(1);
+                  const value = e.target.value;
+                  startTransition(() => {
+                    setRestaurantId(value);
+                    setPage(1);
+                  });
                 }}
               >
                 <option value="">All restaurants</option>
@@ -528,8 +534,11 @@ export default function OrdersPage() {
                 className={selectClassName}
                 value={partnerId}
                 onChange={(e) => {
-                  setPartnerId(e.target.value);
-                  setPage(1);
+                  const value = e.target.value;
+                  startTransition(() => {
+                    setPartnerId(value);
+                    setPage(1);
+                  });
                 }}
               >
                 <option value="">All partners</option>

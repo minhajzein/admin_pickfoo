@@ -604,7 +604,7 @@ export default function RestaurantLedgerPage() {
           <button
             key={key}
             type="button"
-            onClick={() => setTab(key)}
+            onClick={() => startTransition(() => setTab(key))}
             className={`px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors ${
               tab === key
                 ? "border-[#98E32F] text-[#98E32F]"
@@ -644,7 +644,7 @@ export default function RestaurantLedgerPage() {
                         ? "bg-[#98E32F] text-[#013644] hover:bg-[#98E32F]"
                         : "border-white/15 text-white/70"
                     }
-                    onClick={() => setTxType(t)}
+                    onClick={() => startTransition(() => setTxType(t))}
                   >
                     {t === "all"
                       ? "All"
@@ -758,7 +758,7 @@ export default function RestaurantLedgerPage() {
                       ? "bg-[#98E32F] text-[#013644] hover:bg-[#98E32F]"
                       : "border-white/15 text-white/70"
                   }
-                  onClick={() => setWdStatus(s)}
+                  onClick={() => startTransition(() => setWdStatus(s))}
                 >
                   {s === "all" ? "All" : s}
                 </Button>
