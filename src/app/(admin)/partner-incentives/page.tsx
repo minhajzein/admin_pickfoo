@@ -49,6 +49,7 @@ function toLocalInput(dt: Date): string {
 }
 
 const typeLabels: Record<PartnerIncentiveType, string> = {
+  challenge: "Challenge (conditions)",
   clean_window: "No reject/timeout window",
   streak: "Consecutive deliveries",
   daily_count: "Complete N in a day",
@@ -61,17 +62,30 @@ export default function PartnerIncentivesPage() {
   const [form, setForm] = useState({
     title: "",
     body: "",
-    type: "daily_count" as PartnerIncentiveType,
-    rewardAmountInr: 100,
+    type: "challenge" as PartnerIncentiveType,
+    rewardAmountInr: 500,
+    rewardMode: "guaranteed_total" as "flat" | "guaranteed_total",
     startsAt: toLocalInput(now),
     endsAt: toLocalInput(new Date(now.getTime() + 24 * 60 * 60 * 1000)),
     streakTarget: 10,
     dailyTarget: 10,
     requireMinDeliveries: 1,
+    loseOnRejectOrTimeout: true,
+    enableAcceptRate: true,
+    minAcceptRatePercent: 100,
+    enableOnlineHours: false,
+    minOnlineHours: 11,
+    enableOnlineShift: true,
+    onlineWindowStart: "16:00",
+    onlineWindowEnd: "23:00",
+    breakMinutesAllowed: 25,
+    enableMinDeliveries: false,
+    minDeliveries: 10,
     audience: "all" as PartnerIncentiveAudience,
     partnerIdsRaw: "",
     zoneIdsRaw: "",
     publishNow: true,
+    showLegacyTypes: false,
   });
   const [selected, setSelected] = useState<AdminPartnerIncentive | null>(null);
   const [progressOpen, setProgressOpen] = useState(false);
@@ -140,11 +154,25 @@ export default function PartnerIncentivesPage() {
       .map((s) => s.trim())
       .filter(Boolean);
 
+    if (form.type === "challenge") {
+      const anyCond =
+        form.loseOnRejectOrTimeout ||
+        form.enableAcceptRate ||
+        form.enableOnlineHours ||
+        form.enableOnlineShift ||
+        form.enableMinDeliveries;
+      if (!anyCond) {
+        toast.error("Enable at least one condition");
+        return;
+      }
+    }
+
     createMutation.mutate({
       title: form.title.trim(),
       body: form.body.trim(),
       type: form.type,
       rewardAmountInr: Number(form.rewardAmountInr),
+      rewardMode: form.rewardMode,
       startsAt: new Date(form.startsAt).toISOString(),
       endsAt: new Date(form.endsAt).toISOString(),
       streakTarget:
@@ -154,6 +182,22 @@ export default function PartnerIncentivesPage() {
       requireMinDeliveries:
         form.type === "clean_window"
           ? Number(form.requireMinDeliveries)
+          : undefined,
+      conditions:
+        form.type === "challenge"
+          ? {
+              loseOnRejectOrTimeout: form.loseOnRejectOrTimeout,
+              enableAcceptRate: form.enableAcceptRate,
+              minAcceptRatePercent: form.minAcceptRatePercent,
+              enableOnlineHours: form.enableOnlineHours,
+              minOnlineHours: form.minOnlineHours,
+              enableOnlineShift: form.enableOnlineShift,
+              onlineWindowStart: form.onlineWindowStart,
+              onlineWindowEnd: form.onlineWindowEnd,
+              breakMinutesAllowed: form.breakMinutesAllowed,
+              enableMinDeliveries: form.enableMinDeliveries,
+              minDeliveries: form.minDeliveries,
+            }
           : undefined,
       audience: form.audience,
       partnerIds: form.audience === "partners" ? partnerIds : undefined,
@@ -169,8 +213,9 @@ export default function PartnerIncentivesPage() {
           Partner incentives
         </h1>
         <p className="text-sm text-muted-foreground">
-          Create offers with live progress. Rewards auto-credit to Pocket when
-          earned.
+          Create challenge offers with stacked conditions. Rewards auto-credit
+          to Pocket when earned; partners are notified on activate / miss /
+          earn.
         </p>
       </div>
 
@@ -190,7 +235,7 @@ export default function PartnerIncentivesPage() {
                 onChange={(e) =>
                   setForm((f) => ({ ...f, title: e.target.value }))
                 }
-                placeholder="Complete 10 deliveries today"
+                placeholder="100% accept + 11h online today"
                 required
               />
             </div>
@@ -202,27 +247,11 @@ export default function PartnerIncentivesPage() {
                 onChange={(e) =>
                   setForm((f) => ({ ...f, body: e.target.value }))
                 }
-                placeholder="Deliver 10 orders today. Rejects are OK."
+                placeholder="Stay online 11 hours with 100% accept rate. Reject or timeout loses the offer."
                 required
               />
             </div>
-            <div className="space-y-2">
-              <Label>Type</Label>
-              <select
-                className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                value={form.type}
-                onChange={(e) =>
-                  setForm((f) => ({
-                    ...f,
-                    type: e.target.value as PartnerIncentiveType,
-                  }))
-                }
-              >
-                <option value="daily_count">{typeLabels.daily_count}</option>
-                <option value="streak">{typeLabels.streak}</option>
-                <option value="clean_window">{typeLabels.clean_window}</option>
-              </select>
-            </div>
+
             <div className="space-y-2">
               <Label>Reward (₹)</Label>
               <Input
@@ -239,75 +268,51 @@ export default function PartnerIncentivesPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label>Starts</Label>
-              <Input
-                type="datetime-local"
-                value={form.startsAt}
+              <Label>Reward mode</Label>
+              <select
+                className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                value={form.rewardMode}
                 onChange={(e) =>
-                  setForm((f) => ({ ...f, startsAt: e.target.value }))
+                  setForm((f) => ({
+                    ...f,
+                    rewardMode: e.target.value as "flat" | "guaranteed_total",
+                  }))
                 }
-                required
-              />
+              >
+                <option value="guaranteed_total">
+                  Guaranteed total (top-up earnings to ₹ amount)
+                </option>
+                <option value="flat">Flat bonus (credit full ₹ amount)</option>
+              </select>
             </div>
-            <div className="space-y-2">
-              <Label>Ends</Label>
-              <Input
-                type="datetime-local"
-                value={form.endsAt}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, endsAt: e.target.value }))
+            <div className="md:col-span-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  setForm((f) => ({
+                    ...f,
+                    type: "challenge",
+                    title: "₹500 guaranteed",
+                    body: "Daily earnings + bonus. Stay online 4pm–11pm with 100% accept rate. 25 minutes break available.",
+                    rewardAmountInr: 500,
+                    rewardMode: "guaranteed_total",
+                    loseOnRejectOrTimeout: true,
+                    enableAcceptRate: true,
+                    minAcceptRatePercent: 100,
+                    enableOnlineHours: false,
+                    enableOnlineShift: true,
+                    onlineWindowStart: "16:00",
+                    onlineWindowEnd: "23:00",
+                    breakMinutesAllowed: 25,
+                    enableMinDeliveries: false,
+                  }))
                 }
-                required
-              />
+              >
+                Load preset: ₹500 guaranteed (4–11pm)
+              </Button>
             </div>
-            {form.type === "streak" && (
-              <div className="space-y-2">
-                <Label>Streak target (orders in a row)</Label>
-                <Input
-                  type="number"
-                  min={1}
-                  value={form.streakTarget}
-                  onChange={(e) =>
-                    setForm((f) => ({
-                      ...f,
-                      streakTarget: Number(e.target.value),
-                    }))
-                  }
-                />
-              </div>
-            )}
-            {form.type === "daily_count" && (
-              <div className="space-y-2">
-                <Label>Daily delivery target</Label>
-                <Input
-                  type="number"
-                  min={1}
-                  value={form.dailyTarget}
-                  onChange={(e) =>
-                    setForm((f) => ({
-                      ...f,
-                      dailyTarget: Number(e.target.value),
-                    }))
-                  }
-                />
-              </div>
-            )}
-            {form.type === "clean_window" && (
-              <div className="space-y-2">
-                <Label>Min deliveries to earn (no reject/timeout)</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  value={form.requireMinDeliveries}
-                  onChange={(e) =>
-                    setForm((f) => ({
-                      ...f,
-                      requireMinDeliveries: Number(e.target.value),
-                    }))
-                  }
-                />
-              </div>
-            )}
             <div className="space-y-2">
               <Label>Audience</Label>
               <select
@@ -325,6 +330,30 @@ export default function PartnerIncentivesPage() {
                 <option value="partners">Specific partners</option>
               </select>
             </div>
+
+            <div className="space-y-2">
+              <Label>Starts</Label>
+              <Input
+                type="datetime-local"
+                value={form.startsAt}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, startsAt: e.target.value }))
+                }
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Ends (expires)</Label>
+              <Input
+                type="datetime-local"
+                value={form.endsAt}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, endsAt: e.target.value }))
+                }
+                required
+              />
+            </div>
+
             {form.audience === "zones" && (
               <div className="space-y-2 md:col-span-2">
                 <Label>Zone IDs (comma-separated)</Label>
@@ -347,6 +376,290 @@ export default function PartnerIncentivesPage() {
                 />
               </div>
             )}
+
+            <div className="md:col-span-2 space-y-3 rounded-md border p-4">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <p className="text-sm font-medium">Conditions (all must pass)</p>
+                  <p className="text-xs text-muted-foreground">
+                    Challenge type — stack accept rate, online hours, deliveries,
+                    and lose-on-reject.
+                  </p>
+                </div>
+                <Badge variant="secondary">challenge</Badge>
+              </div>
+
+              <label className="flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={form.loseOnRejectOrTimeout}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      loseOnRejectOrTimeout: e.target.checked,
+                      type: "challenge",
+                    }))
+                  }
+                />
+                <span>
+                  Lose offer on reject or timeout
+                  <span className="block text-xs text-muted-foreground">
+                    Partner is notified immediately when this happens.
+                  </span>
+                </span>
+              </label>
+
+              <div className="flex flex-wrap items-center gap-3 text-sm">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={form.enableAcceptRate}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        enableAcceptRate: e.target.checked,
+                        type: "challenge",
+                      }))
+                    }
+                  />
+                  Min accept rate %
+                </label>
+                <Input
+                  className="w-24"
+                  type="number"
+                  min={1}
+                  max={100}
+                  disabled={!form.enableAcceptRate}
+                  value={form.minAcceptRatePercent}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      minAcceptRatePercent: Number(e.target.value),
+                    }))
+                  }
+                />
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3 text-sm">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={form.enableOnlineHours}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        enableOnlineHours: e.target.checked,
+                        type: "challenge",
+                      }))
+                    }
+                  />
+                  Min online hours (cumulative)
+                </label>
+                <Input
+                  className="w-24"
+                  type="number"
+                  min={0.1}
+                  step={0.5}
+                  disabled={!form.enableOnlineHours}
+                  value={form.minOnlineHours}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      minOnlineHours: Number(e.target.value),
+                    }))
+                  }
+                />
+              </div>
+
+              <div className="space-y-2 rounded-md border border-dashed p-3">
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={form.enableOnlineShift}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        enableOnlineShift: e.target.checked,
+                        type: "challenge",
+                      }))
+                    }
+                  />
+                  Peak shift online window (IST)
+                </label>
+                <div className="flex flex-wrap items-end gap-3 text-sm">
+                  <div className="space-y-1">
+                    <Label className="text-xs">From</Label>
+                    <Input
+                      className="w-28"
+                      type="time"
+                      disabled={!form.enableOnlineShift}
+                      value={form.onlineWindowStart}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...f,
+                          onlineWindowStart: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">To</Label>
+                    <Input
+                      className="w-28"
+                      type="time"
+                      disabled={!form.enableOnlineShift}
+                      value={form.onlineWindowEnd}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...f,
+                          onlineWindowEnd: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Break allowed (min)</Label>
+                    <Input
+                      className="w-24"
+                      type="number"
+                      min={0}
+                      disabled={!form.enableOnlineShift}
+                      value={form.breakMinutesAllowed}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...f,
+                          breakMinutesAllowed: Number(e.target.value),
+                        }))
+                      }
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Required online = window length − break. Exceeding break fails
+                  the offer.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3 text-sm">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={form.enableMinDeliveries}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        enableMinDeliveries: e.target.checked,
+                        type: "challenge",
+                      }))
+                    }
+                  />
+                  Min deliveries
+                </label>
+                <Input
+                  className="w-24"
+                  type="number"
+                  min={1}
+                  disabled={!form.enableMinDeliveries}
+                  value={form.minDeliveries}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      minDeliveries: Number(e.target.value),
+                    }))
+                  }
+                />
+              </div>
+            </div>
+
+            <div className="md:col-span-2">
+              <button
+                type="button"
+                className="text-xs text-muted-foreground underline"
+                onClick={() =>
+                  setForm((f) => ({
+                    ...f,
+                    showLegacyTypes: !f.showLegacyTypes,
+                  }))
+                }
+              >
+                {form.showLegacyTypes
+                  ? "Hide legacy offer types"
+                  : "Show legacy offer types"}
+              </button>
+            </div>
+
+            {form.showLegacyTypes && (
+              <>
+                <div className="space-y-2">
+                  <Label>Legacy type</Label>
+                  <select
+                    className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                    value={form.type}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        type: e.target.value as PartnerIncentiveType,
+                      }))
+                    }
+                  >
+                    <option value="challenge">{typeLabels.challenge}</option>
+                    <option value="daily_count">{typeLabels.daily_count}</option>
+                    <option value="streak">{typeLabels.streak}</option>
+                    <option value="clean_window">{typeLabels.clean_window}</option>
+                  </select>
+                </div>
+                {form.type === "streak" && (
+                  <div className="space-y-2">
+                    <Label>Streak target (orders in a row)</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={form.streakTarget}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...f,
+                          streakTarget: Number(e.target.value),
+                        }))
+                      }
+                    />
+                  </div>
+                )}
+                {form.type === "daily_count" && (
+                  <div className="space-y-2">
+                    <Label>Daily delivery target</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={form.dailyTarget}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...f,
+                          dailyTarget: Number(e.target.value),
+                        }))
+                      }
+                    />
+                  </div>
+                )}
+                {form.type === "clean_window" && (
+                  <div className="space-y-2">
+                    <Label>Min deliveries to earn (no reject/timeout)</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={form.requireMinDeliveries}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...f,
+                          requireMinDeliveries: Number(e.target.value),
+                        }))
+                      }
+                    />
+                  </div>
+                )}
+              </>
+            )}
+
             <label className="flex items-center gap-2 text-sm md:col-span-2">
               <input
                 type="checkbox"
@@ -395,9 +708,42 @@ export default function PartnerIncentivesPage() {
                 <TableBody>
                   {rows.map((row) => {
                     const counts = row.progressCounts || {};
+                    const c = row.conditions;
+                    const condSummary =
+                      row.type === "challenge" && c
+                        ? [
+                            c.loseOnRejectOrTimeout ? "no reject" : null,
+                            c.minAcceptRatePercent != null
+                              ? `${c.minAcceptRatePercent}% accept`
+                              : null,
+                            c.minOnlineHours != null
+                              ? `${c.minOnlineHours}h online`
+                              : null,
+                            c.onlineWindowStart && c.onlineWindowEnd
+                              ? `${c.onlineWindowStart}–${c.onlineWindowEnd}${
+                                  c.breakMinutesAllowed != null
+                                    ? ` (${c.breakMinutesAllowed}m break)`
+                                    : ""
+                                }`
+                              : null,
+                            c.minDeliveries != null
+                              ? `${c.minDeliveries} deliveries`
+                              : null,
+                            row.rewardMode === "guaranteed_total"
+                              ? "guaranteed"
+                              : null,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")
+                        : typeLabels[row.type];
                     return (
                       <TableRow key={row.id}>
-                        <TableCell className="font-medium">{row.title}</TableCell>
+                        <TableCell className="font-medium">
+                          <div>{row.title}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {condSummary}
+                          </div>
+                        </TableCell>
                         <TableCell>{typeLabels[row.type]}</TableCell>
                         <TableCell>₹{row.rewardAmountInr}</TableCell>
                         <TableCell>
@@ -472,7 +818,7 @@ export default function PartnerIncentivesPage() {
       </Card>
 
       <Dialog open={progressOpen} onOpenChange={setProgressOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-3xl">
           <DialogHeader>
             <DialogTitle>{selected?.title || "Progress"}</DialogTitle>
           </DialogHeader>
@@ -486,7 +832,7 @@ export default function PartnerIncentivesPage() {
                 <TableRow>
                   <TableHead>Partner</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Progress</TableHead>
+                  <TableHead>Conditions</TableHead>
                   <TableHead>Miss</TableHead>
                 </TableRow>
               </TableHeader>
@@ -497,10 +843,23 @@ export default function PartnerIncentivesPage() {
                       {p.partnerId}
                     </TableCell>
                     <TableCell>{p.status}</TableCell>
-                    <TableCell>
-                      {p.progressCurrent}/{p.progressTarget}
+                    <TableCell className="text-xs">
+                      {(p.conditionStates ?? []).length > 0
+                        ? (p.conditionStates ?? [])
+                            .map(
+                              (s) =>
+                                `${s.label}: ${s.current}/${s.target}${s.unit || ""} (${s.status})`,
+                            )
+                            .join(" · ")
+                        : `${p.progressCurrent}/${p.progressTarget}`}
                     </TableCell>
-                    <TableCell>{p.missReason || "—"}</TableCell>
+                    <TableCell className="text-xs">
+                      {p.missDetail ||
+                        [p.missConditionKind, p.missReason]
+                          .filter(Boolean)
+                          .join(" · ") ||
+                        "—"}
+                    </TableCell>
                   </TableRow>
                 ))}
                 {(progressQuery.data?.data ?? []).length === 0 && (

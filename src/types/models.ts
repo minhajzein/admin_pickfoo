@@ -299,7 +299,11 @@ export interface AdminGigBooking {
   activeMinutes: number;
 }
 
-export type PartnerIncentiveType = 'clean_window' | 'streak' | 'daily_count';
+export type PartnerIncentiveType =
+  | 'challenge'
+  | 'clean_window'
+  | 'streak'
+  | 'daily_count';
 export type PartnerIncentiveStatus =
   | 'draft'
   | 'scheduled'
@@ -313,17 +317,41 @@ export type PartnerIncentiveProgressStatus =
   | 'earned'
   | 'expired';
 
+export interface PartnerIncentiveConditions {
+  loseOnRejectOrTimeout: boolean;
+  minAcceptRatePercent?: number | null;
+  minOnlineHours?: number | null;
+  onlineWindowStart?: string | null;
+  onlineWindowEnd?: string | null;
+  breakMinutesAllowed?: number | null;
+  minDeliveries?: number | null;
+}
+
+export type PartnerIncentiveRewardMode = "flat" | "guaranteed_total";
+
+export interface PartnerIncentiveConditionState {
+  kind: string;
+  label: string;
+  current: number;
+  target: number;
+  unit: string;
+  ratio: number;
+  status: "pending" | "met" | "failed" | string;
+}
+
 export interface AdminPartnerIncentive {
   id: string;
   title: string;
   body: string;
   rewardAmountInr: number;
+  rewardMode?: PartnerIncentiveRewardMode;
   type: PartnerIncentiveType;
   startsAt: string;
   endsAt: string;
   streakTarget?: number | null;
   dailyTarget?: number | null;
   requireMinDeliveries?: number;
+  conditions?: PartnerIncentiveConditions;
   audience: PartnerIncentiveAudience;
   zoneIds: string[];
   partnerIds: string[];
@@ -343,7 +371,13 @@ export interface AdminPartnerIncentiveProgress {
   progressCurrent: number;
   progressTarget: number;
   deliveredInWindow: number;
+  conditions?: PartnerIncentiveConditions | null;
+  metrics?: Record<string, unknown> | null;
+  conditionStates?: PartnerIncentiveConditionState[];
+  missConditionKind?: string | null;
   missReason?: string | null;
+  missDetail?: string | null;
+  missOrderRef?: string | null;
   missedAt?: string | null;
   earnedAt?: string | null;
   expiredAt?: string | null;

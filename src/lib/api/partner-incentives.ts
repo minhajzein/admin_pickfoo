@@ -8,6 +8,7 @@ import type {
   AdminPartnerIncentive,
   AdminPartnerIncentiveProgress,
   PartnerIncentiveAudience,
+  PartnerIncentiveConditions,
   PartnerIncentiveStatus,
   PartnerIncentiveType,
 } from "@/types/models";
@@ -32,11 +33,18 @@ export async function createPartnerIncentive(input: {
   body: string;
   type: PartnerIncentiveType;
   rewardAmountInr: number;
+  rewardMode?: "flat" | "guaranteed_total";
   startsAt: string;
   endsAt: string;
   streakTarget?: number;
   dailyTarget?: number;
   requireMinDeliveries?: number;
+  conditions?: PartnerIncentiveConditions & {
+    enableAcceptRate?: boolean;
+    enableOnlineHours?: boolean;
+    enableOnlineShift?: boolean;
+    enableMinDeliveries?: boolean;
+  };
   audience: PartnerIncentiveAudience;
   zoneIds?: string[];
   partnerIds?: string[];
