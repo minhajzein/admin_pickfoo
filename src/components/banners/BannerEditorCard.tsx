@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import dynamic from "next/dynamic";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -125,6 +125,8 @@ type Props = {
   initialBanner?: AdminHomeBanner | null;
   onCancel: () => void;
   onSaved: () => void;
+  /** When true, render form body only (for Dialog). */
+  embedded?: boolean;
 };
 
 export function BannerEditorCard({
@@ -132,9 +134,9 @@ export function BannerEditorCard({
   initialBanner,
   onCancel,
   onSaved,
+  embedded = false,
 }: Props) {
   const queryClient = useQueryClient();
-  const cardRef = useRef<HTMLDivElement>(null);
   const [fields, setFields] = useState<FormFields>(() =>
     initialBanner ? fieldsFromBanner(initialBanner) : emptyFields(),
   );
@@ -142,12 +144,6 @@ export function BannerEditorCard({
     initialBanner ? linkFromBanner(initialBanner) : emptyLink(),
   );
   const [uploading, setUploading] = useState(false);
-
-  useEffect(() => {
-    requestAnimationFrame(() => {
-      cardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
-  }, []);
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -226,164 +222,169 @@ export function BannerEditorCard({
     Boolean(fields.imageStaticUrl.trim()) ||
     Boolean(fields.imagePreview.trim());
 
-  return (
-    <Card
-      ref={cardRef}
-      className="bg-[#002833] border-white/10 ring-1 ring-[#98E32F]/30"
+  const form = (
+    <form
+      className="space-y-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        saveMutation.mutate();
+      }}
+      noValidate
     >
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="space-y-2">
+          <Label>Title (optional)</Label>
+          <Input
+            value={fields.title}
+            onChange={(e) =>
+              setFields((f) => ({ ...f, title: e.target.value }))
+            }
+            placeholder="FLAT ₹100 OFF"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label>Subtitle (optional)</Label>
+          <Input
+            value={fields.subtitle}
+            onChange={(e) =>
+              setFields((f) => ({ ...f, subtitle: e.target.value }))
+            }
+            placeholder="On your first 5 orders"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label>Sort order</Label>
+          <Input
+            type="number"
+            value={fields.sortOrder}
+            onChange={(e) =>
+              setFields((f) => ({
+                ...f,
+                sortOrder: Number(e.target.value) || 0,
+              }))
+            }
+          />
+        </div>
+        <div className="space-y-2">
+          <Label>Link type</Label>
+          <select
+            className="h-10 w-full rounded-md border border-white/20 bg-[#013644] px-3 text-sm"
+            value={fields.linkType}
+            onChange={(e) => {
+              const linkType = e.target.value as HomeBannerLinkType;
+              setFields((f) => ({ ...f, linkType }));
+              setLink(emptyLink());
+            }}
+          >
+            {Object.entries(linkTypeLabels).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="space-y-2">
+          <Label>Starts at (optional)</Label>
+          <Input
+            type="datetime-local"
+            value={fields.startsAt}
+            onChange={(e) =>
+              setFields((f) => ({ ...f, startsAt: e.target.value }))
+            }
+          />
+        </div>
+        <div className="space-y-2">
+          <Label>Ends at (optional)</Label>
+          <Input
+            type="datetime-local"
+            value={fields.endsAt}
+            onChange={(e) =>
+              setFields((f) => ({ ...f, endsAt: e.target.value }))
+            }
+          />
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Banner image</Label>
+        <div className="flex flex-wrap items-center gap-3">
+          <Input
+            type="file"
+            accept="image/*"
+            onChange={(e) => onPickImage(e.target.files?.[0] ?? null)}
+            disabled={uploading}
+          />
+          {uploading && (
+            <Loader2 className="h-5 w-5 animate-spin text-[#98E32F]" />
+          )}
+        </div>
+        {fields.imagePreview ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={fields.imagePreview}
+            alt="Preview"
+            loading="lazy"
+            decoding="async"
+            className="mt-2 h-32 w-full max-w-md rounded-lg border border-white/10 object-cover"
+          />
+        ) : null}
+        {!imageReady && (
+          <p className="text-xs text-amber-400/90">
+            Upload an image before saving — the create button needs a successful
+            upload.
+          </p>
+        )}
+      </div>
+
+      {fields.linkType !== "none" && (
+        <BannerLinkTargetPicker
+          key={`${editingId ?? "new"}-${fields.linkType}`}
+          linkType={fields.linkType}
+          value={link}
+          onChange={onLinkChange}
+        />
+      )}
+
+      <label className="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={fields.isActive}
+          onChange={(e) =>
+            setFields((f) => ({ ...f, isActive: e.target.checked }))
+          }
+        />
+        Active (visible on customer home)
+      </label>
+
+      <div className="flex flex-wrap gap-2 pt-1">
+        <Button type="submit" disabled={saveMutation.isPending || uploading}>
+          {saveMutation.isPending && (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          )}
+          {editingId ? "Update banner" : "Create banner"}
+        </Button>
+        {embedded ? (
+          <Button type="button" variant="outline" onClick={onCancel}>
+            Cancel
+          </Button>
+        ) : null}
+      </div>
+    </form>
+  );
+
+  if (embedded) {
+    return form;
+  }
+
+  return (
+    <Card className="border-white/10 bg-[#002833] ring-1 ring-[#98E32F]/30">
       <CardHeader className="flex flex-row items-center justify-between space-y-0">
         <CardTitle>{editingId ? "Edit banner" : "Create banner"}</CardTitle>
         <Button type="button" variant="outline" size="sm" onClick={onCancel}>
           Cancel
         </Button>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <form
-          className="space-y-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-            saveMutation.mutate();
-          }}
-          noValidate
-        >
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Title (optional)</Label>
-              <Input
-                value={fields.title}
-                onChange={(e) =>
-                  setFields((f) => ({ ...f, title: e.target.value }))
-                }
-                placeholder="FLAT ₹100 OFF"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Subtitle (optional)</Label>
-              <Input
-                value={fields.subtitle}
-                onChange={(e) =>
-                  setFields((f) => ({ ...f, subtitle: e.target.value }))
-                }
-                placeholder="On your first 5 orders"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Sort order</Label>
-              <Input
-                type="number"
-                value={fields.sortOrder}
-                onChange={(e) =>
-                  setFields((f) => ({
-                    ...f,
-                    sortOrder: Number(e.target.value) || 0,
-                  }))
-                }
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Link type</Label>
-              <select
-                className="w-full h-10 rounded-md bg-[#013644] border border-white/20 px-3 text-sm"
-                value={fields.linkType}
-                onChange={(e) => {
-                  const linkType = e.target.value as HomeBannerLinkType;
-                  setFields((f) => ({ ...f, linkType }));
-                  setLink(emptyLink());
-                }}
-              >
-                {Object.entries(linkTypeLabels).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="space-y-2">
-              <Label>Starts at (optional)</Label>
-              <Input
-                type="datetime-local"
-                value={fields.startsAt}
-                onChange={(e) =>
-                  setFields((f) => ({ ...f, startsAt: e.target.value }))
-                }
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Ends at (optional)</Label>
-              <Input
-                type="datetime-local"
-                value={fields.endsAt}
-                onChange={(e) =>
-                  setFields((f) => ({ ...f, endsAt: e.target.value }))
-                }
-              />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Banner image</Label>
-            <div className="flex flex-wrap items-center gap-3">
-              <Input
-                type="file"
-                accept="image/*"
-                onChange={(e) => onPickImage(e.target.files?.[0] ?? null)}
-                disabled={uploading}
-              />
-              {uploading && (
-                <Loader2 className="h-5 w-5 animate-spin text-[#98E32F]" />
-              )}
-            </div>
-            {fields.imagePreview ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={fields.imagePreview}
-                alt="Preview"
-                loading="lazy"
-                decoding="async"
-                className="mt-2 h-32 w-full max-w-md rounded-lg object-cover border border-white/10"
-              />
-            ) : null}
-            {!imageReady && (
-              <p className="text-xs text-amber-400/90">
-                Upload an image before saving — the create button needs a
-                successful upload.
-              </p>
-            )}
-          </div>
-
-          {fields.linkType !== "none" && (
-            <BannerLinkTargetPicker
-              key={`${editingId ?? "new"}-${fields.linkType}`}
-              linkType={fields.linkType}
-              value={link}
-              onChange={onLinkChange}
-            />
-          )}
-
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={fields.isActive}
-              onChange={(e) =>
-                setFields((f) => ({ ...f, isActive: e.target.checked }))
-              }
-            />
-            Active (visible on customer home)
-          </label>
-
-          <div className="flex gap-2">
-            <Button
-              type="submit"
-              disabled={saveMutation.isPending || uploading}
-            >
-              {saveMutation.isPending && (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              )}
-              {editingId ? "Update banner" : "Create banner"}
-            </Button>
-          </div>
-        </form>
-      </CardContent>
+      <CardContent className="space-y-4">{form}</CardContent>
     </Card>
   );
 }

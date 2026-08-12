@@ -3,16 +3,19 @@
 import {
   memo,
   startTransition,
+  useCallback,
   useEffect,
   useLayoutEffect,
+  useRef,
+  useState,
   useTransition,
   type ComponentType,
   type ReactNode,
 } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuthStore } from "@/store/useAuthStore";
-import Link from "next/link";
 import {
   LayoutDashboard,
   Store,
@@ -77,8 +80,59 @@ const AdminPageSlot = memo(function AdminPageSlot({
 }) {
   return (
     <div className="flex-1 overflow-auto">
-      <div className="p-4 sm:p-8 max-w-7xl mx-auto">{children}</div>
+      <div className="mx-auto max-w-7xl p-4 sm:p-8">{children}</div>
     </div>
+  );
+});
+
+const NavItemButton = memo(function NavItemButton({
+  name,
+  href,
+  icon: Icon,
+  isActive,
+  isPending,
+  expanded,
+  onNavigate,
+}: {
+  name: string;
+  href: string;
+  icon: ComponentType<{ size?: number; className?: string }>;
+  isActive: boolean;
+  isPending: boolean;
+  expanded: boolean;
+  onNavigate: (href: string) => void;
+}) {
+  return (
+    <Link
+      href={href}
+      prefetch
+      onClick={(e) => {
+        e.preventDefault();
+        onNavigate(href);
+      }}
+      className={`group relative flex w-full items-center rounded-xl p-3 text-left transition-colors duration-100 ${
+        isActive || isPending
+          ? "bg-[#98E32F] text-[#013644] shadow-[0_0_20px_rgba(152,227,47,0.2)]"
+          : "text-white/60 hover:bg-[#98E32F]/10 hover:text-[#98E32F]"
+      }`}
+    >
+      <div
+        className={`flex items-center justify-center ${expanded ? "w-auto" : "w-full"}`}
+      >
+        {isPending && !isActive ? (
+          <Loader2 size={22} className="min-w-[22px] animate-spin" />
+        ) : (
+          <Icon size={22} className="min-w-[22px]" />
+        )}
+      </div>
+      <span
+        className={`overflow-hidden whitespace-nowrap text-sm font-bold tracking-tight ${
+          expanded ? "ml-4 max-w-[200px] opacity-100" : "ml-0 max-w-0 opacity-0"
+        }`}
+      >
+        {name}
+      </span>
+    </Link>
   );
 });
 
@@ -86,23 +140,54 @@ function AdminSidebar({ onLogout }: { onLogout: () => void }) {
   const router = useRouter();
   const pathname = usePathname();
   const { sidebarOpen, mobileOpen } = useAdminShellUi();
-  const [isNavPending, startNavTransition] = useTransition();
+  const [pendingHref, setPendingHref] = useState<string | null>(null);
+  const navLockRef = useRef(false);
+  const [, startNavTransition] = useTransition();
 
-  const navigate = (href: string) => {
-    startTransition(() => adminShellUi.closeMobile());
-    if (href === pathname) return;
-    // Keep the sidebar responsive while the destination page mounts.
-    startNavTransition(() => {
-      router.push(href);
-    });
-  };
+  useEffect(() => {
+    setPendingHref(null);
+    navLockRef.current = false;
+  }, [pathname]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      for (const item of NAV_ITEMS) {
+        try {
+          router.prefetch(item.href);
+        } catch {
+          // ignore prefetch failures
+        }
+      }
+    }, 600);
+    return () => window.clearTimeout(timer);
+  }, [router]);
+
+  const navigate = useCallback(
+    (href: string) => {
+      adminShellUi.closeMobile();
+      if (href === pathname || navLockRef.current) return;
+
+      navLockRef.current = true;
+      // Paint pending state in this task; push the route after the click ends.
+      setPendingHref(href);
+
+      window.setTimeout(() => {
+        startNavTransition(() => {
+          router.push(href);
+        });
+      }, 32);
+    },
+    [pathname, router, startNavTransition],
+  );
+
+  const expanded = sidebarOpen || mobileOpen;
 
   return (
     <>
       {mobileOpen ? (
         <div
           className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden"
-          onClick={() => startTransition(() => adminShellUi.closeMobile())}
+          onClick={() => adminShellUi.closeMobile()}
         />
       ) : null}
 
@@ -117,13 +202,9 @@ function AdminSidebar({ onLogout }: { onLogout: () => void }) {
       >
         <div className="relative flex h-20 items-center overflow-hidden p-6">
           <div
-            className={`transition-[opacity,transform] duration-300 ease-in-out ${sidebarOpen || mobileOpen ? "translate-x-0 opacity-100" : "pointer-events-none -translate-x-10 opacity-0"}`}
+            className={`${expanded ? "translate-x-0 opacity-100" : "pointer-events-none -translate-x-10 opacity-0"}`}
           >
-            <button
-              type="button"
-              onClick={() => navigate("/")}
-              className="relative block h-10 w-32"
-            >
+            <Link href="/" className="relative block h-10 w-32" prefetch>
               <Image
                 src="/logo.png"
                 alt="Pickfoo"
@@ -134,15 +215,15 @@ function AdminSidebar({ onLogout }: { onLogout: () => void }) {
               <span className="absolute -bottom-1 left-0 text-[8px] font-black tracking-widest text-[#98E32F] opacity-60">
                 ADMIN
               </span>
-            </button>
+            </Link>
           </div>
 
           <div
-            className={`absolute left-5 transition-[opacity,transform] duration-300 ease-in-out ${!sidebarOpen && !mobileOpen ? "scale-100 opacity-100" : "pointer-events-none scale-50 opacity-0"}`}
+            className={`absolute left-5 ${!expanded ? "scale-100 opacity-100" : "pointer-events-none scale-50 opacity-0"}`}
           >
-            <button
-              type="button"
-              onClick={() => navigate("/")}
+            <Link
+              href="/"
+              prefetch
               className="relative flex h-10 w-10 items-center justify-center"
             >
               <Image
@@ -152,13 +233,13 @@ function AdminSidebar({ onLogout }: { onLogout: () => void }) {
                 height={32}
                 className="object-contain"
               />
-            </button>
+            </Link>
           </div>
 
           {mobileOpen ? (
             <button
               type="button"
-              onClick={() => startTransition(() => adminShellUi.closeMobile())}
+              onClick={() => adminShellUi.closeMobile()}
               className="absolute right-6 rounded-lg p-2 text-[#98E32F] hover:bg-white/5 lg:hidden"
             >
               <X size={20} />
@@ -166,62 +247,35 @@ function AdminSidebar({ onLogout }: { onLogout: () => void }) {
           ) : null}
         </div>
 
-        <nav className="flex-1 space-y-2 overflow-y-auto px-4 py-4">
-          {isNavPending ? (
-            <div className="mb-2 flex items-center gap-2 px-3 text-[11px] text-white/40">
-              <Loader2 className="h-3.5 w-3.5 animate-spin text-[#98E32F]" />
-              Loading…
-            </div>
-          ) : null}
-          {NAV_ITEMS.map((item) => {
-            const isActive = pathname === item.href;
-            return (
-              <button
-                key={item.name}
-                type="button"
-                onClick={() => navigate(item.href)}
-                className={`group relative flex w-full items-center rounded-xl p-3 text-left transition-colors duration-150 ${
-                  isActive
-                    ? "bg-[#98E32F] text-[#013644] shadow-[0_0_20px_rgba(152,227,47,0.2)]"
-                    : "text-white/60 hover:bg-[#98E32F]/10 hover:text-[#98E32F]"
-                }`}
-              >
-                <div
-                  className={`flex items-center justify-center ${sidebarOpen || mobileOpen ? "w-auto" : "w-full"}`}
-                >
-                  <item.icon
-                    size={22}
-                    className={`min-w-[22px] ${isActive ? "scale-110" : ""}`}
-                  />
-                </div>
-                <span
-                  className={`overflow-hidden whitespace-nowrap text-sm font-bold tracking-tight ${
-                    sidebarOpen || mobileOpen
-                      ? "ml-4 max-w-[200px] opacity-100"
-                      : "ml-0 max-w-0 opacity-0"
-                  }`}
-                >
-                  {item.name}
-                </span>
-              </button>
-            );
-          })}
+        <nav className="flex-1 space-y-1 overflow-y-auto px-4 py-4">
+          {NAV_ITEMS.map((item) => (
+            <NavItemButton
+              key={item.name}
+              name={item.name}
+              href={item.href}
+              icon={item.icon}
+              isActive={pathname === item.href}
+              isPending={pendingHref === item.href}
+              expanded={expanded}
+              onNavigate={navigate}
+            />
+          ))}
         </nav>
 
         <div className="border-t border-white/5 p-4">
           <button
             type="button"
             onClick={() => startTransition(() => onLogout())}
-            className="flex w-full items-center rounded-xl p-3 text-red-400 transition-colors duration-150 hover:bg-red-500/10"
+            className="flex w-full items-center rounded-xl p-3 text-red-400 transition-colors duration-100 hover:bg-red-500/10"
           >
             <div
-              className={`flex items-center justify-center ${sidebarOpen || mobileOpen ? "w-auto" : "w-full"}`}
+              className={`flex items-center justify-center ${expanded ? "w-auto" : "w-full"}`}
             >
               <LogOut size={22} className="min-w-[22px]" />
             </div>
             <span
               className={`overflow-hidden whitespace-nowrap font-medium ${
-                sidebarOpen || mobileOpen
+                expanded
                   ? "ml-4 max-w-[200px] opacity-100"
                   : "ml-0 max-w-0 opacity-0"
               }`}
