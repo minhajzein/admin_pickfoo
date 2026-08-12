@@ -52,20 +52,26 @@ import { ListPagination } from "@/components/ui/list-pagination";
  * Decoding them in the list freezes the main thread (INP / hang).
  * List uses a lightweight placeholder; the dialog loads one preview.
  */
-const BannerEditorCard = dynamic(
-  () =>
-    import("@/components/banners/BannerEditorCard").then(
-      (m) => m.BannerEditorCard,
-    ),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="flex justify-center py-12 text-white/40">
-        <Loader2 className="h-8 w-8 animate-spin text-[#98E32F]" />
-      </div>
-    ),
-  },
-);
+const loadBannerEditor = () =>
+  import("@/components/banners/BannerEditorCard").then(
+    (m) => m.BannerEditorCard,
+  );
+
+const BannerEditorCard = dynamic(loadBannerEditor, {
+  ssr: false,
+  loading: () => (
+    <div className="flex justify-center py-12 text-white/40">
+      <Loader2 className="h-8 w-8 animate-spin text-[#98E32F]" />
+    </div>
+  ),
+});
+
+/** Yield past the next paint so click INP isn't charged for dialog work. */
+function afterNextPaint(fn: () => void) {
+  window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(fn);
+  });
+}
 
 const BANNERS_PAGE_SIZE = 10;
 
@@ -278,34 +284,30 @@ function BannerEditorDialog({
   editor,
   onClose,
 }: {
-  editor: EditorState | null;
+  editor: EditorState;
   onClose: () => void;
 }) {
-  const open = editor !== null;
-  /** Mount form only after dialog paint — avoids blocking the Edit click. */
+  /** Mount form only after dialog shell paints — keeps Add/Edit click light. */
   const [formReady, setFormReady] = useState(false);
 
   useEffect(() => {
-    if (!open) {
-      setFormReady(false);
-      return;
-    }
-    const id = window.setTimeout(() => setFormReady(true), 50);
+    setFormReady(false);
+    const id = window.setTimeout(() => setFormReady(true), 120);
     return () => window.clearTimeout(id);
-  }, [open, editor?.mode, editor && editor.mode === "edit" ? editor.id : null]);
+  }, [editor.mode, editor.mode === "edit" ? editor.id : "create"]);
 
-  const title = editor?.mode === "edit" ? "Edit banner" : "Create banner";
+  const title = editor.mode === "edit" ? "Edit banner" : "Create banner";
 
   return (
     <Dialog
-      open={open}
+      open
       onOpenChange={(next) => {
         if (!next) onClose();
       }}
     >
       <DialogContent
         showCloseButton
-        className="max-h-[90vh] w-full max-w-[calc(100%-1.5rem)] overflow-y-auto border-white/10 bg-[#002833] text-white sm:max-w-3xl"
+        className="max-h-[90vh] w-full max-w-[calc(100%-1.5rem)] overflow-y-auto border-white/10 bg-[#002833] text-white duration-0 data-[state=open]:zoom-in-100 data-[state=closed]:zoom-out-100 sm:max-w-3xl"
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
         <DialogHeader>
@@ -316,7 +318,7 @@ function BannerEditorDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {!formReady || !editor ? (
+        {!formReady ? (
           <div className="flex justify-center py-12 text-white/40">
             <Loader2 className="h-8 w-8 animate-spin text-[#98E32F]" />
           </div>
@@ -343,11 +345,52 @@ function BannerEditorDialog({
   );
 }
 
+/** Isolated so Add click only re-renders this button, not the banners table. */
+const AddBannerButton = memo(function AddBannerButton({
+  disabled,
+  onOpen,
+}: {
+  disabled: boolean;
+  onOpen: () => void;
+}) {
+  const [pending, setPending] = useState(false);
+
+  useEffect(() => {
+    if (!disabled) setPending(false);
+  }, [disabled]);
+
+  return (
+    <Button
+      type="button"
+      className="shrink-0"
+      disabled={disabled || pending}
+      onPointerEnter={() => {
+        void loadBannerEditor();
+      }}
+      onFocus={() => {
+        void loadBannerEditor();
+      }}
+      onClick={() => {
+        setPending(true);
+        afterNextPaint(() => {
+          onOpen();
+        });
+      }}
+    >
+      {pending ? (
+        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+      ) : (
+        <Plus className="mr-2 h-4 w-4" />
+      )}
+      Add banner
+    </Button>
+  );
+});
+
 export default function BannersPage() {
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [editor, setEditor] = useState<EditorState | null>(null);
-  const [editorBusy, setEditorBusy] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{
     id: string;
     title: string;
@@ -355,6 +398,13 @@ export default function BannersPage() {
   const [, startUiTransition] = useTransition();
   const deleteMutateRef = useRef<(id: string) => void>(() => {});
   const bannersByIdRef = useRef<Map<string, AdminHomeBanner>>(new Map());
+
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      void loadBannerEditor();
+    }, 800);
+    return () => window.clearTimeout(t);
+  }, []);
 
   const { data, isLoading } = useQuery({
     queryKey: ["admin-banners", page],
@@ -400,14 +450,9 @@ export default function BannersPage() {
   );
 
   const openCreate = useCallback(() => {
-    setEditorBusy(true);
-    // Leave the click task before opening dialog.
-    window.setTimeout(() => {
-      startUiTransition(() => {
-        setEditor({ mode: "create" });
-        setEditorBusy(false);
-      });
-    }, 32);
+    startUiTransition(() => {
+      setEditor({ mode: "create" });
+    });
   }, [startUiTransition]);
 
   const startEdit = useCallback(
@@ -417,9 +462,8 @@ export default function BannersPage() {
         toast.error("Banner not found — refresh and try again.");
         return;
       }
-      setEditorBusy(true);
       // Snapshot after click returns — do not clone heavy work in the handler.
-      window.setTimeout(() => {
+      afterNextPaint(() => {
         const snapshot: AdminHomeBanner = {
           id: banner.id,
           title: banner.title,
@@ -437,9 +481,8 @@ export default function BannersPage() {
         };
         startUiTransition(() => {
           setEditor({ mode: "edit", id: snapshot.id, banner: snapshot });
-          setEditorBusy(false);
         });
-      }, 32);
+      });
     },
     [startUiTransition],
   );
@@ -485,19 +528,10 @@ export default function BannersPage() {
             restaurant or dish(es).
           </p>
         </div>
-        <Button
-          type="button"
-          onClick={openCreate}
-          className="shrink-0"
-          disabled={editorBusy || editor !== null}
-        >
-          {editorBusy ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <Plus className="mr-2 h-4 w-4" />
-          )}
-          Add banner
-        </Button>
+        <AddBannerButton
+          disabled={editor !== null}
+          onOpen={openCreate}
+        />
       </div>
 
       <StatsRow total={total} activeCount={activeCount} />
@@ -514,7 +548,9 @@ export default function BannersPage() {
         onDelete={requestDelete}
       />
 
-      <BannerEditorDialog editor={editor} onClose={closeEditor} />
+      {editor ? (
+        <BannerEditorDialog editor={editor} onClose={closeEditor} />
+      ) : null}
 
       <Dialog
         open={deleteTarget !== null}
@@ -522,7 +558,7 @@ export default function BannersPage() {
           if (!open) cancelDelete();
         }}
       >
-        <DialogContent className="border-white/10 bg-[#002833] text-white sm:max-w-md">
+        <DialogContent className="border-white/10 bg-[#002833] text-white duration-0 data-[state=open]:zoom-in-100 data-[state=closed]:zoom-out-100 sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-white">Delete banner?</DialogTitle>
             <DialogDescription className="text-white/50">

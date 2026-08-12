@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { memo, startTransition, useCallback, useState } from "react";
 import dynamic from "next/dynamic";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -120,6 +120,25 @@ function linkFromBanner(banner: AdminHomeBanner): LinkTargetValue {
   };
 }
 
+/** Keep huge banner previews out of pending/submit re-renders. */
+const BannerImagePreview = memo(function BannerImagePreview({
+  src,
+}: {
+  src: string;
+}) {
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt="Preview"
+      loading="lazy"
+      decoding="async"
+      fetchPriority="low"
+      className="mt-2 h-32 w-full max-w-md rounded-lg border border-white/10 object-cover"
+    />
+  );
+});
+
 type Props = {
   editingId: string | null;
   initialBanner?: AdminHomeBanner | null;
@@ -187,9 +206,14 @@ export function BannerEditorCard({
       return createBanner(payload);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-banners"] });
       toast.success(editingId ? "Banner updated" : "Banner created");
-      onSaved();
+      // Defer close + list refetch so Create/Update click paints first.
+      window.setTimeout(() => {
+        startTransition(() => {
+          queryClient.invalidateQueries({ queryKey: ["admin-banners"] });
+          onSaved();
+        });
+      }, 0);
     },
     onError: (error: unknown) => {
       toast.error(apiErrorMessage(error, "Failed to save banner"));
@@ -227,7 +251,10 @@ export function BannerEditorCard({
       className="space-y-4"
       onSubmit={(e) => {
         e.preventDefault();
-        saveMutation.mutate();
+        // Leave the submit click before mutation state updates.
+        window.setTimeout(() => {
+          saveMutation.mutate();
+        }, 0);
       }}
       noValidate
     >
@@ -319,14 +346,7 @@ export function BannerEditorCard({
           )}
         </div>
         {fields.imagePreview ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={fields.imagePreview}
-            alt="Preview"
-            loading="lazy"
-            decoding="async"
-            className="mt-2 h-32 w-full max-w-md rounded-lg border border-white/10 object-cover"
-          />
+          <BannerImagePreview src={fields.imagePreview} />
         ) : null}
         {!imageReady && (
           <p className="text-xs text-amber-400/90">
