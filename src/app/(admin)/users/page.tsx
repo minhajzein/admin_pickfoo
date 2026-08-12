@@ -51,6 +51,14 @@ interface User {
   role: 'user' | 'owner' | 'admin';
   isVerified: boolean;
   createdAt: string;
+  orderStats?: {
+    totalOrders: number;
+    completedOrders: number;
+    cancelledOrders: number;
+    totalCommissionEarned: number;
+    hasCompletedOrder: boolean;
+    lastOrderAt?: string | null;
+  };
 }
 
 type RoleChip = 'user' | 'owner' | 'admin';
@@ -203,7 +211,14 @@ export default function UsersPage() {
                           {(user.name || '?')[0]}
                         </div>
                         <div className="flex flex-col">
-                          <span>{user.name || '—'}</span>
+                          <div className="flex items-center gap-2">
+                            <span>{user.name || '—'}</span>
+                            {user.orderStats?.hasCompletedOrder ? (
+                              <Badge className="bg-sky-500/15 text-sky-200 border border-sky-400/30">
+                                Ordered
+                              </Badge>
+                            ) : null}
+                          </div>
                           <span className="text-[10px] text-white/40 font-mono tracking-wider uppercase">
                             {user.externalUserId || `${user._id.substring(0, 8)}...`}
                           </span>
@@ -237,6 +252,11 @@ export default function UsersPage() {
                         <DropdownMenuContent align="end" className="bg-[#002833] border-white/5 text-white">
                           <DropdownMenuLabel>User Actions</DropdownMenuLabel>
                           <DropdownMenuSeparator className="bg-white/5" />
+                          <Link href={`/users/${user._id}`}>
+                            <DropdownMenuItem className="focus:bg-white/10">
+                              <UserCog className="mr-2 h-4 w-4" /> View details
+                            </DropdownMenuItem>
+                          </Link>
                           <Link href={`/users/${user._id}/payments`}>
                             <DropdownMenuItem className="text-[#98E32F] focus:text-[#98E32F] focus:bg-[#98E32F]/10">
                               <Wallet className="mr-2 h-4 w-4" /> Payments & refunds

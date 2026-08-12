@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import { toast } from "sonner";
 import {
   ArrowLeft,
@@ -218,6 +219,14 @@ export default function CustomerPaymentsPage() {
             </p>
           </div>
         </div>
+        <Link href={`/users/${userId}`}>
+          <Button
+            variant="outline"
+            className="border-white/15 text-white/80"
+          >
+            Customer details
+          </Button>
+        </Link>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
