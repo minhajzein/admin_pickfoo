@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import axios from "axios";
@@ -16,10 +17,22 @@ import {
   type AdminHomeBanner,
   type HomeBannerLinkType,
 } from "@/lib/api/banners";
-import {
-  BannerLinkTargetPicker,
-  type LinkTargetValue,
-} from "@/components/banners/BannerLinkTargetPicker";
+import type { LinkTargetValue } from "@/components/banners/BannerLinkTargetPicker";
+
+const BannerLinkTargetPicker = dynamic(
+  () =>
+    import("@/components/banners/BannerLinkTargetPicker").then(
+      (m) => m.BannerLinkTargetPicker,
+    ),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex justify-center py-6 text-white/40">
+        <Loader2 className="h-5 w-5 animate-spin" />
+      </div>
+    ),
+  },
+);
 
 const linkTypeLabels: Record<HomeBannerLinkType, string> = {
   none: "No link",
@@ -321,9 +334,12 @@ export function BannerEditorCard({
               )}
             </div>
             {fields.imagePreview ? (
+              // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={fields.imagePreview}
                 alt="Preview"
+                loading="lazy"
+                decoding="async"
                 className="mt-2 h-32 w-full max-w-md rounded-lg object-cover border border-white/10"
               />
             ) : null}

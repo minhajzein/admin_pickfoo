@@ -5,6 +5,7 @@ import {
   startTransition,
   useEffect,
   useLayoutEffect,
+  useTransition,
   type ComponentType,
   type ReactNode,
 } from "react";
@@ -33,6 +34,7 @@ import {
   Bell,
   Gift,
   IndianRupee,
+  Loader2,
 } from "lucide-react";
 import { io } from "socket.io-client";
 import { toast } from "sonner";
@@ -81,8 +83,19 @@ const AdminPageSlot = memo(function AdminPageSlot({
 });
 
 function AdminSidebar({ onLogout }: { onLogout: () => void }) {
+  const router = useRouter();
   const pathname = usePathname();
   const { sidebarOpen, mobileOpen } = useAdminShellUi();
+  const [isNavPending, startNavTransition] = useTransition();
+
+  const navigate = (href: string) => {
+    startTransition(() => adminShellUi.closeMobile());
+    if (href === pathname) return;
+    // Keep the sidebar responsive while the destination page mounts.
+    startNavTransition(() => {
+      router.push(href);
+    });
+  };
 
   return (
     <>
@@ -104,9 +117,13 @@ function AdminSidebar({ onLogout }: { onLogout: () => void }) {
       >
         <div className="relative flex h-20 items-center overflow-hidden p-6">
           <div
-            className={`transition-all duration-300 ease-in-out ${sidebarOpen || mobileOpen ? "translate-x-0 opacity-100" : "pointer-events-none -translate-x-10 opacity-0"}`}
+            className={`transition-[opacity,transform] duration-300 ease-in-out ${sidebarOpen || mobileOpen ? "translate-x-0 opacity-100" : "pointer-events-none -translate-x-10 opacity-0"}`}
           >
-            <Link href="/" className="relative block h-10 w-32">
+            <button
+              type="button"
+              onClick={() => navigate("/")}
+              className="relative block h-10 w-32"
+            >
               <Image
                 src="/logo.png"
                 alt="Pickfoo"
@@ -117,14 +134,15 @@ function AdminSidebar({ onLogout }: { onLogout: () => void }) {
               <span className="absolute -bottom-1 left-0 text-[8px] font-black tracking-widest text-[#98E32F] opacity-60">
                 ADMIN
               </span>
-            </Link>
+            </button>
           </div>
 
           <div
-            className={`absolute left-5 transition-all duration-300 ease-in-out ${!sidebarOpen && !mobileOpen ? "scale-100 opacity-100" : "pointer-events-none scale-50 opacity-0"}`}
+            className={`absolute left-5 transition-[opacity,transform] duration-300 ease-in-out ${!sidebarOpen && !mobileOpen ? "scale-100 opacity-100" : "pointer-events-none scale-50 opacity-0"}`}
           >
-            <Link
-              href="/"
+            <button
+              type="button"
+              onClick={() => navigate("/")}
               className="relative flex h-10 w-10 items-center justify-center"
             >
               <Image
@@ -134,7 +152,7 @@ function AdminSidebar({ onLogout }: { onLogout: () => void }) {
                 height={32}
                 className="object-contain"
               />
-            </Link>
+            </button>
           </div>
 
           {mobileOpen ? (
@@ -149,32 +167,35 @@ function AdminSidebar({ onLogout }: { onLogout: () => void }) {
         </div>
 
         <nav className="flex-1 space-y-2 overflow-y-auto px-4 py-4">
+          {isNavPending ? (
+            <div className="mb-2 flex items-center gap-2 px-3 text-[11px] text-white/40">
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-[#98E32F]" />
+              Loading…
+            </div>
+          ) : null}
           {NAV_ITEMS.map((item) => {
             const isActive = pathname === item.href;
             return (
-              <Link
+              <button
                 key={item.name}
-                href={item.href}
-                prefetch
-                onClick={() =>
-                  startTransition(() => adminShellUi.closeMobile())
-                }
-                className={`group relative flex items-center rounded-xl p-3 transition-all duration-300 ${
+                type="button"
+                onClick={() => navigate(item.href)}
+                className={`group relative flex w-full items-center rounded-xl p-3 text-left transition-colors duration-150 ${
                   isActive
                     ? "bg-[#98E32F] text-[#013644] shadow-[0_0_20px_rgba(152,227,47,0.2)]"
                     : "text-white/60 hover:bg-[#98E32F]/10 hover:text-[#98E32F]"
                 }`}
               >
                 <div
-                  className={`flex items-center justify-center transition-all duration-300 ${sidebarOpen || mobileOpen ? "w-auto" : "w-full"}`}
+                  className={`flex items-center justify-center ${sidebarOpen || mobileOpen ? "w-auto" : "w-full"}`}
                 >
                   <item.icon
                     size={22}
-                    className={`min-w-[22px] transition-transform duration-300 ${isActive ? "scale-110" : ""}`}
+                    className={`min-w-[22px] ${isActive ? "scale-110" : ""}`}
                   />
                 </div>
                 <span
-                  className={`overflow-hidden whitespace-nowrap text-sm font-bold tracking-tight transition-all duration-300 ${
+                  className={`overflow-hidden whitespace-nowrap text-sm font-bold tracking-tight ${
                     sidebarOpen || mobileOpen
                       ? "ml-4 max-w-[200px] opacity-100"
                       : "ml-0 max-w-0 opacity-0"
@@ -182,7 +203,7 @@ function AdminSidebar({ onLogout }: { onLogout: () => void }) {
                 >
                   {item.name}
                 </span>
-              </Link>
+              </button>
             );
           })}
         </nav>
@@ -191,15 +212,15 @@ function AdminSidebar({ onLogout }: { onLogout: () => void }) {
           <button
             type="button"
             onClick={() => startTransition(() => onLogout())}
-            className="flex w-full items-center rounded-xl p-3 text-red-400 transition-all duration-300 hover:bg-red-500/10"
+            className="flex w-full items-center rounded-xl p-3 text-red-400 transition-colors duration-150 hover:bg-red-500/10"
           >
             <div
-              className={`flex items-center justify-center transition-all duration-300 ${sidebarOpen || mobileOpen ? "w-auto" : "w-full"}`}
+              className={`flex items-center justify-center ${sidebarOpen || mobileOpen ? "w-auto" : "w-full"}`}
             >
               <LogOut size={22} className="min-w-[22px]" />
             </div>
             <span
-              className={`overflow-hidden whitespace-nowrap font-medium transition-all duration-300 ${
+              className={`overflow-hidden whitespace-nowrap font-medium ${
                 sidebarOpen || mobileOpen
                   ? "ml-4 max-w-[200px] opacity-100"
                   : "ml-0 max-w-0 opacity-0"

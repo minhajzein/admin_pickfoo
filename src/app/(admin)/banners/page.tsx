@@ -4,9 +4,11 @@ import {
   memo,
   startTransition,
   useCallback,
+  useEffect,
   useMemo,
   useRef,
   useState,
+  useTransition,
 } from "react";
 import dynamic from "next/dynamic";
 import axios from "axios";
@@ -55,6 +57,8 @@ const BannerEditorCard = dynamic(
   },
 );
 
+const BANNERS_PAGE_SIZE = Math.min(DEFAULT_PAGE_SIZE, 15);
+
 const linkTypeLabels: Record<HomeBannerLinkType, string> = {
   none: "No link",
   restaurant: "Restaurant",
@@ -71,6 +75,34 @@ function linkSummary(banner: AdminHomeBanner) {
   return "—";
 }
 
+function scheduleDeferred(work: () => void) {
+  // Let the click paint first, then mount the heavy editor off the critical path.
+  requestAnimationFrame(() => {
+    window.setTimeout(work, 0);
+  });
+}
+
+const BannerThumb = memo(function BannerThumb({
+  src,
+  priority,
+}: {
+  src: string;
+  priority?: boolean;
+}) {
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt=""
+      width={96}
+      height={56}
+      loading={priority ? "eager" : "lazy"}
+      decoding="async"
+      className="h-14 w-24 rounded object-cover bg-black/20"
+    />
+  );
+});
+
 const BannersListCard = memo(function BannersListCard({
   banners,
   editingId,
@@ -80,6 +112,7 @@ const BannersListCard = memo(function BannersListCard({
   totalPages,
   deletePending,
   showForm,
+  editorBusy,
   onPageChange,
   onCreate,
   onEdit,
@@ -93,6 +126,7 @@ const BannersListCard = memo(function BannersListCard({
   totalPages: number;
   deletePending: boolean;
   showForm: boolean;
+  editorBusy: boolean;
   onPageChange: (page: number) => void;
   onCreate: () => void;
   onEdit: (banner: AdminHomeBanner) => void;
@@ -106,8 +140,17 @@ const BannersListCard = memo(function BannersListCard({
           All banners
         </CardTitle>
         {!showForm && (
-          <Button type="button" onClick={onCreate} size="sm">
-            <Plus className="mr-2 h-4 w-4" />
+          <Button
+            type="button"
+            onClick={onCreate}
+            size="sm"
+            disabled={editorBusy}
+          >
+            {editorBusy ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Plus className="mr-2 h-4 w-4" />
+            )}
             Add banner
           </Button>
         )}
@@ -136,7 +179,7 @@ const BannersListCard = memo(function BannersListCard({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {banners.map((banner) => (
+              {banners.map((banner, index) => (
                 <TableRow
                   key={banner.id}
                   className={
@@ -146,11 +189,7 @@ const BannersListCard = memo(function BannersListCard({
                   }
                 >
                   <TableCell>
-                    <img
-                      src={banner.imageUrl}
-                      alt=""
-                      className="h-14 w-24 rounded object-cover"
-                    />
+                    <BannerThumb src={banner.imageUrl} priority={index < 4} />
                   </TableCell>
                   <TableCell>
                     <div className="font-medium">
@@ -198,6 +237,7 @@ const BannersListCard = memo(function BannersListCard({
                         type="button"
                         size="sm"
                         variant="outline"
+                        disabled={editorBusy}
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
@@ -227,8 +267,7 @@ const BannersListCard = memo(function BannersListCard({
                         }}
                         aria-label={`Delete ${banner.title?.trim() || "banner"}`}
                       >
-                        <Trash2 className="h-4 w-4 mr-1" />
-                        Delete
+                        <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
                   </TableCell>
@@ -239,7 +278,7 @@ const BannersListCard = memo(function BannersListCard({
         )}
         <ListPagination
           page={page}
-          limit={DEFAULT_PAGE_SIZE}
+          limit={BANNERS_PAGE_SIZE}
           total={total}
           totalPages={totalPages}
           onPageChange={onPageChange}
@@ -258,11 +297,26 @@ export default function BannersPage() {
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [editor, setEditor] = useState<EditorState | null>(null);
+  const [editorBusy, setEditorBusy] = useState(false);
+  const [, startUiTransition] = useTransition();
   const deleteMutateRef = useRef<(id: string) => void>(() => {});
+
+  // Warm the editor chunk so Add/Edit doesn't pay the import cost on click.
+  useEffect(() => {
+    let cancelled = false;
+    const preload = () => {
+      if (!cancelled) void import("@/components/banners/BannerEditorCard");
+    };
+    const timeoutId = window.setTimeout(preload, 300);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, []);
 
   const { data, isLoading } = useQuery({
     queryKey: ["admin-banners", page],
-    queryFn: () => fetchBanners({ page, limit: DEFAULT_PAGE_SIZE }),
+    queryFn: () => fetchBanners({ page, limit: BANNERS_PAGE_SIZE }),
     placeholderData: keepPreviousData,
   });
 
@@ -299,22 +353,32 @@ export default function BannersPage() {
   );
 
   const openCreate = useCallback(() => {
-    startTransition(() => {
-      setEditor({ mode: "create" });
+    setEditorBusy(true);
+    scheduleDeferred(() => {
+      startUiTransition(() => {
+        setEditor({ mode: "create" });
+        setEditorBusy(false);
+      });
     });
-  }, []);
+  }, [startUiTransition]);
 
-  const startEdit = useCallback((banner: AdminHomeBanner) => {
-    const id = String(banner.id ?? "").trim();
-    if (!id) {
-      toast.error("This banner has no id — refresh the list and try again.");
-      return;
-    }
-    // Defer heavy editor mount so the Edit click doesn't block paint.
-    startTransition(() => {
-      setEditor({ mode: "edit", id, banner });
-    });
-  }, []);
+  const startEdit = useCallback(
+    (banner: AdminHomeBanner) => {
+      const id = String(banner.id ?? "").trim();
+      if (!id) {
+        toast.error("This banner has no id — refresh the list and try again.");
+        return;
+      }
+      setEditorBusy(true);
+      scheduleDeferred(() => {
+        startUiTransition(() => {
+          setEditor({ mode: "edit", id, banner });
+          setEditorBusy(false);
+        });
+      });
+    },
+    [startUiTransition],
+  );
 
   const closeEditor = useCallback(() => {
     startTransition(() => setEditor(null));
@@ -342,8 +406,17 @@ export default function BannersPage() {
           </p>
         </div>
         {!showForm && (
-          <Button type="button" onClick={openCreate} className="shrink-0">
-            <Plus className="mr-2 h-4 w-4" />
+          <Button
+            type="button"
+            onClick={openCreate}
+            className="shrink-0"
+            disabled={editorBusy}
+          >
+            {editorBusy ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Plus className="mr-2 h-4 w-4" />
+            )}
             Add banner
           </Button>
         )}
@@ -358,7 +431,7 @@ export default function BannersPage() {
         </Card>
         <Card className="bg-[#002833] border-white/10">
           <CardContent className="pt-6">
-            <p className="text-sm text-white/60">Active</p>
+            <p className="text-sm text-white/60">Active (this page)</p>
             <p className="text-3xl font-bold text-[#98E32F]">{activeCount}</p>
           </CardContent>
         </Card>
@@ -391,6 +464,7 @@ export default function BannersPage() {
         totalPages={totalPages}
         deletePending={deleteMutation.isPending}
         showForm={showForm}
+        editorBusy={editorBusy}
         onPageChange={handlePageChange}
         onCreate={openCreate}
         onEdit={startEdit}
