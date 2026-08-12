@@ -132,6 +132,16 @@ export default function UserDetailsPage() {
               <p className="mt-1 text-sm text-white/50">
                 {user.externalUserId || user._id}
               </p>
+              {user.createdAt ? (
+                <p className="text-xs text-white/35">
+                  Joined{" "}
+                  {new Date(user.createdAt).toLocaleDateString("en-IN", {
+                    day: "2-digit",
+                    month: "long",
+                    year: "numeric",
+                  })}
+                </p>
+              ) : null}
               <div className="mt-3 flex flex-wrap gap-2">
                 <Link href={`/users/${userId}/payments`}>
                   <Button className="bg-[#98E32F] font-semibold text-[#013644] hover:brightness-110">

@@ -62,6 +62,7 @@ interface User {
 }
 
 type RoleChip = 'user' | 'owner' | 'admin';
+type CustomerSegment = 'all' | 'new' | 'ordered';
 
 const ROLE_CHIPS: Array<{ value: RoleChip; label: string }> = [
   { value: 'user', label: 'Customers' },
@@ -69,10 +70,17 @@ const ROLE_CHIPS: Array<{ value: RoleChip; label: string }> = [
   { value: 'admin', label: 'Admins' },
 ];
 
+const CUSTOMER_SEGMENTS: Array<{ value: CustomerSegment; label: string }> = [
+  { value: 'all', label: 'All customers' },
+  { value: 'new', label: 'New' },
+  { value: 'ordered', label: 'Ordered' },
+];
+
 export default function UsersPage() {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<RoleChip>('user');
+  const [customerSegment, setCustomerSegment] = useState<CustomerSegment>('all');
   const [page, setPage] = useState(1);
   const queryClient = useQueryClient();
 
@@ -83,15 +91,19 @@ export default function UsersPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [roleFilter, debouncedSearch]);
+  }, [roleFilter, customerSegment, debouncedSearch]);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['users', debouncedSearch, roleFilter, page],
+    queryKey: ['users', debouncedSearch, roleFilter, customerSegment, page],
     queryFn: async () => {
       const response = await api.get(`/users`, {
         params: {
           search: debouncedSearch || undefined,
           role: roleFilter,
+          customerSegment:
+            roleFilter === 'user' && customerSegment !== 'all'
+              ? customerSegment
+              : undefined,
           page,
           limit: DEFAULT_PAGE_SIZE,
         },
@@ -176,6 +188,31 @@ export default function UsersPage() {
         })}
       </div>
 
+      {roleFilter === 'user' ? (
+        <div className="flex flex-wrap gap-2">
+          {CUSTOMER_SEGMENTS.map((chip) => {
+            const active = customerSegment === chip.value;
+            return (
+              <button
+                key={chip.value}
+                type="button"
+                onClick={() => {
+                  setCustomerSegment(chip.value);
+                  setPage(1);
+                }}
+                className={`rounded-full px-4 py-1.5 text-sm font-semibold border transition-colors ${
+                  active
+                    ? 'bg-sky-400 text-[#013644] border-sky-400'
+                    : 'bg-white/5 text-white/60 border-white/10 hover:bg-white/10 hover:text-white'
+                }`}
+              >
+                {chip.label}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+
       <Card className="bg-[#002833] border-white/5 text-white overflow-hidden">
         <CardContent className="p-0">
           <Table>
@@ -222,6 +259,9 @@ export default function UsersPage() {
                           <span className="text-[10px] text-white/40 font-mono tracking-wider uppercase">
                             {user.externalUserId || `${user._id.substring(0, 8)}...`}
                           </span>
+                          <span className="text-[10px] text-white/30">
+                            Joined {new Date(user.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                          </span>
                         </div>
                       </div>
                     </TableCell>
@@ -239,8 +279,8 @@ export default function UsersPage() {
                         <span className="text-xs text-white/40 truncate max-w-[150px]">{user.email || '—'}</span>
                       </div>
                     </TableCell>
-                    <TableCell className="text-white/40 font-mono text-xs">
-                      {new Date(user.createdAt).toLocaleDateString()}
+                    <TableCell className="text-white/55 text-xs whitespace-nowrap">
+                      {new Date(user.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                     </TableCell>
                     <TableCell className="text-right">
                       <DropdownMenu>
