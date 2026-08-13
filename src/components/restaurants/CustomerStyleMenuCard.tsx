@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import NextImage from "next/image";
 import { Clock, Edit2, ImageIcon, Loader2, Star, Trash2 } from "lucide-react";
 import type { AdminMenuItem } from "@/lib/api/menu";
@@ -20,7 +21,7 @@ function ratingLabel(item: AdminMenuItem) {
 }
 
 /** Mint menu card matching customer Flutter MenuItemCard. */
-export function CustomerStyleMenuCard({
+export const CustomerStyleMenuCard = memo(function CustomerStyleMenuCard({
   item,
   restaurantName,
   onEdit,
@@ -53,6 +54,8 @@ export function CustomerStyleMenuCard({
               alt={item.name}
               fill
               unoptimized
+              loading="lazy"
+              decoding="async"
               className="object-cover"
             />
           ) : (
@@ -197,4 +200,4 @@ export function CustomerStyleMenuCard({
       </div>
     </div>
   );
-}
+});

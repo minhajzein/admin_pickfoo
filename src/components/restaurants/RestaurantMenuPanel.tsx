@@ -1,7 +1,14 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import {
+  memo,
+  startTransition,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { toast } from "sonner";
 import {
   Edit2,
@@ -136,6 +143,47 @@ function validateForm(form: AdminMenuItemInput): string | null {
   }
   return null;
 }
+
+/**
+ * Uncontrolled + debounced: keystrokes never re-render the menu grid
+ * (which was causing ~200–300ms INP on this search input).
+ */
+const MenuSearchInput = memo(function MenuSearchInput({
+  onSearch,
+}: {
+  onSearch: (query: string) => void;
+}) {
+  const timerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+    };
+  }, []);
+
+  return (
+    <div className="relative">
+      <Search
+        className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30"
+        size={16}
+      />
+      <Input
+        defaultValue=""
+        placeholder="Search items..."
+        className="pl-10 bg-white/5 border-white/10 text-white"
+        onChange={(e) => {
+          const value = e.target.value;
+          if (timerRef.current !== null) {
+            window.clearTimeout(timerRef.current);
+          }
+          timerRef.current = window.setTimeout(() => {
+            startTransition(() => onSearch(value));
+          }, 200);
+        }}
+      />
+    </div>
+  );
+});
 
 export function RestaurantMenuPanel({
   restaurantId,
@@ -801,18 +849,7 @@ export function RestaurantMenuPanel({
         </div>
       </div>
 
-      <div className="relative">
-        <Search
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30"
-          size={16}
-        />
-        <Input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search items..."
-          className="pl-10 bg-white/5 border-white/10 text-white"
-        />
-      </div>
+      <MenuSearchInput onSearch={setSearch} />
 
       {isMenuLoading ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
