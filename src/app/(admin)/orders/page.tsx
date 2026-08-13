@@ -56,6 +56,7 @@ const STATUS_FILTERS: Array<{ label: string; value: string }> = [
   { label: "Active", value: "active" },
   { label: "Awaiting owner", value: "awaiting-owner" },
   { label: "Awaiting payment", value: "accepted-awaiting-payment" },
+  { label: "Payment expired", value: "payment-expired" },
   { label: "Confirmed", value: "confirmed" },
   { label: "Preparing", value: "preparing" },
   { label: "Ready", value: "ready" },

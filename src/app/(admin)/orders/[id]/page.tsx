@@ -1,9 +1,10 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,6 +22,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { raiseCustomerOrderFromRefs } from "@/lib/api/customer-payments";
 import {
   cancelSourceLabel,
   fetchDispatchOrder,
@@ -33,6 +35,7 @@ import {
   Loader2,
   Mail,
   MapPin,
+  Megaphone,
   Phone,
   Store,
   User,
@@ -145,12 +148,47 @@ function TimelineCard({ order }: { order: AdminOrderDetail }) {
 export default function OrderDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const orderRef = String(params?.id || "").trim();
 
   const { data: order, isLoading, isError, error } = useQuery({
     queryKey: ["orders", "dispatch-order", orderRef],
     queryFn: () => fetchDispatchOrder(orderRef),
     enabled: !!orderRef,
+  });
+
+  const raiseMutation = useMutation({
+    mutationFn: () => {
+      if (!order?.customer?.id) {
+        throw new Error("Customer is missing on this order");
+      }
+      return raiseCustomerOrderFromRefs(order.customer.id, {
+        orderId: order.pickfooId || order.id,
+        razorpayOrderId: order.razorpayOrderId || undefined,
+        razorpayPaymentId:
+          order.paymentReference || order.transactionId || undefined,
+      });
+    },
+    onSuccess: (res) => {
+      toast.success(
+        res.alreadyRaised
+          ? "Order was already raised"
+          : "Order raised — restaurant alerted and marked confirmed",
+      );
+      queryClient.invalidateQueries({
+        queryKey: ["orders", "dispatch-order", orderRef],
+      });
+    },
+    onError: (err: unknown) => {
+      const msg =
+        err && typeof err === "object" && "response" in err
+          ? (err as { response?: { data?: { message?: string } } }).response
+              ?.data?.message
+          : err instanceof Error
+            ? err.message
+            : undefined;
+      toast.error(msg || "Could not raise order");
+    },
   });
 
   if (isLoading) {
@@ -243,6 +281,24 @@ export default function OrderDetailPage() {
               >
                 Paid · start prep
               </Badge>
+            ) : null}
+            {["payment-expired", "cancelled", "accepted-awaiting-payment"].includes(
+              order.status,
+            ) && order.customer?.id ? (
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-[#98E32F]/40 text-[#98E32F] hover:bg-[#98E32F]/10"
+                disabled={raiseMutation.isPending}
+                onClick={() => raiseMutation.mutate()}
+              >
+                {raiseMutation.isPending ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Megaphone className="mr-1 h-3.5 w-3.5" />
+                )}
+                Raise paid order
+              </Button>
             ) : null}
           </div>
         </div>

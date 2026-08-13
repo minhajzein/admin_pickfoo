@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import {
   ArrowLeft,
   Loader2,
+  Megaphone,
   RotateCcw,
   Search,
   Wallet,
@@ -17,6 +18,8 @@ import {
   fetchCustomerPaymentSummary,
   fetchCustomerPaymentTransactions,
   refundCustomerPayment,
+  raiseCustomerOrderFromPayment,
+  raiseCustomerOrderFromRefs,
   type CustomerPaymentStatus,
   type CustomerPaymentTransaction,
 } from "@/lib/api/customer-payments";
@@ -89,6 +92,24 @@ function restaurantName(tx: CustomerPaymentTransaction) {
   return r.name || "—";
 }
 
+function orderNeedsRaise(tx: CustomerPaymentTransaction): boolean {
+  if (tx.status !== "captured" && tx.status !== "success") return false;
+  const order = tx.order;
+  if (!order) return true;
+  if (typeof order === "string") return false;
+  const status = (order.status || "").toLowerCase();
+  const payment = (order.paymentStatus || "").toLowerCase();
+  if (payment === "paid" && ["confirmed", "preparing", "ready", "out-for-delivery", "delivered"].includes(status)) {
+    return false;
+  }
+  return (
+    status === "payment-expired" ||
+    status === "cancelled" ||
+    status === "accepted-awaiting-payment" ||
+    payment !== "paid"
+  );
+}
+
 type StatusFilter = CustomerPaymentStatus | "all";
 
 export default function CustomerPaymentsPage() {
@@ -106,6 +127,10 @@ export default function CustomerPaymentsPage() {
   const [reason, setReason] = useState("");
   const [refundAmount, setRefundAmount] = useState("");
   const [recordOnly, setRecordOnly] = useState(false);
+  const [raiseOpen, setRaiseOpen] = useState(false);
+  const [raiseOrderId, setRaiseOrderId] = useState("");
+  const [raiseRpOrderId, setRaiseRpOrderId] = useState("");
+  const [raiseRpPaymentId, setRaiseRpPaymentId] = useState("");
 
   const {
     data: summaryData,
@@ -169,6 +194,61 @@ export default function CustomerPaymentsPage() {
     },
   });
 
+  const raiseTxMutation = useMutation({
+    mutationFn: (txId: string) => raiseCustomerOrderFromPayment(userId, txId),
+    onSuccess: (res) => {
+      toast.success(
+        res.alreadyRaised
+          ? "Order was already raised"
+          : "Order raised — restaurant alerted and marked confirmed",
+      );
+      queryClient.invalidateQueries({ queryKey: ["customer-payments", userId] });
+      queryClient.invalidateQueries({
+        queryKey: ["customer-payments-tx", userId],
+      });
+    },
+    onError: (err: unknown) => {
+      const msg =
+        err && typeof err === "object" && "response" in err
+          ? (err as { response?: { data?: { message?: string } } }).response
+              ?.data?.message
+          : undefined;
+      toast.error(msg || "Could not raise order");
+    },
+  });
+
+  const raiseRefsMutation = useMutation({
+    mutationFn: () =>
+      raiseCustomerOrderFromRefs(userId, {
+        orderId: raiseOrderId.trim() || undefined,
+        razorpayOrderId: raiseRpOrderId.trim() || undefined,
+        razorpayPaymentId: raiseRpPaymentId.trim() || undefined,
+      }),
+    onSuccess: (res) => {
+      toast.success(
+        res.alreadyRaised
+          ? "Order was already raised"
+          : "Order raised — restaurant alerted and marked confirmed",
+      );
+      queryClient.invalidateQueries({ queryKey: ["customer-payments", userId] });
+      queryClient.invalidateQueries({
+        queryKey: ["customer-payments-tx", userId],
+      });
+      setRaiseOpen(false);
+      setRaiseOrderId("");
+      setRaiseRpOrderId("");
+      setRaiseRpPaymentId("");
+    },
+    onError: (err: unknown) => {
+      const msg =
+        err && typeof err === "object" && "response" in err
+          ? (err as { response?: { data?: { message?: string } } }).response
+              ?.data?.message
+          : undefined;
+      toast.error(msg || "Could not raise order");
+    },
+  });
+
   const summary = summaryData?.summary;
   const user = summaryData?.user;
 
@@ -219,14 +299,24 @@ export default function CustomerPaymentsPage() {
             </p>
           </div>
         </div>
-        <Link href={`/users/${userId}`}>
+        <div className="flex flex-wrap gap-2">
+          <Link href={`/users/${userId}`}>
+            <Button
+              variant="outline"
+              className="border-white/15 text-white/80"
+            >
+              Customer details
+            </Button>
+          </Link>
           <Button
             variant="outline"
-            className="border-white/15 text-white/80"
+            className="border-[#98E32F]/40 text-[#98E32F] hover:bg-[#98E32F]/10"
+            onClick={() => setRaiseOpen(true)}
           >
-            Customer details
+            <Megaphone className="mr-2 h-4 w-4" />
+            Raise paid order
           </Button>
-        </Link>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
@@ -376,25 +466,41 @@ export default function CustomerPaymentsPage() {
                       )}
                     </TableCell>
                     <TableCell className="text-right">
-                      {tx.status === "captured" || tx.status === "success" ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="border-sky-500/40 text-sky-300 hover:bg-sky-500/10"
-                          onClick={() => {
-                            setRefundTx(tx);
-                            setRefundAmount(String(tx.amount ?? ""));
-                            setReason("");
-                            setRecordOnly(false);
-                            setRefundOpen(true);
-                          }}
-                        >
-                          <RotateCcw className="mr-1 h-3.5 w-3.5" />
-                          Refund
-                        </Button>
-                      ) : (
-                        <span className="text-xs text-white/25">—</span>
-                      )}
+                      <div className="flex justify-end gap-2">
+                        {orderNeedsRaise(tx) ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="border-[#98E32F]/40 text-[#98E32F] hover:bg-[#98E32F]/10"
+                            disabled={raiseTxMutation.isPending}
+                            onClick={() => raiseTxMutation.mutate(tx._id)}
+                          >
+                            <Megaphone className="mr-1 h-3.5 w-3.5" />
+                            Raise
+                          </Button>
+                        ) : null}
+                        {tx.status === "captured" || tx.status === "success" ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="border-sky-500/40 text-sky-300 hover:bg-sky-500/10"
+                            onClick={() => {
+                              setRefundTx(tx);
+                              setRefundAmount(String(tx.amount ?? ""));
+                              setReason("");
+                              setRecordOnly(false);
+                              setRefundOpen(true);
+                            }}
+                          >
+                            <RotateCcw className="mr-1 h-3.5 w-3.5" />
+                            Refund
+                          </Button>
+                        ) : (
+                          orderNeedsRaise(tx) ? null : (
+                            <span className="text-xs text-white/25">—</span>
+                          )
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -464,6 +570,69 @@ export default function CustomerPaymentsPage() {
                 <Loader2 className="animate-spin h-4 w-4" />
               ) : (
                 "Confirm refund"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={raiseOpen} onOpenChange={setRaiseOpen}>
+        <DialogContent className="bg-[#002833] border-white/10 text-white">
+          <DialogHeader>
+            <DialogTitle>Raise paid order</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-white/50">
+              Use this when Razorpay captured a payment but the kitchen never got
+              the order. The existing order is staged as awaiting payment, then
+              confirmed — restaurant is alerted. Duplicate captures on the same
+              payment are ignored.
+            </p>
+            <div className="space-y-2">
+              <Label className="text-white/50">Pickfoo order id</Label>
+              <Input
+                value={raiseOrderId}
+                onChange={(e) => setRaiseOrderId(e.target.value)}
+                placeholder="PF-20260813-E8CFB1"
+                className="bg-black/20 border-white/10 font-mono"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-white/50">Razorpay order id</Label>
+              <Input
+                value={raiseRpOrderId}
+                onChange={(e) => setRaiseRpOrderId(e.target.value)}
+                placeholder="order_..."
+                className="bg-black/20 border-white/10 font-mono"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-white/50">Razorpay payment id</Label>
+              <Input
+                value={raiseRpPaymentId}
+                onChange={(e) => setRaiseRpPaymentId(e.target.value)}
+                placeholder="pay_..."
+                className="bg-black/20 border-white/10 font-mono"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              className="border-white/15"
+              onClick={() => setRaiseOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="bg-[#98E32F] text-[#013644] font-semibold hover:bg-[#98E32F]"
+              disabled={raiseRefsMutation.isPending}
+              onClick={() => raiseRefsMutation.mutate()}
+            >
+              {raiseRefsMutation.isPending ? (
+                <Loader2 className="animate-spin h-4 w-4" />
+              ) : (
+                "Raise order"
               )}
             </Button>
           </DialogFooter>

@@ -84,3 +84,23 @@ export async function refundCustomerPayment(
   );
   return data;
 }
+
+export async function raiseCustomerOrderFromPayment(
+  userId: string,
+  txId: string,
+): Promise<{ data?: CustomerPaymentTransaction; alreadyRaised?: boolean; message?: string }> {
+  const { data } = await api.post(`/users/${userId}/payments/${txId}/raise-order`);
+  return data;
+}
+
+export async function raiseCustomerOrderFromRefs(
+  userId: string,
+  payload: {
+    orderId?: string;
+    razorpayOrderId?: string;
+    razorpayPaymentId?: string;
+  },
+): Promise<{ data?: unknown; alreadyRaised?: boolean; message?: string }> {
+  const { data } = await api.post(`/users/${userId}/payments/raise-order`, payload);
+  return data;
+}

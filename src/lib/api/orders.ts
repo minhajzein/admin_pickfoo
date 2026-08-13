@@ -243,10 +243,13 @@ function cancelSourceLabel(input: {
   rejectionReason?: string | null;
 }): string | null {
   const status = (input.status ?? "").trim().toLowerCase();
+  if (status === "payment-expired") return "Payment expired";
   if (status !== "rejected" && status !== "cancelled") return null;
 
   const code = (input.rejectionCode ?? "").trim().toLowerCase();
   switch (code) {
+    case "payment_timeout":
+      return "Payment expired";
     case "customer_cancelled":
       return "Canceled by customer";
     case "owner_rejected":
