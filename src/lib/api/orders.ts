@@ -242,6 +242,7 @@ export async function markOrderRefunded(
 
 function canRedispatchPickupOrder(row: AdminOrderRow): boolean {
   if (row.orderType !== "pickup") return false;
+  if (row.paymentStatus === "refunded") return false;
   if (row.status !== "preparing" && row.status !== "ready") return false;
 
   // Hide once a partner has accepted (or progressed further).

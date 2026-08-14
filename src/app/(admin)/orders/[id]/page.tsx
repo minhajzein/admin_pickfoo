@@ -271,6 +271,12 @@ export default function OrderDetailPage() {
   });
   const title = order.pickfooId || order.id;
   const cancelSource = cancelSourceLabel(order);
+  const canMarkRefunded = order.paymentStatus === "paid";
+  const canCleanupRefundedDispatch =
+    order.paymentStatus === "refunded" &&
+    ["confirmed", "preparing", "ready", "out-for-delivery"].includes(
+      order.status,
+    );
 
   return (
     <div className="space-y-6">
@@ -327,7 +333,7 @@ export default function OrderDetailPage() {
                 Paid · start prep
               </Badge>
             ) : null}
-            {order.paymentStatus === "paid" ? (
+            {canMarkRefunded || canCleanupRefundedDispatch ? (
               <Button
                 size="sm"
                 variant="outline"
@@ -335,7 +341,9 @@ export default function OrderDetailPage() {
                 onClick={() => setRefundOpen(true)}
               >
                 <Undo2 className="mr-1 h-3.5 w-3.5" />
-                Mark refunded
+                {canCleanupRefundedDispatch
+                  ? "Stop partner offers"
+                  : "Mark refunded"}
               </Button>
             ) : null}
             {["payment-expired", "cancelled", "accepted-awaiting-payment"].includes(
@@ -685,7 +693,7 @@ export default function OrderDetailPage() {
               {order.refundReason ? (
                 <DetailRow label="Refund reason" value={order.refundReason} />
               ) : null}
-              {order.paymentStatus === "paid" ? (
+              {canMarkRefunded || canCleanupRefundedDispatch ? (
                 <Button
                   type="button"
                   size="sm"
@@ -694,7 +702,9 @@ export default function OrderDetailPage() {
                   onClick={() => setRefundOpen(true)}
                 >
                   <Undo2 className="mr-1 h-3.5 w-3.5" />
-                  Mark refunded
+                  {canCleanupRefundedDispatch
+                    ? "Stop partner offers"
+                    : "Mark refunded"}
                 </Button>
               ) : null}
             </CardContent>
@@ -714,11 +724,15 @@ export default function OrderDetailPage() {
       >
         <DialogContent className="border-white/10 bg-[#002833] text-white sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-white">Mark as refunded?</DialogTitle>
+            <DialogTitle className="text-white">
+              {canCleanupRefundedDispatch
+                ? "Stop partner offers?"
+                : "Mark as refunded?"}
+            </DialogTitle>
             <DialogDescription className="text-white/50">
-              Records this order as refunded in admin. Does not call Razorpay —
-              use this after you already refunded in the dashboard or offline.
-              Linked customer payment records will also be marked refunded.
+              {canCleanupRefundedDispatch
+                ? "This order is already refunded but still in the kitchen/dispatch pipeline. This cancels it and withdraws the partner offer so partners stop getting notified."
+                : "Records this order as refunded in admin. Does not call Razorpay — use this after you already refunded in the dashboard or offline. Linked customer payment records will also be marked refunded, and any partner offer will be cleared."}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
@@ -754,7 +768,9 @@ export default function OrderDetailPage() {
               ) : (
                 <Undo2 className="mr-2 h-4 w-4" />
               )}
-              Mark refunded
+              {canCleanupRefundedDispatch
+                ? "Stop partner offers"
+                : "Mark refunded"}
             </Button>
           </DialogFooter>
         </DialogContent>
