@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   memo,
   startTransition,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -55,6 +56,13 @@ type MealType = "breakfast" | "lunch" | "dinner";
 
 const DEFAULT_COMMISSION_PERCENT = 12;
 
+/** Yield past the next paint so click INP isn't charged for dialog mount. */
+function afterNextPaint(fn: () => void) {
+  window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(fn);
+  });
+}
+
 const RESTAURANT_TYPE_LABELS: Record<RestaurantType, string> = {
   restaurant: "Restaurant",
   cafe: "Cafe",
@@ -94,6 +102,8 @@ const emptyForm = (
   variants: [],
   isVeg: true,
   isActive: true,
+  availableFrom: "",
+  availableTo: "",
   image: "",
   ingredients: [],
   restaurantTypes:
@@ -141,6 +151,14 @@ function validateForm(form: AdminMenuItemInput): string | null {
   if (!form.restaurantTypes || form.restaurantTypes.length === 0) {
     return "Select at least one restaurant type";
   }
+  const from = (form.availableFrom ?? "").trim();
+  const to = (form.availableTo ?? "").trim();
+  const hhmm = /^([01]\d|2[0-3]):([0-5]\d)$/;
+  if ((from && !to) || (!from && to)) {
+    return "Set both available-from and available-to, or leave both empty";
+  }
+  if (from && !hhmm.test(from)) return "Available from must be HH:mm";
+  if (to && !hhmm.test(to)) return "Available to must be HH:mm";
   return null;
 }
 
@@ -198,6 +216,8 @@ export function RestaurantMenuPanel({
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [isItemModalOpen, setIsItemModalOpen] = useState(false);
+  /** Mount heavy item form after dialog shell paints. */
+  const [itemFormReady, setItemFormReady] = useState(false);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [form, setForm] = useState(() => emptyForm(restaurantTypeDefaults));
   const [ingredientInput, setIngredientInput] = useState("");
@@ -451,61 +471,86 @@ export function RestaurantMenuPanel({
     },
   });
 
-  const openCreate = () => {
-    setEditingItemId(null);
-    setForm(emptyForm(restaurantTypeDefaults));
-    setIngredientInput("");
-    setRelatedItemSearch("");
-    setRelatedItemCategories([]);
-    setCommissionPercent(DEFAULT_COMMISSION_PERCENT);
-    setOriginalPrice(0);
-    setOriginalVariantPrices([]);
-    setIsItemModalOpen(true);
-  };
+  useEffect(() => {
+    if (!isItemModalOpen) {
+      setItemFormReady(false);
+      return;
+    }
+    const id = window.setTimeout(() => setItemFormReady(true), 80);
+    return () => window.clearTimeout(id);
+  }, [isItemModalOpen, editingItemId]);
 
-  const openEdit = (item: AdminMenuItem) => {
-    setEditingItemId(item._id);
-    const itemTypes =
-      item.restaurantTypes && item.restaurantTypes.length > 0
-        ? item.restaurantTypes
-        : restaurantTypeDefaults.length > 0
-          ? restaurantTypeDefaults
-          : ["restaurant"];
-    const itemMealTypes: MealType[] =
-      item.mealTypes && item.mealTypes.length > 0
-        ? item.mealTypes
-        : item.type
-          ? ([item.type] as MealType[])
-          : ["lunch"];
-    const pct = DEFAULT_COMMISSION_PERCENT;
-    const variants = item.variants?.map((v) => ({ ...v })) ?? [];
-    setForm({
-      name: item.name,
-      description: item.description,
-      price: item.price,
-      category: item.category,
-      type: item.type || "lunch",
-      mealTypes: [...itemMealTypes],
-      preparationTime: item.preparationTime ?? 0,
-      packingCharge: item.packingCharge ?? 0,
-      variants,
-      isVeg: item.isVeg,
-      isActive: item.isActive,
-      image: item.image || "",
-      ingredients: item.ingredients ?? [],
-      restaurantTypes: [...itemTypes],
-      completeMealItemIds: normalizeRelatedItemIds(item.completeMealItemIds),
+  const openCreate = useCallback(() => {
+    // Leave the click task before resetting form + mounting the huge dialog.
+    afterNextPaint(() => {
+      startTransition(() => {
+        setEditingItemId(null);
+        setForm(emptyForm(restaurantTypeDefaults));
+        setIngredientInput("");
+        setRelatedItemSearch("");
+        setRelatedItemCategories([]);
+        setCommissionPercent(DEFAULT_COMMISSION_PERCENT);
+        setOriginalPrice(0);
+        setOriginalVariantPrices([]);
+        setIsItemModalOpen(true);
+      });
     });
-    setCommissionPercent(pct);
-    setOriginalPrice(originalFromFinal(item.price, pct));
-    setOriginalVariantPrices(
-      variants.map((v) => originalFromFinal(v.price, pct)),
-    );
-    setIngredientInput("");
-    setRelatedItemSearch("");
-    setRelatedItemCategories([]);
-    setIsItemModalOpen(true);
-  };
+  }, [restaurantTypeDefaults]);
+
+  const openEdit = useCallback(
+    (item: AdminMenuItem) => {
+      afterNextPaint(() => {
+        startTransition(() => {
+          setEditingItemId(item._id);
+          const itemTypes =
+            item.restaurantTypes && item.restaurantTypes.length > 0
+              ? item.restaurantTypes
+              : restaurantTypeDefaults.length > 0
+                ? restaurantTypeDefaults
+                : ["restaurant"];
+          const itemMealTypes: MealType[] =
+            item.mealTypes && item.mealTypes.length > 0
+              ? item.mealTypes
+              : item.type
+                ? ([item.type] as MealType[])
+                : ["lunch"];
+          const pct = DEFAULT_COMMISSION_PERCENT;
+          const variants = item.variants?.map((v) => ({ ...v })) ?? [];
+          setForm({
+            name: item.name,
+            description: item.description,
+            price: item.price,
+            category: item.category,
+            type: item.type || "lunch",
+            mealTypes: [...itemMealTypes],
+            preparationTime: item.preparationTime ?? 0,
+            packingCharge: item.packingCharge ?? 0,
+            variants,
+            isVeg: item.isVeg,
+            isActive: item.isActive,
+            availableFrom: item.availableFrom || "",
+            availableTo: item.availableTo || "",
+            image: item.image || "",
+            ingredients: item.ingredients ?? [],
+            restaurantTypes: [...itemTypes],
+            completeMealItemIds: normalizeRelatedItemIds(
+              item.completeMealItemIds,
+            ),
+          });
+          setCommissionPercent(pct);
+          setOriginalPrice(originalFromFinal(item.price, pct));
+          setOriginalVariantPrices(
+            variants.map((v) => originalFromFinal(v.price, pct)),
+          );
+          setIngredientInput("");
+          setRelatedItemSearch("");
+          setRelatedItemCategories([]);
+          setIsItemModalOpen(true);
+        });
+      });
+    },
+    [restaurantTypeDefaults],
+  );
 
   const syncRaisedFromOriginals = (
     nextOriginal: number,
@@ -694,6 +739,8 @@ export function RestaurantMenuPanel({
       image: form.image || undefined,
       restaurantTypes: form.restaurantTypes ?? ["restaurant"],
       completeMealItemIds: form.completeMealItemIds ?? [],
+      availableFrom: (form.availableFrom ?? "").trim(),
+      availableTo: (form.availableTo ?? "").trim(),
     };
     try {
       setIsSaving(true);
@@ -907,8 +954,14 @@ export function RestaurantMenuPanel({
       )}
 
       {/* Add / Edit item dialog */}
-      <Dialog open={isItemModalOpen} onOpenChange={setIsItemModalOpen}>
-        <DialogContent className="bg-[#002833] border-white/10 text-white max-w-2xl sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+      <Dialog
+        open={isItemModalOpen}
+        onOpenChange={(open) => {
+          setIsItemModalOpen(open);
+          if (!open) setItemFormReady(false);
+        }}
+      >
+        <DialogContent className="bg-[#002833] border-white/10 text-white max-w-2xl sm:max-w-2xl max-h-[90vh] overflow-y-auto duration-0 data-[state=open]:zoom-in-100 data-[state=closed]:zoom-out-100">
           <DialogHeader>
             <DialogTitle>
               {editingItemId ? "Edit menu item" : "Add menu item"}
@@ -918,6 +971,12 @@ export function RestaurantMenuPanel({
             </DialogDescription>
           </DialogHeader>
 
+          {!itemFormReady ? (
+            <div className="flex justify-center py-16 text-white/40">
+              <Loader2 className="h-8 w-8 animate-spin text-[#98E32F]" />
+            </div>
+          ) : (
+          <>
           <div className="space-y-5 py-2">
             <div className="space-y-2">
               <div className="flex items-center justify-between">
@@ -1121,6 +1180,45 @@ export function RestaurantMenuPanel({
                   className="mt-1 bg-white/5 border-white/10 text-white"
                 />
               </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-[10px] font-bold text-white/40 uppercase tracking-wider">
+                  Available from
+                </label>
+                <Input
+                  type="time"
+                  value={form.availableFrom || ""}
+                  onChange={(e) =>
+                    setForm((p) => ({
+                      ...p,
+                      availableFrom: e.target.value,
+                    }))
+                  }
+                  className="mt-1 bg-white/5 border-white/10 text-white"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-white/40 uppercase tracking-wider">
+                  Available to
+                </label>
+                <Input
+                  type="time"
+                  value={form.availableTo || ""}
+                  onChange={(e) =>
+                    setForm((p) => ({
+                      ...p,
+                      availableTo: e.target.value,
+                    }))
+                  }
+                  className="mt-1 bg-white/5 border-white/10 text-white"
+                />
+              </div>
+              <p className="col-span-2 text-[10px] text-white/40">
+                Leave both empty for all-day availability (IST). Overnight ranges
+                are supported (e.g. 22:00 → 02:00).
+              </p>
             </div>
 
             <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-2">
@@ -1542,6 +1640,8 @@ export function RestaurantMenuPanel({
               )}
             </Button>
           </DialogFooter>
+          </>
+          )}
         </DialogContent>
       </Dialog>
 

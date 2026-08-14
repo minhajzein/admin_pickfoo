@@ -109,6 +109,8 @@ export interface AdminOrderDetail {
   razorpayOrderId?: string | null;
   paymentReference?: string | null;
   transactionId?: string | null;
+  refundedAt?: string | null;
+  refundReason?: string | null;
   items: AdminOrderItem[];
   itemTotal: number;
   packingTotal: number;
@@ -214,6 +216,27 @@ export async function redispatchOrder(
   const { data } = await api.post(`/dispatch/orders/${encodeURIComponent(orderRef)}/redispatch`, {
     reason: reason?.trim() || undefined,
   });
+  return data;
+}
+
+export async function markOrderRefunded(
+  orderRef: string,
+  reason?: string
+): Promise<{
+  success: boolean;
+  data: {
+    id: string;
+    pickfooId?: string | null;
+    paymentStatus: string;
+    refundedAt: string;
+    refundReason?: string | null;
+    transactionsUpdated: number;
+  };
+}> {
+  const { data } = await api.post(
+    `/dispatch/orders/${encodeURIComponent(orderRef)}/mark-refunded`,
+    { reason: reason?.trim() || undefined }
+  );
   return data;
 }
 

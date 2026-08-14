@@ -18,6 +18,8 @@ export interface AdminMenuItem {
   category: string;
   isVeg: boolean;
   isActive: boolean;
+  availableFrom?: string;
+  availableTo?: string;
   image?: string;
   ingredients?: string[];
   restaurants?: string[];
@@ -50,6 +52,8 @@ export interface AdminMenuItemInput {
   variants?: AdminMenuVariant[];
   isVeg: boolean;
   isActive: boolean;
+  availableFrom?: string;
+  availableTo?: string;
   image?: string;
   ingredients?: string[];
   restaurantTypes?: string[];

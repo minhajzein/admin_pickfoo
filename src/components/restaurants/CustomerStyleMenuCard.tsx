@@ -37,6 +37,10 @@ export const CustomerStyleMenuCard = memo(function CustomerStyleMenuCard({
   isTogglingActive?: boolean;
 }) {
   const prep = item.preparationTime ?? 0;
+  const from = (item.availableFrom ?? "").trim();
+  const to = (item.availableTo ?? "").trim();
+  const timeRange =
+    from && to ? `${from}–${to}` : null;
   const rating = ratingLabel(item);
   const grayscale = !item.isActive;
 
@@ -69,6 +73,16 @@ export const CustomerStyleMenuCard = memo(function CustomerStyleMenuCard({
           <div className="absolute top-2 left-2 z-10 flex items-center gap-1 rounded-full bg-black/60 px-1.5 py-0.5 text-[8px] font-extrabold text-white">
             <Clock size={9} />
             {prep} min
+          </div>
+        )}
+        {timeRange && (
+          <div
+            className={`absolute left-2 z-10 flex items-center gap-1 rounded-full bg-black/60 px-1.5 py-0.5 text-[8px] font-extrabold text-white ${
+              prep > 0 ? "top-8" : "top-2"
+            }`}
+          >
+            <Clock size={9} />
+            {timeRange}
           </div>
         )}
 

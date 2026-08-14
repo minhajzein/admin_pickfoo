@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -15,6 +16,16 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
   Table,
   TableBody,
   TableCell,
@@ -27,6 +38,7 @@ import {
   cancelSourceLabel,
   fetchDispatchOrder,
   isPaidAwaitingPrep,
+  markOrderRefunded,
   type AdminOrderDetail,
 } from "@/lib/api/orders";
 import {
@@ -38,6 +50,7 @@ import {
   Megaphone,
   Phone,
   Store,
+  Undo2,
   User,
 } from "lucide-react";
 
@@ -150,6 +163,8 @@ export default function OrderDetailPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const orderRef = String(params?.id || "").trim();
+  const [refundOpen, setRefundOpen] = useState(false);
+  const [refundReason, setRefundReason] = useState("");
 
   const { data: order, isLoading, isError, error } = useQuery({
     queryKey: ["orders", "dispatch-order", orderRef],
@@ -188,6 +203,34 @@ export default function OrderDetailPage() {
             ? err.message
             : undefined;
       toast.error(msg || "Could not raise order");
+    },
+  });
+
+  const refundMutation = useMutation({
+    mutationFn: () => markOrderRefunded(orderRef, refundReason),
+    onSuccess: (res) => {
+      const n = res.data?.transactionsUpdated ?? 0;
+      toast.success(
+        n > 0
+          ? `Marked refunded · ${n} payment record${n === 1 ? "" : "s"} updated`
+          : "Order marked as refunded",
+      );
+      setRefundOpen(false);
+      setRefundReason("");
+      queryClient.invalidateQueries({
+        queryKey: ["orders", "dispatch-order", orderRef],
+      });
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
+    },
+    onError: (err: unknown) => {
+      const msg =
+        err && typeof err === "object" && "response" in err
+          ? (err as { response?: { data?: { message?: string } } }).response
+              ?.data?.message
+          : err instanceof Error
+            ? err.message
+            : undefined;
+      toast.error(msg || "Could not mark refunded");
     },
   });
 
@@ -268,7 +311,9 @@ export default function OrderDetailPage() {
                 className={
                   order.paymentStatus === "paid"
                     ? "border-[#98E32F]/40 bg-[#98E32F]/10 text-[#98E32F]"
-                    : "border-white/10 text-white/70"
+                    : order.paymentStatus === "refunded"
+                      ? "border-sky-400/40 bg-sky-500/15 text-sky-300"
+                      : "border-white/10 text-white/70"
                 }
               >
                 payment: {order.paymentStatus}
@@ -281,6 +326,17 @@ export default function OrderDetailPage() {
               >
                 Paid · start prep
               </Badge>
+            ) : null}
+            {order.paymentStatus === "paid" ? (
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-sky-400/40 text-sky-300 hover:bg-sky-500/10"
+                onClick={() => setRefundOpen(true)}
+              >
+                <Undo2 className="mr-1 h-3.5 w-3.5" />
+                Mark refunded
+              </Button>
             ) : null}
             {["payment-expired", "cancelled", "accepted-awaiting-payment"].includes(
               order.status,
@@ -620,11 +676,89 @@ export default function OrderDetailPage() {
                 label="Transaction"
                 value={order.transactionId || "—"}
               />
+              {order.refundedAt ? (
+                <DetailRow
+                  label="Refunded at"
+                  value={formatDate(order.refundedAt)}
+                />
+              ) : null}
+              {order.refundReason ? (
+                <DetailRow label="Refund reason" value={order.refundReason} />
+              ) : null}
+              {order.paymentStatus === "paid" ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="mt-4 w-full border-sky-400/40 text-sky-300 hover:bg-sky-500/10"
+                  onClick={() => setRefundOpen(true)}
+                >
+                  <Undo2 className="mr-1 h-3.5 w-3.5" />
+                  Mark refunded
+                </Button>
+              ) : null}
             </CardContent>
           </Card>
           <TimelineCard order={order} />
         </div>
       </div>
+
+      <Dialog
+        open={refundOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setRefundOpen(false);
+            setRefundReason("");
+          }
+        }}
+      >
+        <DialogContent className="border-white/10 bg-[#002833] text-white sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-white">Mark as refunded?</DialogTitle>
+            <DialogDescription className="text-white/50">
+              Records this order as refunded in admin. Does not call Razorpay —
+              use this after you already refunded in the dashboard or offline.
+              Linked customer payment records will also be marked refunded.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label className="text-white/50">Reason (optional)</Label>
+            <Input
+              value={refundReason}
+              onChange={(e) => setRefundReason(e.target.value)}
+              placeholder="Cancelled order / duplicate charge..."
+              className="border-white/10 bg-black/20 text-white"
+            />
+          </div>
+          <DialogFooter className="gap-2 sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              className="border-white/10"
+              onClick={() => {
+                setRefundOpen(false);
+                setRefundReason("");
+              }}
+              disabled={refundMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              className="bg-sky-400 text-[#013644] font-semibold hover:bg-sky-300"
+              disabled={refundMutation.isPending}
+              onClick={() => refundMutation.mutate()}
+            >
+              {refundMutation.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Undo2 className="mr-2 h-4 w-4" />
+              )}
+              Mark refunded
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

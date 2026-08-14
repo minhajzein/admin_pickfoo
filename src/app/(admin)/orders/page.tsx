@@ -682,7 +682,9 @@ export default function OrdersPage() {
                               className={
                                 row.paymentStatus === "paid"
                                   ? "text-[11px] text-[#98E32F]/80"
-                                  : "text-[11px] text-white/40"
+                                  : row.paymentStatus === "refunded"
+                                    ? "text-[11px] text-sky-300/90"
+                                    : "text-[11px] text-white/40"
                               }
                             >
                               payment: {row.paymentStatus}
