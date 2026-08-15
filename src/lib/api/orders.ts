@@ -188,12 +188,40 @@ export interface AdminOrderDetail {
   updatedAt?: string | null;
 }
 
+export interface AdminOrderRoute {
+  distanceKm: number;
+  durationSeconds: number;
+  geometry: {
+    type: "LineString";
+    coordinates: [number, number][];
+  };
+  provider: "osrm";
+  computedAt: string;
+  origin: { lat: number; lng: number };
+  destination: { lat: number; lng: number };
+  originSource: "order_snapshot" | "restaurant_profile";
+}
+
 export async function fetchDispatchOrder(
   orderRef: string
 ): Promise<AdminOrderDetail> {
   const { data } = await api.get(
     `/dispatch/orders/${encodeURIComponent(orderRef)}`
   );
+  return data.data;
+}
+
+export async function fetchDispatchOrderRoute(
+  orderRef: string,
+): Promise<AdminOrderRoute> {
+  const { data } = await api.get<{
+    success: boolean;
+    data?: AdminOrderRoute;
+    message?: string;
+  }>(`/dispatch/orders/${encodeURIComponent(orderRef)}/route`);
+  if (!data.success || !data.data) {
+    throw new Error(data.message || "Could not load the driving route");
+  }
   return data.data;
 }
 

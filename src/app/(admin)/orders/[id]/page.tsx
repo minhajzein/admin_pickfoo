@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useState } from "react";
+import dynamic from "next/dynamic";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -53,6 +54,15 @@ import {
   Undo2,
   User,
 } from "lucide-react";
+
+const OrderRouteMap = dynamic(() => import("@/components/map/OrderRouteMap"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-[320px] items-center justify-center text-white/50">
+      <Loader2 className="h-7 w-7 animate-spin text-[#98E32F]" />
+    </div>
+  ),
+});
 
 const money = new Intl.NumberFormat("en-IN", {
   style: "currency",
@@ -498,6 +508,21 @@ export default function OrderDetailPage() {
           )}
         </PartyCard>
       </div>
+
+      <Card className="border-white/5 bg-[#002833] text-white">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <MapPin className="h-4 w-4 text-[#98E32F]" />
+            Restaurant to customer route
+          </CardTitle>
+          <CardDescription className="text-white/45">
+            Live driving directions and distance for this order.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <OrderRouteMap orderRef={order.pickfooId || order.id} />
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="border-white/5 bg-[#002833] text-white lg:col-span-2">
