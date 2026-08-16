@@ -43,7 +43,6 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { ListPagination } from "@/components/ui/list-pagination";
 import { DEFAULT_PAGE_SIZE, parsePaginatedResponse } from "@/lib/pagination";
-import { cn } from "@/lib/utils";
 
 const money = new Intl.NumberFormat("en-IN", {
   style: "currency",
@@ -222,7 +221,7 @@ export default function OrdersPage() {
   const [status, setStatus] = useState("");
   const [restaurantId, setRestaurantId] = useState("");
   const [partnerId, setPartnerId] = useState("");
-  const [datePreset, setDatePreset] = useState<DatePreset>("all");
+  const [datePreset, setDatePreset] = useState<DatePreset>("today");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
   const [redispatchingRef, setRedispatchingRef] = useState<string | null>(null);
@@ -260,8 +259,12 @@ export default function OrdersPage() {
     [status, restaurantId, partnerId, dateRange.from, dateRange.to],
   );
 
-  const hasFilters = Boolean(
-    status || restaurantId || partnerId || dateRange.from || dateRange.to,
+  const hasNonDefaultFilters = Boolean(
+    status ||
+      restaurantId ||
+      partnerId ||
+      datePreset !== "today" ||
+      (datePreset === "custom" && (customFrom || customTo)),
   );
 
   const clearFilters = () => {
@@ -269,7 +272,7 @@ export default function OrdersPage() {
       setStatus("");
       setRestaurantId("");
       setPartnerId("");
-      setDatePreset("all");
+      setDatePreset("today");
       setCustomFrom("");
       setCustomTo("");
       setPage(1);
@@ -422,66 +425,25 @@ export default function OrdersPage() {
 
       <Card className="border-white/5 bg-[#002833] text-white">
         <CardContent className="space-y-4 p-4">
-          <div className="space-y-2">
-            <label className="text-[10px] font-bold uppercase tracking-widest text-white/40">
-              Period
-            </label>
-            <div className="flex flex-wrap gap-2">
-              {DATE_PRESETS.map((p) => (
-                <Button
-                  key={p.id}
-                  type="button"
-                  size="sm"
-                  variant={datePreset === p.id ? "default" : "outline"}
-                  className={cn(
-                    datePreset === p.id
-                      ? "bg-[#98E32F] text-[#013644] hover:bg-[#98E32F]/90"
-                      : "border-white/15 bg-transparent text-white/80 hover:bg-white/5 hover:text-white",
-                  )}
-                  onClick={() => selectDatePreset(p.id)}
-                >
-                  {p.label}
-                </Button>
-              ))}
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold uppercase tracking-widest text-white/40">
+                Period
+              </label>
+              <select
+                className={selectClassName}
+                value={datePreset}
+                onChange={(e) =>
+                  selectDatePreset(e.target.value as DatePreset)
+                }
+              >
+                {DATE_PRESETS.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.label}
+                  </option>
+                ))}
+              </select>
             </div>
-            {datePreset === "custom" ? (
-              <div className="flex flex-wrap items-end gap-3 pt-1">
-                <div className="space-y-1">
-                  <label className="text-xs text-white/50">From</label>
-                  <Input
-                    type="date"
-                    value={customFrom}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      startTransition(() => {
-                        setCustomFrom(value);
-                        setPage(1);
-                      });
-                    }}
-                    className="h-9 w-[11rem] border-white/15 bg-black/20 text-white"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs text-white/50">To</label>
-                  <Input
-                    type="date"
-                    value={customTo}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      startTransition(() => {
-                        setCustomTo(value);
-                        setPage(1);
-                      });
-                    }}
-                    className="h-9 w-[11rem] border-white/15 bg-black/20 text-white"
-                  />
-                </div>
-              </div>
-            ) : null}
-            <p className="text-xs text-white/40">Showing · {periodLabel}</p>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold uppercase tracking-widest text-white/40">
                 Status
@@ -555,7 +517,7 @@ export default function OrdersPage() {
               <Button
                 type="button"
                 variant="outline"
-                disabled={!hasFilters}
+                disabled={!hasNonDefaultFilters}
                 onClick={clearFilters}
                 className="w-full border-white/15 text-white/70 disabled:opacity-40"
               >
@@ -564,6 +526,41 @@ export default function OrdersPage() {
               </Button>
             </div>
           </div>
+
+          {datePreset === "custom" ? (
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="space-y-1">
+                <label className="text-xs text-white/50">From</label>
+                <Input
+                  type="date"
+                  value={customFrom}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    startTransition(() => {
+                      setCustomFrom(value);
+                      setPage(1);
+                    });
+                  }}
+                  className="h-9 w-[11rem] border-white/15 bg-black/20 text-white"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs text-white/50">To</label>
+                <Input
+                  type="date"
+                  value={customTo}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    startTransition(() => {
+                      setCustomTo(value);
+                      setPage(1);
+                    });
+                  }}
+                  className="h-9 w-[11rem] border-white/15 bg-black/20 text-white"
+                />
+              </div>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 
