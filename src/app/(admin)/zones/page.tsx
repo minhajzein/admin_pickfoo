@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { startTransition, useCallback, useEffect, useMemo, useState } from "react";
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -137,6 +137,9 @@ export default function ZonesPage() {
   });
 
   const [zoneDialogOpen, setZoneDialogOpen] = useState(false);
+  /** Keep Mapbox mounted briefly after close so Cancel doesn't tear it down on the click path (INP). */
+  const [mapMounted, setMapMounted] = useState(false);
+  const mapTeardownTimerRef = useRef<number | null>(null);
   const [selectedId, setSelectedId] = useState<string | "new" | null>(null);
   const [lsgiCode, setLsgiCode] = useState("");
   const [name, setName] = useState("");
@@ -243,32 +246,62 @@ export default function ZonesPage() {
     }
   }, []);
 
+  const cancelMapTeardown = useCallback(() => {
+    if (mapTeardownTimerRef.current != null) {
+      window.clearTimeout(mapTeardownTimerRef.current);
+      mapTeardownTimerRef.current = null;
+    }
+  }, []);
+
+  const scheduleMapTeardown = useCallback(() => {
+    cancelMapTeardown();
+    // Yield past the click + first paint, then destroy Mapbox off the INP path.
+    mapTeardownTimerRef.current = window.setTimeout(() => {
+      mapTeardownTimerRef.current = null;
+      startTransition(() => {
+        setMapMounted(false);
+        resetForm();
+      });
+    }, 220);
+  }, [cancelMapTeardown, resetForm]);
+
+  useEffect(() => () => cancelMapTeardown(), [cancelMapTeardown]);
+
   const openNewZoneDialog = useCallback(() => {
+    cancelMapTeardown();
     startTransition(() => {
       resetForm();
       setSelectedId("new");
+      setMapMounted(true);
       setZoneDialogOpen(true);
     });
-  }, [resetForm]);
+  }, [cancelMapTeardown, resetForm]);
 
   const openEditZoneDialog = useCallback(
     (z: DeliveryZone) => {
+      cancelMapTeardown();
       startTransition(() => {
         loadZoneIntoForm(z);
+        setMapMounted(true);
         setZoneDialogOpen(true);
       });
     },
-    [loadZoneIntoForm],
+    [cancelMapTeardown, loadZoneIntoForm],
   );
 
   const handleDialogOpenChange = useCallback(
     (open: boolean) => {
-      setZoneDialogOpen(open);
-      if (!open) {
-        resetForm();
+      if (open) {
+        cancelMapTeardown();
+        setMapMounted(true);
+        setZoneDialogOpen(true);
+        return;
       }
+      // Close dialog immediately; tear down Mapbox after paint / exit animation (INP).
+      setZoneDialogOpen(false);
+      scheduleMapTeardown();
     },
-    [resetForm],
+    [cancelMapTeardown, scheduleMapTeardown],
   );
 
   const createMut = useMutation({
@@ -277,6 +310,8 @@ export default function ZonesPage() {
       queryClient.invalidateQueries({ queryKey: ["zones"] });
       toast.success("Zone created");
       setZoneDialogOpen(false);
+      cancelMapTeardown();
+      setMapMounted(false);
       resetForm();
     },
     onError: (e: unknown) => {
@@ -312,6 +347,8 @@ export default function ZonesPage() {
       queryClient.invalidateQueries({ queryKey: ["zones"] });
       toast.success("Zone deleted");
       setZoneDialogOpen(false);
+      cancelMapTeardown();
+      setMapMounted(false);
       resetForm();
     },
     onError: () => toast.error("Failed to delete zone"),
@@ -326,17 +363,20 @@ export default function ZonesPage() {
     return null;
   }, [geometryOverride, selectedId, zones, drawPolygon]);
 
-  const applyGeoJson = () => {
+  const applyGeoJson = useCallback(() => {
     const parsed = parseZoneGeometryFromText(geoText);
     if (!parsed) {
       toast.error("Invalid GeoJSON (need Polygon or MultiPolygon)");
       return;
     }
-    applyGeometry(parsed);
+    // Geometry → draw sync is heavy; keep Apply GeoJSON off the blocking click path.
+    startTransition(() => {
+      applyGeometry(parsed);
+    });
     toast.message("GeoJSON applied", {
       description: `${parsed.type} loaded. Save to persist.`,
     });
-  };
+  }, [geoText, applyGeometry]);
 
   const handleDrawChange = useCallback((p: PolygonZoneGeometry | null) => {
     setDrawPolygon(p);
@@ -626,7 +666,7 @@ export default function ZonesPage() {
                     <p>Set NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN to use the map.</p>
                   </div>
                 ) : (
-                  zoneDialogOpen && (
+                  mapMounted && (
                     <ZoneMapEditor
                       key={mapEditorKey}
                       accessToken={token}
