@@ -260,11 +260,7 @@ export default function OrdersPage() {
   );
 
   const hasNonDefaultFilters = Boolean(
-    status ||
-      restaurantId ||
-      partnerId ||
-      datePreset !== "today" ||
-      (datePreset === "custom" && (customFrom || customTo)),
+    status || restaurantId || partnerId || datePreset !== "today",
   );
 
   const clearFilters = () => {
