@@ -37,9 +37,9 @@ export interface AdminOrdersResponse {
     active: number;
     delivered: number;
     cancelled: number;
-    /** Sum of platform commission for non-cancelled/rejected filtered orders. */
+    /** Sum of platform commission for active + delivered filtered orders. */
     platformCommission: number;
-    /** Mean platform commission per countable filtered order. */
+    /** Mean platform commission per active/delivered filtered order. */
     averageCommission: number;
     commissionableOrders: number;
   };

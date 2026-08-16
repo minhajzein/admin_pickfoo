@@ -429,7 +429,7 @@ export default function OrdersPage() {
               {formatMoney(summary.averageCommission)}
             </p>
             <p className="mt-1 text-xs text-white/40">
-              Per countable order
+              Active + delivered
               {summary.commissionableOrders > 0
                 ? ` · ${summary.commissionableOrders}`
                 : ""}
