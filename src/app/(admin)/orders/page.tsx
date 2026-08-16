@@ -364,6 +364,9 @@ export default function OrdersPage() {
     active: 0,
     delivered: 0,
     cancelled: 0,
+    platformCommission: 0,
+    averageCommission: 0,
+    commissionableOrders: 0,
   };
   const total = data?.total ?? 0;
   const totalPages = data?.totalPages ?? 1;
@@ -388,7 +391,7 @@ export default function OrdersPage() {
         </p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <Card className="border-white/5 bg-[#002833] text-white">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm text-white/60">Total orders</CardTitle>
@@ -415,6 +418,22 @@ export default function OrdersPage() {
           </CardHeader>
           <CardContent className="text-2xl font-bold">
             {summary.delivered}
+          </CardContent>
+        </Card>
+        <Card className="border-white/5 bg-[#002833] text-white">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-white/60">Avg commission</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold text-[#98E32F]">
+              {formatMoney(summary.averageCommission)}
+            </p>
+            <p className="mt-1 text-xs text-white/40">
+              Per countable order
+              {summary.commissionableOrders > 0
+                ? ` · ${summary.commissionableOrders}`
+                : ""}
+            </p>
           </CardContent>
         </Card>
       </div>

@@ -37,8 +37,11 @@ export interface AdminOrdersResponse {
     active: number;
     delivered: number;
     cancelled: number;
-    /** Sum of platform commission for non-cancelled/rejected rows in the result set. */
+    /** Sum of platform commission for non-cancelled/rejected filtered orders. */
     platformCommission: number;
+    /** Mean platform commission per countable filtered order. */
+    averageCommission: number;
+    commissionableOrders: number;
   };
   data: AdminOrderRow[];
   page: number;
@@ -79,6 +82,8 @@ export async function fetchDispatchOrders(params?: {
       delivered: data.summary?.delivered ?? 0,
       cancelled: data.summary?.cancelled ?? 0,
       platformCommission: Number(data.summary?.platformCommission) || 0,
+      averageCommission: Number(data.summary?.averageCommission) || 0,
+      commissionableOrders: Number(data.summary?.commissionableOrders) || 0,
     },
     data: data.data ?? [],
     page,
