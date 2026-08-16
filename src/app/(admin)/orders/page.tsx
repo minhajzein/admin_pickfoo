@@ -391,7 +391,7 @@ export default function OrdersPage() {
         </p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <Card className="border-white/5 bg-[#002833] text-white">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm text-white/60">Total orders</CardTitle>
@@ -418,6 +418,24 @@ export default function OrdersPage() {
           </CardHeader>
           <CardContent className="text-2xl font-bold">
             {summary.delivered}
+          </CardContent>
+        </Card>
+        <Card className="border-white/5 bg-[#002833] text-white">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-white/60">
+              Earned commission
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold text-[#98E32F]">
+              {formatMoney(summary.platformCommission)}
+            </p>
+            <p className="mt-1 text-xs text-white/40">
+              {periodLabel}
+              {summary.commissionableOrders > 0
+                ? ` · ${summary.commissionableOrders} orders`
+                : ""}
+            </p>
           </CardContent>
         </Card>
         <Card className="border-white/5 bg-[#002833] text-white">
