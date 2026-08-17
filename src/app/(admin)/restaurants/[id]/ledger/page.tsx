@@ -419,6 +419,14 @@ export default function RestaurantLedgerPage() {
           >
             Payout: {restaurant.payoutMode}
           </Badge>
+          {restaurant.isGstRegistered ? (
+            <Badge
+              variant="outline"
+              className="border-[#98E32F]/40 text-[#98E32F] font-normal"
+            >
+              GST {restaurant.gstNumber}
+            </Badge>
+          ) : null}
           <Link href={`/restaurants/verify/${restaurantId}`}>
             <Button
               variant="outline"
@@ -468,6 +476,9 @@ export default function RestaurantLedgerPage() {
             <p className="text-[11px] text-white/35 mt-2">
               {summary.creditCount} credited · {summary.debitCount ?? 0}{" "}
               debited · food+packing {inr(summary.totalGrossSales)}
+              {restaurant.isGstRegistered
+                ? ` · GST ${inr(summary.totalGstInWallet ?? 0)}`
+                : ""}
             </p>
           </CardContent>
         </Card>
@@ -673,7 +684,11 @@ export default function RestaurantLedgerPage() {
                     <TableHead className="text-white/40">Date</TableHead>
                     <TableHead className="text-white/40">Type</TableHead>
                     <TableHead className="text-white/40">Order</TableHead>
-                    <TableHead className="text-white/40">Gross / Comm</TableHead>
+                    <TableHead className="text-white/40">
+                      {restaurant.isGstRegistered
+                        ? "Gross / GST / Comm"
+                        : "Gross / Comm"}
+                    </TableHead>
                     <TableHead className="text-white/40 text-right">
                       Amount
                     </TableHead>
@@ -710,6 +725,16 @@ export default function RestaurantLedgerPage() {
                         {tx.grossAmount != null ? (
                           <>
                             {inr(tx.grossAmount)}
+                            {restaurant.isGstRegistered &&
+                            tx.gstAmount != null &&
+                            tx.gstInRestaurantWallet ? (
+                              <span className="text-[#98E32F]/80">
+                                {" "}
+                                / {inr(tx.gstAmount)}
+                              </span>
+                            ) : restaurant.isGstRegistered ? (
+                              <span className="text-white/30"> / —</span>
+                            ) : null}
                             <span className="text-amber-300/80">
                               {" "}
                               / {inr(tx.commissionAmount ?? 0)}

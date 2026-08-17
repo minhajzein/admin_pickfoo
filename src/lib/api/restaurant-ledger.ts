@@ -21,6 +21,8 @@ export interface RestaurantLedgerSummary {
     commissionPercent: number;
     payoutMode: "manual" | "auto";
     status?: string;
+    gstNumber?: string | null;
+    isGstRegistered?: boolean;
   };
   summary: {
     availableBalance: number;
@@ -37,6 +39,7 @@ export interface RestaurantLedgerSummary {
     totalFoodSales?: number;
     commissionEarned: number;
     commissionParsedCount: number;
+    totalGstInWallet?: number;
     openWithdrawalHold: number;
     withdrawalsByStatus: Record<
       string,
@@ -59,6 +62,8 @@ export interface RestaurantLedgerTransaction {
   grossAmount?: number | null;
   foodAmount?: number | null;
   packingAmount?: number | null;
+  gstAmount?: number | null;
+  gstInRestaurantWallet?: boolean | null;
   /** Linked withdrawal lifecycle status for payout rows. */
   withdrawalStatus?: WithdrawalStatus | string | null;
   displayStatus?: string | null;
