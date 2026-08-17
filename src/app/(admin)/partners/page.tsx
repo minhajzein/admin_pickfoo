@@ -115,7 +115,7 @@ export default function PartnersPage() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [page, setPage] = useState(1);
-  const [statusFilter, setStatusFilter] = useState<"ALL" | PartnerStatusType>("ALL");
+  const [statusFilter, setStatusFilter] = useState<"ALL" | PartnerStatusType>("VERIFIED");
   const [editPartner, setEditPartner] = useState<Partner | null>(null);
   const [selectedZoneIds, setSelectedZoneIds] = useState<string[]>([]);
 
