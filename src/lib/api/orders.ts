@@ -308,10 +308,25 @@ function cancelSourceLabel(input: {
   status?: string | null;
   rejectionCode?: string | null;
   rejectionReason?: string | null;
+  refundReason?: string | null;
 }): string | null {
   const status = (input.status ?? "").trim().toLowerCase();
   if (status === "payment-expired") return "Payment expired";
   if (status !== "rejected" && status !== "cancelled") return null;
+
+  const refundDisplay = (() => {
+    const raw = (
+      input.refundReason ||
+      input.rejectionReason ||
+      ""
+    ).trim();
+    if (!raw) return "Refunded";
+    const stripped = raw
+      .replace(/^refunded by admin:\s*/i, "")
+      .replace(/^refunded:\s*/i, "")
+      .trim();
+    return stripped || "Refunded";
+  })();
 
   const code = (input.rejectionCode ?? "").trim().toLowerCase();
   switch (code) {
@@ -319,6 +334,8 @@ function cancelSourceLabel(input: {
       return "Payment expired";
     case "customer_cancelled":
       return "Canceled by customer";
+    case "admin_refunded":
+      return refundDisplay;
     case "owner_rejected":
       return "Canceled by restaurant";
     case "owner_not_responding":
@@ -342,6 +359,9 @@ function cancelSourceLabel(input: {
   }
   if (reason.includes("not responding")) {
     return "No response from restaurant";
+  }
+  if (reason.includes("refunded by admin") || reason.startsWith("refunded")) {
+    return refundDisplay;
   }
   if ((input.rejectionReason ?? "").trim() || status === "rejected") {
     return "Canceled by restaurant";
