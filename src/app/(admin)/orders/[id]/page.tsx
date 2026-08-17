@@ -43,6 +43,14 @@ import {
   type AdminOrderDetail,
 } from "@/lib/api/orders";
 import {
+  buildRefundSettlementPayload,
+  emptyRefundSettlementState,
+  fetchRefundPreview,
+  validateRefundSettlement,
+  type RefundSettlementState,
+} from "@/lib/api/refund-settlement";
+import { RefundSettlementFields } from "@/components/refund/RefundSettlementFields";
+import {
   ArrowLeft,
   Bike,
   Loader2,
@@ -175,11 +183,21 @@ export default function OrderDetailPage() {
   const orderRef = String(params?.id || "").trim();
   const [refundOpen, setRefundOpen] = useState(false);
   const [refundReason, setRefundReason] = useState("");
+  const [refundSettlement, setRefundSettlement] = useState<RefundSettlementState>(
+    emptyRefundSettlementState(),
+  );
 
   const { data: order, isLoading, isError, error } = useQuery({
     queryKey: ["orders", "dispatch-order", orderRef],
     queryFn: () => fetchDispatchOrder(orderRef),
     enabled: !!orderRef,
+  });
+
+  const canMarkRefundedEarly = order?.paymentStatus === "paid";
+  const { data: refundPreview, isLoading: refundPreviewLoading } = useQuery({
+    queryKey: ["orders", "refund-preview", orderRef],
+    queryFn: () => fetchRefundPreview(orderRef),
+    enabled: refundOpen && !!orderRef && !!canMarkRefundedEarly,
   });
 
   const raiseMutation = useMutation({
@@ -217,16 +235,53 @@ export default function OrderDetailPage() {
   });
 
   const refundMutation = useMutation({
-    mutationFn: () => markOrderRefunded(orderRef, refundReason),
+    mutationFn: () => {
+      const isCleanupOnly =
+        order?.paymentStatus === "refunded" &&
+        ["confirmed", "preparing", "ready", "out-for-delivery"].includes(
+          order?.status ?? "",
+        );
+      if (!isCleanupOnly && !refundPreview) {
+        throw new Error("Refund options are still loading");
+      }
+      if (!isCleanupOnly && refundPreview) {
+        const validationError = validateRefundSettlement(
+          refundSettlement,
+          refundPreview.presets,
+          refundPreview.caps,
+        );
+        if (validationError) throw new Error(validationError);
+      }
+      const settlement =
+        !isCleanupOnly && refundPreview
+          ? buildRefundSettlementPayload(
+              refundSettlement,
+              refundPreview.presets,
+            )
+          : undefined;
+      return markOrderRefunded(orderRef, refundReason, settlement);
+    },
     onSuccess: (res) => {
       const n = res.data?.transactionsUpdated ?? 0;
-      toast.success(
+      const wd = res.data?.walletDeductions;
+      let msg =
         n > 0
           ? `Marked refunded · ${n} payment record${n === 1 ? "" : "s"} updated`
-          : "Order marked as refunded",
-      );
+          : "Order marked as refunded";
+      if (wd && (wd.restaurantApplied > 0 || wd.partnerApplied > 0)) {
+        const parts: string[] = [];
+        if (wd.restaurantApplied > 0) {
+          parts.push(`restaurant −₹${wd.restaurantApplied}`);
+        }
+        if (wd.partnerApplied > 0) {
+          parts.push(`partner −₹${wd.partnerApplied}`);
+        }
+        msg += ` · ${parts.join(", ")}`;
+      }
+      toast.success(msg);
       setRefundOpen(false);
       setRefundReason("");
+      setRefundSettlement(emptyRefundSettlementState());
       queryClient.invalidateQueries({
         queryKey: ["orders", "dispatch-order", orderRef],
       });
@@ -744,6 +799,9 @@ export default function OrderDetailPage() {
           if (!open) {
             setRefundOpen(false);
             setRefundReason("");
+            setRefundSettlement(emptyRefundSettlementState());
+          } else {
+            setRefundOpen(true);
           }
         }}
       >
@@ -760,6 +818,21 @@ export default function OrderDetailPage() {
                 : "Records this order as refunded in admin. Does not call Razorpay — use this after you already refunded in the dashboard or offline. Linked customer payment records will also be marked refunded, and any partner offer will be cleared."}
             </DialogDescription>
           </DialogHeader>
+          {!canCleanupRefundedDispatch ? (
+            refundPreviewLoading || !refundPreview ? (
+              <div className="flex items-center justify-center py-8 text-white/50">
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                Loading refund options…
+              </div>
+            ) : (
+              <RefundSettlementFields
+                state={refundSettlement}
+                onChange={setRefundSettlement}
+                presets={refundPreview.presets}
+                caps={refundPreview.caps}
+              />
+            )
+          ) : null}
           <div className="space-y-2">
             <Label className="text-white/50">Reason (optional)</Label>
             <Input
@@ -777,6 +850,7 @@ export default function OrderDetailPage() {
               onClick={() => {
                 setRefundOpen(false);
                 setRefundReason("");
+                setRefundSettlement(emptyRefundSettlementState());
               }}
               disabled={refundMutation.isPending}
             >
@@ -785,7 +859,11 @@ export default function OrderDetailPage() {
             <Button
               type="button"
               className="bg-sky-400 text-[#013644] font-semibold hover:bg-sky-300"
-              disabled={refundMutation.isPending}
+              disabled={
+                refundMutation.isPending ||
+                (!canCleanupRefundedDispatch &&
+                  (refundPreviewLoading || !refundPreview))
+              }
               onClick={() => refundMutation.mutate()}
             >
               {refundMutation.isPending ? (

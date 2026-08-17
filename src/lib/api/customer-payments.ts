@@ -1,4 +1,5 @@
 import api from "@/lib/axios";
+import type { RefundSettlementPayload } from "@/lib/api/refund-settlement";
 
 export type CustomerPaymentStatus =
   | "created"
@@ -76,8 +77,19 @@ export async function fetchCustomerPaymentTransactions(
 export async function refundCustomerPayment(
   userId: string,
   txId: string,
-  payload: { reason?: string; amount?: number; recordOnly?: boolean },
-): Promise<{ data: CustomerPaymentTransaction; razorpay?: unknown }> {
+  payload: {
+    reason?: string;
+    amount?: number;
+    recordOnly?: boolean;
+  } & RefundSettlementPayload,
+): Promise<{
+  data: CustomerPaymentTransaction;
+  walletDeductions?: {
+    restaurantApplied: number;
+    partnerApplied: number;
+  } | null;
+  razorpay?: unknown;
+}> {
   const { data } = await api.post(
     `/users/${userId}/payments/${txId}/refund`,
     payload,

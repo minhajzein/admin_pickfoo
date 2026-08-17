@@ -1,4 +1,5 @@
 import api from "@/lib/axios";
+import type { RefundSettlementPayload } from "@/lib/api/refund-settlement";
 
 export interface AdminOrderRow {
   id: string;
@@ -254,7 +255,8 @@ export async function redispatchOrder(
 
 export async function markOrderRefunded(
   orderRef: string,
-  reason?: string
+  reason?: string,
+  settlement?: RefundSettlementPayload,
 ): Promise<{
   success: boolean;
   data: {
@@ -263,12 +265,20 @@ export async function markOrderRefunded(
     paymentStatus: string;
     refundedAt: string;
     refundReason?: string | null;
+    refundAmount?: number | null;
+    walletDeductions?: {
+      restaurantApplied: number;
+      partnerApplied: number;
+    } | null;
     transactionsUpdated: number;
   };
 }> {
   const { data } = await api.post(
     `/dispatch/orders/${encodeURIComponent(orderRef)}/mark-refunded`,
-    { reason: reason?.trim() || undefined }
+    {
+      reason: reason?.trim() || undefined,
+      ...settlement,
+    },
   );
   return data;
 }

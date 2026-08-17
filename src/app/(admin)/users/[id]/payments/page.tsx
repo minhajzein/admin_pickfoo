@@ -23,6 +23,14 @@ import {
   type CustomerPaymentStatus,
   type CustomerPaymentTransaction,
 } from "@/lib/api/customer-payments";
+import {
+  buildRefundSettlementPayload,
+  emptyRefundSettlementState,
+  fetchRefundPreview,
+  validateRefundSettlement,
+  type RefundSettlementState,
+} from "@/lib/api/refund-settlement";
+import { RefundSettlementFields } from "@/components/refund/RefundSettlementFields";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -78,6 +86,13 @@ function statusBadge(status: string) {
   );
 }
 
+function orderRefFromTx(tx: CustomerPaymentTransaction): string | null {
+  const order = tx.order;
+  if (!order) return null;
+  if (typeof order === "string") return order;
+  return order.pickfooId || String(order._id);
+}
+
 function orderLabel(tx: CustomerPaymentTransaction) {
   const order = tx.order;
   if (!order) return "—";
@@ -125,8 +140,17 @@ export default function CustomerPaymentsPage() {
     null,
   );
   const [reason, setReason] = useState("");
-  const [refundAmount, setRefundAmount] = useState("");
   const [recordOnly, setRecordOnly] = useState(false);
+  const [refundSettlement, setRefundSettlement] = useState<RefundSettlementState>(
+    emptyRefundSettlementState(),
+  );
+  const refundOrderRef = refundTx ? orderRefFromTx(refundTx) : null;
+
+  const { data: refundPreview, isLoading: refundPreviewLoading } = useQuery({
+    queryKey: ["orders", "refund-preview", refundOrderRef],
+    queryFn: () => fetchRefundPreview(refundOrderRef!),
+    enabled: refundOpen && !!refundOrderRef,
+  });
   const [raiseOpen, setRaiseOpen] = useState(false);
   const [raiseOrderId, setRaiseOrderId] = useState("");
   const [raiseRpOrderId, setRaiseRpOrderId] = useState("");
@@ -155,23 +179,57 @@ export default function CustomerPaymentsPage() {
   const refundMutation = useMutation({
     mutationFn: () => {
       if (!refundTx) throw new Error("No payment selected");
-      const amountNum =
-        refundAmount.trim() === "" ? undefined : Number(refundAmount);
+      const captured = Number(refundTx.amount) || 0;
+      const presets = refundPreview?.presets ?? {
+        fullAmount: captured,
+        netItemsPackingAmount: captured,
+        itemTotal: 0,
+        packingTotal: 0,
+        discountAmount: 0,
+      };
+      const caps = refundPreview?.caps ?? {
+        maxRestaurantDeduction: 0,
+        maxPartnerDeduction: 0,
+        assignedPartnerId: null,
+        hasRestaurantCredit: false,
+        hasPartnerTripEarning: false,
+      };
+      if (refundOrderRef && !refundPreview) {
+        throw new Error("Refund options are still loading");
+      }
+      const validationError = validateRefundSettlement(
+        refundSettlement,
+        presets,
+        caps,
+        captured || undefined,
+      );
+      if (validationError) throw new Error(validationError);
+      const settlement = buildRefundSettlementPayload(
+        refundSettlement,
+        presets,
+      );
       return refundCustomerPayment(userId, refundTx._id, {
         reason: reason.trim() || undefined,
-        amount:
-          amountNum != null && Number.isFinite(amountNum)
-            ? amountNum
-            : undefined,
         recordOnly,
+        ...settlement,
       });
     },
     onSuccess: (res) => {
-      toast.success(
-        res.razorpay
-          ? "Refund issued via Razorpay"
-          : "Payment marked as refunded",
-      );
+      const wd = res.walletDeductions;
+      let msg = res.razorpay
+        ? "Refund issued via Razorpay"
+        : "Payment marked as refunded";
+      if (wd && (wd.restaurantApplied > 0 || wd.partnerApplied > 0)) {
+        const parts: string[] = [];
+        if (wd.restaurantApplied > 0) {
+          parts.push(`restaurant −₹${wd.restaurantApplied}`);
+        }
+        if (wd.partnerApplied > 0) {
+          parts.push(`partner −₹${wd.partnerApplied}`);
+        }
+        msg += ` · ${parts.join(", ")}`;
+      }
+      toast.success(msg);
       queryClient.invalidateQueries({
         queryKey: ["customer-payments", userId],
       });
@@ -181,15 +239,17 @@ export default function CustomerPaymentsPage() {
       setRefundOpen(false);
       setRefundTx(null);
       setReason("");
-      setRefundAmount("");
       setRecordOnly(false);
+      setRefundSettlement(emptyRefundSettlementState());
     },
     onError: (err: unknown) => {
       const msg =
         err && typeof err === "object" && "response" in err
           ? (err as { response?: { data?: { message?: string } } }).response
               ?.data?.message
-          : undefined;
+          : err instanceof Error
+            ? err.message
+            : undefined;
       toast.error(msg || "Refund failed");
     },
   });
@@ -486,9 +546,9 @@ export default function CustomerPaymentsPage() {
                             className="border-sky-500/40 text-sky-300 hover:bg-sky-500/10"
                             onClick={() => {
                               setRefundTx(tx);
-                              setRefundAmount(String(tx.amount ?? ""));
                               setReason("");
                               setRecordOnly(false);
+                              setRefundSettlement(emptyRefundSettlementState());
                               setRefundOpen(true);
                             }}
                           >
@@ -510,27 +570,64 @@ export default function CustomerPaymentsPage() {
         </CardContent>
       </Card>
 
-      <Dialog open={refundOpen} onOpenChange={setRefundOpen}>
-        <DialogContent className="bg-[#002833] border-white/10 text-white">
+      <Dialog
+        open={refundOpen}
+        onOpenChange={(open) => {
+          setRefundOpen(open);
+          if (!open) {
+            setRefundTx(null);
+            setReason("");
+            setRecordOnly(false);
+            setRefundSettlement(emptyRefundSettlementState());
+          }
+        }}
+      >
+        <DialogContent className="bg-[#002833] border-white/10 text-white sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Refund payment</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <p className="text-sm text-white/50">
-              Order {refundTx ? orderLabel(refundTx) : "—"} ·{" "}
+              Order {refundTx ? orderLabel(refundTx) : "—"} · captured{" "}
               {refundTx ? inr(refundTx.amount) : ""}
             </p>
-            <div className="space-y-2">
-              <Label className="text-white/50">Refund amount (₹)</Label>
-              <Input
-                type="number"
-                min={0}
-                step="0.01"
-                value={refundAmount}
-                onChange={(e) => setRefundAmount(e.target.value)}
-                className="bg-black/20 border-white/10"
+            {refundOrderRef ? (
+              refundPreviewLoading || !refundPreview ? (
+                <div className="flex items-center justify-center py-8 text-white/50">
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                  Loading refund options…
+                </div>
+              ) : (
+                <RefundSettlementFields
+                  state={refundSettlement}
+                  onChange={setRefundSettlement}
+                  presets={refundPreview.presets}
+                  caps={refundPreview.caps}
+                  maxRefund={Number(refundTx?.amount) || undefined}
+                />
+              )
+            ) : refundTx ? (
+              <RefundSettlementFields
+                state={refundSettlement}
+                onChange={setRefundSettlement}
+                presets={{
+                  fullAmount: Number(refundTx.amount) || 0,
+                  netItemsPackingAmount: Number(refundTx.amount) || 0,
+                  itemTotal: 0,
+                  packingTotal: 0,
+                  discountAmount: 0,
+                }}
+                caps={{
+                  maxRestaurantDeduction: 0,
+                  maxPartnerDeduction: 0,
+                  assignedPartnerId: null,
+                  hasRestaurantCredit: false,
+                  hasPartnerTripEarning: false,
+                }}
+                maxRefund={Number(refundTx.amount) || undefined}
+                showWalletOptions={false}
               />
-            </div>
+            ) : null}
             <div className="space-y-2">
               <Label className="text-white/50">Reason</Label>
               <Input
@@ -557,13 +654,22 @@ export default function CustomerPaymentsPage() {
             <Button
               variant="outline"
               className="border-white/15"
-              onClick={() => setRefundOpen(false)}
+              onClick={() => {
+                setRefundOpen(false);
+                setRefundTx(null);
+                setReason("");
+                setRecordOnly(false);
+                setRefundSettlement(emptyRefundSettlementState());
+              }}
             >
               Cancel
             </Button>
             <Button
               className="bg-sky-400 text-[#013644] font-semibold hover:bg-sky-300"
-              disabled={refundMutation.isPending}
+              disabled={
+                refundMutation.isPending ||
+                (!!refundOrderRef && (refundPreviewLoading || !refundPreview))
+              }
               onClick={() => refundMutation.mutate()}
             >
               {refundMutation.isPending ? (
