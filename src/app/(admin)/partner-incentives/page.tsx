@@ -577,7 +577,7 @@ export default function PartnerIncentivesPage() {
                 <Input
                   className="w-24"
                   type="number"
-                  min={0.1}
+                  min={0.5}
                   step={0.5}
                   disabled={!form.enableOnlineHours}
                   value={form.minOnlineHours}
