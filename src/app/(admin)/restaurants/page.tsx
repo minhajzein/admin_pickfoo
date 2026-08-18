@@ -45,6 +45,7 @@ import {
   Trash2,
   UtensilsCrossed,
   Wallet,
+  Clock,
 } from "lucide-react";
 import { useEffect, useState, startTransition } from "react";
 import { toast } from "sonner";
@@ -79,6 +80,7 @@ interface Restaurant {
   status: string;
   isOpen?: boolean;
   isManualOverride?: boolean;
+  openStatusPriority?: "schedule" | "manual";
   createdAt: string;
   legalDocs: {
     fssaiLicenseNumber: string;
@@ -178,12 +180,21 @@ export default function RestaurantsPage() {
       action,
     }: {
       id: string;
-      action: { isOpen: boolean } | { resetOverride: true };
+      action:
+        | { isOpen: boolean }
+        | { resetOverride: true }
+        | { openStatusPriority: "schedule" | "manual" };
     }) => updateRestaurantAvailability(id, action),
     onSuccess: (_data, vars) => {
       queryClient.invalidateQueries({ queryKey: ["restaurants"] });
       if ("resetOverride" in vars.action) {
         toast.success("Returned to schedule");
+      } else if ("openStatusPriority" in vars.action) {
+        toast.success(
+          vars.action.openStatusPriority === "schedule"
+            ? "Schedule has priority"
+            : "Manual open/close has priority",
+        );
       } else {
         toast.success(
           vars.action.isOpen ? "Restaurant marked open" : "Restaurant marked closed",
@@ -295,11 +306,39 @@ export default function RestaurantsPage() {
             }}
             className="text-left text-[10px] text-[#98E32F]/80 hover:text-[#98E32F] hover:underline disabled:opacity-50"
           >
-            Manual · use schedule
+            {restaurant.openStatusPriority === "manual"
+              ? "Manual · use schedule"
+              : "Temp override · resume"}
           </button>
         ) : (
-          <span className="text-[10px] text-white/35">Schedule</span>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              const next =
+                restaurant.openStatusPriority === "manual"
+                  ? "schedule"
+                  : "manual";
+              startTransition(() => {
+                availabilityMutation.mutate({
+                  id: restaurant._id,
+                  action: { openStatusPriority: next },
+                });
+              });
+            }}
+            className="text-left text-[10px] text-white/35 hover:text-white/70"
+          >
+            {restaurant.openStatusPriority === "manual"
+              ? "Priority · manual"
+              : "Priority · schedule"}
+          </button>
         )}
+        <Link
+          href={`/restaurants/verify/${restaurant._id}#schedule`}
+          className="text-left text-[10px] text-white/35 hover:text-[#98E32F]"
+        >
+          Edit hours
+        </Link>
       </div>
     );
   };
@@ -475,6 +514,12 @@ export default function RestaurantsPage() {
                             <DropdownMenuItem>
                               <ShieldCheck className="mr-2 h-4 w-4" /> Verify
                               Documents
+                            </DropdownMenuItem>
+                          </Link>
+                          <Link href={`/restaurants/verify/${restaurant._id}#schedule`}>
+                            <DropdownMenuItem className="text-[#98E32F] focus:text-[#98E32F] focus:bg-[#98E32F]/10">
+                              <Clock className="mr-2 h-4 w-4" /> Manage
+                              schedule
                             </DropdownMenuItem>
                           </Link>
                           <DropdownMenuSeparator className="bg-white/5" />

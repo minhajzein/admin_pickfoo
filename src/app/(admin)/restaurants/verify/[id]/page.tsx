@@ -43,6 +43,7 @@ import {
 } from "@/lib/api/restaurants";
 import { RestaurantMessageThread } from "@/components/restaurants/RestaurantMessageThread";
 import { RestaurantProfileEditor } from "@/components/restaurants/RestaurantProfileEditor";
+import { RestaurantScheduleEditor } from "@/components/restaurants/RestaurantScheduleEditor";
 import { cn } from "@/lib/utils";
 
 function zoneIdFromRestaurant(restaurant: { zone?: unknown } | null | undefined) {
@@ -250,13 +251,19 @@ export default function VerifyRestaurantPage() {
 
   const availabilityMutation = useMutation({
     mutationFn: (
-      action: { isOpen: boolean } | { resetOverride: true },
+      action: { isOpen: boolean } | { resetOverride: true } | { openStatusPriority: "schedule" | "manual" },
     ) => updateRestaurantAvailability(String(id), action),
     onSuccess: (_data, action) => {
       queryClient.invalidateQueries({ queryKey: ["restaurant", id] });
       queryClient.invalidateQueries({ queryKey: ["restaurants"] });
       if ("resetOverride" in action) {
         toast.success("Returned to schedule");
+      } else if ("openStatusPriority" in action) {
+        toast.success(
+          action.openStatusPriority === "schedule"
+            ? "Schedule has priority"
+            : "Manual open/close has priority",
+        );
       } else {
         toast.success(
           action.isOpen ? "Restaurant marked open" : "Restaurant marked closed",
@@ -380,10 +387,31 @@ export default function VerifyRestaurantPage() {
                   }}
                   className="text-left text-[10px] text-[#98E32F]/80 hover:text-[#98E32F] hover:underline disabled:opacity-50"
                 >
-                  Manual · use schedule
+                  {restaurant.openStatusPriority === "manual"
+                    ? "Manual · use schedule"
+                    : "Temp override · resume"}
                 </button>
               ) : (
-                <span className="text-[10px] text-white/35">On schedule</span>
+                <button
+                  type="button"
+                  disabled={availabilityMutation.isPending}
+                  onClick={() => {
+                    const next =
+                      restaurant.openStatusPriority === "manual"
+                        ? "schedule"
+                        : "manual";
+                    startTransition(() => {
+                      availabilityMutation.mutate({
+                        openStatusPriority: next,
+                      });
+                    });
+                  }}
+                  className="text-left text-[10px] text-white/35 hover:text-white/70"
+                >
+                  {restaurant.openStatusPriority === "manual"
+                    ? "Priority · manual"
+                    : "Priority · schedule"}
+                </button>
               )}
             </div>
           ) : null}
@@ -693,6 +721,11 @@ export default function VerifyRestaurantPage() {
         {/* Right Column: Profile, Documents & Review */}
         <div className="lg:col-span-2 space-y-8">
           <RestaurantProfileEditor
+            restaurantId={String(id)}
+            restaurant={restaurant}
+          />
+
+          <RestaurantScheduleEditor
             restaurantId={String(id)}
             restaurant={restaurant}
           />

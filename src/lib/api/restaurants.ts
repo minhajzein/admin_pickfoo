@@ -1,5 +1,5 @@
 import api, { getApiErrorMessage } from "@/lib/axios";
-import type { Restaurant } from "@/types/models";
+import type { OpeningHour, Restaurant } from "@/types/models";
 
 export async function updateRestaurantZone(
   restaurantId: string,
@@ -47,9 +47,19 @@ export async function updateRestaurantProfile(
   return data.data;
 }
 
+export type RestaurantAvailabilityUpdate =
+  | { isOpen: boolean }
+  | { resetOverride: true }
+  | { openStatusPriority: "schedule" | "manual" }
+  | {
+      openingHours: OpeningHour[];
+      openStatusPriority?: "schedule" | "manual";
+      resetOverride?: true;
+    };
+
 export async function updateRestaurantAvailability(
   restaurantId: string,
-  payload: { isOpen: boolean } | { resetOverride: true },
+  payload: RestaurantAvailabilityUpdate,
 ): Promise<Restaurant> {
   const { data } = await api.patch(
     `/restaurants/${restaurantId}/availability`,

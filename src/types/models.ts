@@ -129,6 +129,8 @@ export interface Restaurant {
   numReviews: number;
   isOpen: boolean;
   isManualOverride: boolean;
+  openStatusPriority?: 'schedule' | 'manual';
+  manualOverrideUntil?: string | null;
   openingHours: OpeningHour[];
   zone?: string | DeliveryZoneSummary | null;
   /** Platform commission on orders (%). Set via admin only. */
