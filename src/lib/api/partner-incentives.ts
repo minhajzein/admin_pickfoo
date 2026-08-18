@@ -60,10 +60,24 @@ export async function updatePartnerIncentive(
   patch: Partial<{
     title: string;
     body: string;
+    type: PartnerIncentiveType;
     rewardAmountInr: number;
+    rewardMode: "flat" | "guaranteed_total";
     status: PartnerIncentiveStatus;
     startsAt: string;
     endsAt: string;
+    streakTarget: number;
+    dailyTarget: number;
+    requireMinDeliveries: number;
+    conditions: PartnerIncentiveConditions & {
+      enableAcceptRate?: boolean;
+      enableOnlineHours?: boolean;
+      enableOnlineShift?: boolean;
+      enableMinDeliveries?: boolean;
+    };
+    audience: PartnerIncentiveAudience;
+    zoneIds: string[];
+    partnerIds: string[];
   }>,
 ): Promise<AdminPartnerIncentive> {
   const { data } = await api.patch(`/partner-incentives/${id}`, patch);

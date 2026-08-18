@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import {
   keepPreviousData,
   useMutation,
@@ -55,38 +55,163 @@ const typeLabels: Record<PartnerIncentiveType, string> = {
   daily_count: "Complete N in a day",
 };
 
-export default function PartnerIncentivesPage() {
-  const queryClient = useQueryClient();
-  const [page, setPage] = useState(1);
-  const now = useMemo(() => new Date(), []);
-  const [form, setForm] = useState({
+type IncentiveFormState = {
+  title: string;
+  body: string;
+  type: PartnerIncentiveType;
+  rewardAmountInr: number;
+  rewardMode: "flat" | "guaranteed_total";
+  startsAt: string;
+  endsAt: string;
+  streakTarget: number;
+  dailyTarget: number;
+  requireMinDeliveries: number;
+  loseOnRejectOrTimeout: boolean;
+  enableAcceptRate: boolean;
+  minAcceptRatePercent: number;
+  enableOnlineHours: boolean;
+  minOnlineHours: number;
+  enableOnlineShift: boolean;
+  onlineWindowStart: string;
+  onlineWindowEnd: string;
+  breakMinutesAllowed: number;
+  enableMinDeliveries: boolean;
+  minDeliveries: number;
+  audience: PartnerIncentiveAudience;
+  partnerIdsRaw: string;
+  zoneIdsRaw: string;
+  publishNow: boolean;
+  showLegacyTypes: boolean;
+};
+
+function emptyForm(now = new Date()): IncentiveFormState {
+  return {
     title: "",
     body: "",
-    type: "challenge" as PartnerIncentiveType,
+    type: "challenge",
     rewardAmountInr: 500,
-    rewardMode: "guaranteed_total" as "flat" | "guaranteed_total",
+    rewardMode: "guaranteed_total",
     startsAt: toLocalInput(now),
     endsAt: toLocalInput(new Date(now.getTime() + 24 * 60 * 60 * 1000)),
     streakTarget: 10,
     dailyTarget: 10,
     requireMinDeliveries: 1,
-    loseOnRejectOrTimeout: true,
-    enableAcceptRate: true,
+    loseOnRejectOrTimeout: false,
+    enableAcceptRate: false,
     minAcceptRatePercent: 100,
     enableOnlineHours: false,
     minOnlineHours: 11,
-    enableOnlineShift: true,
+    enableOnlineShift: false,
     onlineWindowStart: "16:00",
     onlineWindowEnd: "23:00",
     breakMinutesAllowed: 25,
     enableMinDeliveries: false,
     minDeliveries: 10,
-    audience: "all" as PartnerIncentiveAudience,
+    audience: "all",
     partnerIdsRaw: "",
     zoneIdsRaw: "",
     publishNow: true,
     showLegacyTypes: false,
-  });
+  };
+}
+
+function formFromOffer(row: AdminPartnerIncentive): IncentiveFormState {
+  const c = row.conditions;
+  const isLegacy = row.type !== "challenge";
+  return {
+    title: row.title,
+    body: row.body,
+    type: row.type,
+    rewardAmountInr: row.rewardAmountInr,
+    rewardMode: row.rewardMode === "flat" ? "flat" : "guaranteed_total",
+    startsAt: toLocalInput(new Date(row.startsAt)),
+    endsAt: toLocalInput(new Date(row.endsAt)),
+    streakTarget: row.streakTarget ?? 10,
+    dailyTarget: row.dailyTarget ?? 10,
+    requireMinDeliveries: row.requireMinDeliveries ?? 1,
+    loseOnRejectOrTimeout: c?.loseOnRejectOrTimeout !== false,
+    enableAcceptRate: c?.minAcceptRatePercent != null,
+    minAcceptRatePercent: c?.minAcceptRatePercent ?? 100,
+    enableOnlineHours: c?.minOnlineHours != null,
+    minOnlineHours: c?.minOnlineHours ?? 11,
+    enableOnlineShift: !!(c?.onlineWindowStart && c?.onlineWindowEnd),
+    onlineWindowStart: c?.onlineWindowStart || "16:00",
+    onlineWindowEnd: c?.onlineWindowEnd || "23:00",
+    breakMinutesAllowed: c?.breakMinutesAllowed ?? 25,
+    enableMinDeliveries: c?.minDeliveries != null,
+    minDeliveries: c?.minDeliveries ?? 10,
+    audience: row.audience,
+    partnerIdsRaw: (row.partnerIds || []).join(", "),
+    zoneIdsRaw: (row.zoneIds || []).join(", "),
+    publishNow: false,
+    showLegacyTypes: isLegacy,
+  };
+}
+
+function buildIncentivePayload(form: IncentiveFormState) {
+  const partnerIds = form.partnerIdsRaw
+    .split(/[\s,]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const zoneIds = form.zoneIdsRaw
+    .split(/[\s,]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return {
+    title: form.title.trim(),
+    body: form.body.trim(),
+    type: form.type,
+    rewardAmountInr: Number(form.rewardAmountInr),
+    rewardMode: form.rewardMode,
+    startsAt: new Date(form.startsAt).toISOString(),
+    endsAt: new Date(form.endsAt).toISOString(),
+    streakTarget:
+      form.type === "streak" ? Number(form.streakTarget) : undefined,
+    dailyTarget:
+      form.type === "daily_count" ? Number(form.dailyTarget) : undefined,
+    requireMinDeliveries:
+      form.type === "clean_window"
+        ? Number(form.requireMinDeliveries)
+        : undefined,
+    conditions:
+      form.type === "challenge"
+        ? {
+            loseOnRejectOrTimeout: form.loseOnRejectOrTimeout,
+            enableAcceptRate: form.enableAcceptRate,
+            minAcceptRatePercent: form.enableAcceptRate
+              ? form.minAcceptRatePercent
+              : undefined,
+            enableOnlineHours: form.enableOnlineHours,
+            minOnlineHours: form.enableOnlineHours
+              ? form.minOnlineHours
+              : undefined,
+            enableOnlineShift: form.enableOnlineShift,
+            onlineWindowStart: form.enableOnlineShift
+              ? form.onlineWindowStart
+              : undefined,
+            onlineWindowEnd: form.enableOnlineShift
+              ? form.onlineWindowEnd
+              : undefined,
+            breakMinutesAllowed: form.enableOnlineShift
+              ? form.breakMinutesAllowed
+              : undefined,
+            enableMinDeliveries: form.enableMinDeliveries,
+            minDeliveries: form.enableMinDeliveries
+              ? form.minDeliveries
+              : undefined,
+          }
+        : undefined,
+    audience: form.audience,
+    partnerIds: form.audience === "partners" ? partnerIds : [],
+    zoneIds: form.audience === "zones" ? zoneIds : [],
+  };
+}
+
+export default function PartnerIncentivesPage() {
+  const queryClient = useQueryClient();
+  const [page, setPage] = useState(1);
+  const [form, setForm] = useState<IncentiveFormState>(() => emptyForm());
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [selected, setSelected] = useState<AdminPartnerIncentive | null>(null);
   const [progressOpen, setProgressOpen] = useState(false);
 
@@ -111,12 +236,31 @@ export default function PartnerIncentivesPage() {
     mutationFn: createPartnerIncentive,
     onSuccess: async () => {
       toast.success("Incentive offer created");
-      setForm((f) => ({ ...f, title: "", body: "" }));
+      setForm(emptyForm());
       setPage(1);
       await queryClient.invalidateQueries({ queryKey: ["partner-incentives"] });
     },
     onError: (err: unknown) => {
       toast.error(err instanceof Error ? err.message : "Create failed");
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({
+      id,
+      payload,
+    }: {
+      id: string;
+      payload: ReturnType<typeof buildIncentivePayload>;
+    }) => updatePartnerIncentive(id, payload),
+    onSuccess: async () => {
+      toast.success("Incentive offer updated");
+      setEditingId(null);
+      setForm(emptyForm());
+      await queryClient.invalidateQueries({ queryKey: ["partner-incentives"] });
+    },
+    onError: (err: unknown) => {
+      toast.error(err instanceof Error ? err.message : "Update failed");
     },
   });
 
@@ -145,15 +289,6 @@ export default function PartnerIncentivesPage() {
 
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const partnerIds = form.partnerIdsRaw
-      .split(/[\s,]+/)
-      .map((s) => s.trim())
-      .filter(Boolean);
-    const zoneIds = form.zoneIdsRaw
-      .split(/[\s,]+/)
-      .map((s) => s.trim())
-      .filter(Boolean);
-
     if (form.type === "challenge") {
       const anyCond =
         form.loseOnRejectOrTimeout ||
@@ -167,43 +302,26 @@ export default function PartnerIncentivesPage() {
       }
     }
 
+    const payload = buildIncentivePayload(form);
+    if (editingId) {
+      updateMutation.mutate({ id: editingId, payload });
+      return;
+    }
     createMutation.mutate({
-      title: form.title.trim(),
-      body: form.body.trim(),
-      type: form.type,
-      rewardAmountInr: Number(form.rewardAmountInr),
-      rewardMode: form.rewardMode,
-      startsAt: new Date(form.startsAt).toISOString(),
-      endsAt: new Date(form.endsAt).toISOString(),
-      streakTarget:
-        form.type === "streak" ? Number(form.streakTarget) : undefined,
-      dailyTarget:
-        form.type === "daily_count" ? Number(form.dailyTarget) : undefined,
-      requireMinDeliveries:
-        form.type === "clean_window"
-          ? Number(form.requireMinDeliveries)
-          : undefined,
-      conditions:
-        form.type === "challenge"
-          ? {
-              loseOnRejectOrTimeout: form.loseOnRejectOrTimeout,
-              enableAcceptRate: form.enableAcceptRate,
-              minAcceptRatePercent: form.minAcceptRatePercent,
-              enableOnlineHours: form.enableOnlineHours,
-              minOnlineHours: form.minOnlineHours,
-              enableOnlineShift: form.enableOnlineShift,
-              onlineWindowStart: form.onlineWindowStart,
-              onlineWindowEnd: form.onlineWindowEnd,
-              breakMinutesAllowed: form.breakMinutesAllowed,
-              enableMinDeliveries: form.enableMinDeliveries,
-              minDeliveries: form.minDeliveries,
-            }
-          : undefined,
-      audience: form.audience,
-      partnerIds: form.audience === "partners" ? partnerIds : undefined,
-      zoneIds: form.audience === "zones" ? zoneIds : undefined,
+      ...payload,
       publishNow: form.publishNow,
     });
+  };
+
+  const beginEdit = (row: AdminPartnerIncentive) => {
+    setEditingId(row.id);
+    setForm(formFromOffer(row));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setForm(emptyForm());
   };
 
   return (
@@ -223,7 +341,7 @@ export default function PartnerIncentivesPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <Gift className="h-4 w-4" />
-            Create offer
+            {editingId ? "Edit offer" : "Create offer"}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -660,6 +778,7 @@ export default function PartnerIncentivesPage() {
               </>
             )}
 
+            {!editingId && (
             <label className="flex items-center gap-2 text-sm md:col-span-2">
               <input
                 type="checkbox"
@@ -670,13 +789,22 @@ export default function PartnerIncentivesPage() {
               />
               Activate &amp; notify partners now (if start time has begun)
             </label>
-            <div className="md:col-span-2">
-              <Button type="submit" disabled={createMutation.isPending}>
-                {createMutation.isPending && (
+            )}
+            <div className="md:col-span-2 flex flex-wrap gap-2">
+              <Button
+                type="submit"
+                disabled={createMutation.isPending || updateMutation.isPending}
+              >
+                {(createMutation.isPending || updateMutation.isPending) && (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 )}
-                Create offer
+                {editingId ? "Save changes" : "Create offer"}
               </Button>
+              {editingId ? (
+                <Button type="button" variant="outline" onClick={cancelEdit}>
+                  Cancel edit
+                </Button>
+              ) : null}
             </div>
           </form>
         </CardContent>
@@ -758,6 +886,16 @@ export default function PartnerIncentivesPage() {
                           {new Date(row.endsAt).toLocaleString()}
                         </TableCell>
                         <TableCell className="space-x-2 text-right">
+                          {row.status !== "cancelled" &&
+                            row.status !== "ended" && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => beginEdit(row)}
+                              >
+                                Edit
+                              </Button>
+                            )}
                           <Button
                             size="sm"
                             variant="outline"
