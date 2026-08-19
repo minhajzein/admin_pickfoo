@@ -50,6 +50,7 @@ import {
 import { useEffect, useState, startTransition } from "react";
 import { toast } from "sonner";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ShieldCheck } from "lucide-react";
 import { fetchZones } from "@/lib/api/zones";
 import {
@@ -98,6 +99,7 @@ export default function RestaurantsPage() {
     useState<Restaurant | null>(null);
   const [isViewOpen, setIsViewOpen] = useState(false);
   const queryClient = useQueryClient();
+  const router = useRouter();
 
   useEffect(() => {
     const t = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
@@ -346,6 +348,15 @@ export default function RestaurantsPage() {
     ? new Date(dataUpdatedAt).toLocaleTimeString()
     : null;
 
+  const go = (href: string) => {
+    // Close the menu and paint first; navigation is a long task otherwise (INP).
+    requestAnimationFrame(() => {
+      startTransition(() => {
+        router.push(href);
+      });
+    });
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -491,47 +502,64 @@ export default function RestaurantsPage() {
                         >
                           <DropdownMenuLabel>Actions</DropdownMenuLabel>
                           <DropdownMenuItem
-                            onClick={() => {
-                              setSelectedRestaurant(restaurant);
-                              setIsViewOpen(true);
+                            onSelect={() => {
+                              startTransition(() => {
+                                setSelectedRestaurant(restaurant);
+                                setIsViewOpen(true);
+                              });
                             }}
                           >
                             <Eye className="mr-2 h-4 w-4" /> View Details
                           </DropdownMenuItem>
-                          <Link href={`/restaurants/${restaurant._id}/menu`}>
-                            <DropdownMenuItem className="text-[#98E32F] focus:text-[#98E32F] focus:bg-[#98E32F]/10">
-                              <UtensilsCrossed className="mr-2 h-4 w-4" />{" "}
-                              Manage Menu
-                            </DropdownMenuItem>
-                          </Link>
-                          <Link href={`/restaurants/${restaurant._id}/ledger`}>
-                            <DropdownMenuItem className="text-[#98E32F] focus:text-[#98E32F] focus:bg-[#98E32F]/10">
-                              <Wallet className="mr-2 h-4 w-4" /> Ledger &
-                              payments
-                            </DropdownMenuItem>
-                          </Link>
-                          <Link href={`/restaurants/verify/${restaurant._id}`}>
-                            <DropdownMenuItem>
-                              <ShieldCheck className="mr-2 h-4 w-4" /> Verify
-                              Documents
-                            </DropdownMenuItem>
-                          </Link>
-                          <Link href={`/restaurants/verify/${restaurant._id}#schedule`}>
-                            <DropdownMenuItem className="text-[#98E32F] focus:text-[#98E32F] focus:bg-[#98E32F]/10">
-                              <Clock className="mr-2 h-4 w-4" /> Manage
-                              schedule
-                            </DropdownMenuItem>
-                          </Link>
+                          <DropdownMenuItem
+                            className="text-[#98E32F] focus:text-[#98E32F] focus:bg-[#98E32F]/10"
+                            onSelect={() =>
+                              go(`/restaurants/${restaurant._id}/menu`)
+                            }
+                          >
+                            <UtensilsCrossed className="mr-2 h-4 w-4" />{" "}
+                            Manage Menu
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="text-[#98E32F] focus:text-[#98E32F] focus:bg-[#98E32F]/10"
+                            onSelect={() =>
+                              go(`/restaurants/${restaurant._id}/ledger`)
+                            }
+                          >
+                            <Wallet className="mr-2 h-4 w-4" /> Ledger &
+                            payments
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onSelect={() =>
+                              go(`/restaurants/verify/${restaurant._id}`)
+                            }
+                          >
+                            <ShieldCheck className="mr-2 h-4 w-4" /> Verify
+                            Documents
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="text-[#98E32F] focus:text-[#98E32F] focus:bg-[#98E32F]/10"
+                            onSelect={() =>
+                              go(
+                                `/restaurants/verify/${restaurant._id}#schedule`,
+                              )
+                            }
+                          >
+                            <Clock className="mr-2 h-4 w-4" /> Manage
+                            schedule
+                          </DropdownMenuItem>
                           <DropdownMenuSeparator className="bg-white/5" />
                           {restaurant.status !== "active" && (
                             <DropdownMenuItem
                               className="text-[#98E32F] focus:text-[#98E32F] focus:bg-[#98E32F]/10"
-                              onClick={() =>
-                                updateStatusMutation.mutate({
-                                  id: restaurant._id,
-                                  status: "active",
-                                })
-                              }
+                              onSelect={() => {
+                                startTransition(() => {
+                                  updateStatusMutation.mutate({
+                                    id: restaurant._id,
+                                    status: "active",
+                                  });
+                                });
+                              }}
                             >
                               <CheckCircle2 className="mr-2 h-4 w-4" /> Approve
                             </DropdownMenuItem>
@@ -539,12 +567,14 @@ export default function RestaurantsPage() {
                           {restaurant.status !== "suspended" && (
                             <DropdownMenuItem
                               className="text-red-400 focus:text-red-400 focus:bg-red-400/10"
-                              onClick={() =>
-                                updateStatusMutation.mutate({
-                                  id: restaurant._id,
-                                  status: "suspended",
-                                })
-                              }
+                              onSelect={() => {
+                                startTransition(() => {
+                                  updateStatusMutation.mutate({
+                                    id: restaurant._id,
+                                    status: "suspended",
+                                  });
+                                });
+                              }}
                             >
                               <AlertCircle className="mr-2 h-4 w-4" /> Suspend
                             </DropdownMenuItem>
