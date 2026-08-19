@@ -49,6 +49,8 @@ function toLocalInput(dt: Date): string {
 }
 
 const typeLabels: Record<PartnerIncentiveType, string> = {
+  hourly: "₹ per completed hour",
+  order_bonus: "After N orders (trip + bonus)",
   challenge: "Challenge (conditions)",
   clean_window: "No reject/timeout window",
   streak: "Consecutive deliveries",
@@ -61,6 +63,7 @@ type IncentiveFormState = {
   type: PartnerIncentiveType;
   rewardAmountInr: number;
   rewardMode: "flat" | "guaranteed_total";
+  exclusive: boolean;
   startsAt: string;
   endsAt: string;
   streakTarget: number;
@@ -88,13 +91,14 @@ function emptyForm(now = new Date()): IncentiveFormState {
   return {
     title: "",
     body: "",
-    type: "challenge",
-    rewardAmountInr: 500,
-    rewardMode: "guaranteed_total",
+    type: "hourly",
+    rewardAmountInr: 40,
+    rewardMode: "flat",
+    exclusive: false,
     startsAt: toLocalInput(now),
     endsAt: toLocalInput(new Date(now.getTime() + 24 * 60 * 60 * 1000)),
     streakTarget: 10,
-    dailyTarget: 10,
+    dailyTarget: 6,
     requireMinDeliveries: 1,
     loseOnRejectOrTimeout: false,
     enableAcceptRate: false,
@@ -117,13 +121,17 @@ function emptyForm(now = new Date()): IncentiveFormState {
 
 function formFromOffer(row: AdminPartnerIncentive): IncentiveFormState {
   const c = row.conditions;
-  const isLegacy = row.type !== "challenge";
+    const isLegacy =
+      row.type === "clean_window" ||
+      row.type === "streak" ||
+      row.type === "daily_count";
   return {
     title: row.title,
     body: row.body,
     type: row.type,
     rewardAmountInr: row.rewardAmountInr,
     rewardMode: row.rewardMode === "flat" ? "flat" : "guaranteed_total",
+    exclusive: row.exclusive === true,
     startsAt: toLocalInput(new Date(row.startsAt)),
     endsAt: toLocalInput(new Date(row.endsAt)),
     streakTarget: row.streakTarget ?? 10,
@@ -168,11 +176,16 @@ function buildIncentivePayload(form: IncentiveFormState) {
     streakTarget:
       form.type === "streak" ? Number(form.streakTarget) : undefined,
     dailyTarget:
-      form.type === "daily_count" ? Number(form.dailyTarget) : undefined,
+      form.type === "daily_count" || form.type === "order_bonus"
+        ? Number(form.dailyTarget)
+        : undefined,
     requireMinDeliveries:
       form.type === "clean_window"
         ? Number(form.requireMinDeliveries)
-        : undefined,
+        : form.type === "order_bonus"
+          ? Number(form.dailyTarget)
+          : undefined,
+    exclusive: form.exclusive,
     conditions:
       form.type === "challenge"
         ? {
@@ -371,7 +384,43 @@ export default function PartnerIncentivesPage() {
             </div>
 
             <div className="space-y-2">
-              <Label>Reward (₹)</Label>
+              <Label>Offer type</Label>
+              <select
+                className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                value={
+                  form.type === "hourly" ||
+                  form.type === "order_bonus" ||
+                  form.type === "challenge"
+                    ? form.type
+                    : "challenge"
+                }
+                onChange={(e) =>
+                  setForm((f) => ({
+                    ...f,
+                    type: e.target.value as PartnerIncentiveType,
+                    rewardMode:
+                      e.target.value === "hourly" ||
+                      e.target.value === "order_bonus"
+                        ? "flat"
+                        : f.rewardMode,
+                    exclusive:
+                      e.target.value === "challenge" ? f.exclusive : false,
+                  }))
+                }
+              >
+                <option value="hourly">{typeLabels.hourly}</option>
+                <option value="order_bonus">{typeLabels.order_bonus}</option>
+                <option value="challenge">{typeLabels.challenge}</option>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <Label>
+                {form.type === "hourly"
+                  ? "₹ per completed hour"
+                  : form.type === "order_bonus"
+                    ? "Bonus ₹ (added on top of trip earnings)"
+                    : "Reward (₹)"}
+              </Label>
               <Input
                 type="number"
                 min={1}
@@ -385,6 +434,23 @@ export default function PartnerIncentivesPage() {
                 required
               />
             </div>
+            {form.type === "order_bonus" && (
+              <div className="space-y-2">
+                <Label>After how many completed orders</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={form.dailyTarget}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      dailyTarget: Number(e.target.value),
+                    }))
+                  }
+                />
+              </div>
+            )}
+            {form.type === "challenge" && (
             <div className="space-y-2">
               <Label>Reward mode</Label>
               <select
@@ -403,7 +469,84 @@ export default function PartnerIncentivesPage() {
                 <option value="flat">Flat bonus (credit full ₹ amount)</option>
               </select>
             </div>
-            <div className="md:col-span-2">
+            )}
+            {form.type === "challenge" && (
+              <label className="flex items-start gap-2 text-sm md:col-span-2">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={form.exclusive}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, exclusive: e.target.checked }))
+                  }
+                />
+                <span>
+                  Exclusive challenge (solo)
+                  <span className="block text-xs text-muted-foreground">
+                    Partner must join. They cannot run another exclusive
+                    challenge at the same time — they cancel the active one
+                    first.
+                  </span>
+                </span>
+              </label>
+            )}
+            <div className="md:col-span-2 flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  setForm((f) => ({
+                    ...f,
+                    type: "hourly",
+                    exclusive: false,
+                    title: "₹40 per completed hour",
+                    body: "Earn ₹40 for every full hour you stay online in this window. Partial hours do not count.",
+                    rewardAmountInr: 40,
+                    rewardMode: "flat",
+                  }))
+                }
+              >
+                Preset: ₹40 / hour
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  setForm((f) => ({
+                    ...f,
+                    type: "order_bonus",
+                    exclusive: false,
+                    title: "6 orders: trip earnings + ₹20",
+                    body: "Complete 6 deliveries. Trip fees stay in Pocket, plus a ₹20 bonus when you hit 6.",
+                    rewardAmountInr: 20,
+                    dailyTarget: 6,
+                    rewardMode: "flat",
+                  }))
+                }
+              >
+                Preset: 6 orders + ₹20
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  setForm((f) => ({
+                    ...f,
+                    type: "order_bonus",
+                    exclusive: false,
+                    title: "10 orders: trip earnings + ₹30",
+                    body: "Complete 10 deliveries. Trip fees stay in Pocket, plus a ₹30 bonus when you hit 10.",
+                    rewardAmountInr: 30,
+                    dailyTarget: 10,
+                    rewardMode: "flat",
+                  }))
+                }
+              >
+                Preset: 10 orders + ₹30
+              </Button>
               <Button
                 type="button"
                 variant="outline"
@@ -412,8 +555,9 @@ export default function PartnerIncentivesPage() {
                   setForm((f) => ({
                     ...f,
                     type: "challenge",
+                    exclusive: true,
                     title: "₹500 guaranteed",
-                    body: "Daily earnings + bonus. Stay online 4pm–11pm with 100% accept rate. 25 minutes break available.",
+                    body: "Daily earnings + bonus. Stay online 4pm–11pm with 100% accept rate. 25 minutes break available. Exclusive — join from Offers.",
                     rewardAmountInr: 500,
                     rewardMode: "guaranteed_total",
                     loseOnRejectOrTimeout: true,
@@ -428,7 +572,7 @@ export default function PartnerIncentivesPage() {
                   }))
                 }
               >
-                Load preset: ₹500 guaranteed (4–11pm)
+                Preset: exclusive ₹500 (4–11pm)
               </Button>
             </div>
             <div className="space-y-2">
@@ -495,6 +639,7 @@ export default function PartnerIncentivesPage() {
               </div>
             )}
 
+            {form.type === "challenge" && (
             <div className="md:col-span-2 space-y-3 rounded-md border p-4">
               <div className="flex items-center justify-between gap-2">
                 <div>
@@ -689,6 +834,7 @@ export default function PartnerIncentivesPage() {
                 />
               </div>
             </div>
+            )}
 
             <div className="md:col-span-2">
               <button

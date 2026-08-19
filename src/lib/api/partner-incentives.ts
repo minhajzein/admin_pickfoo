@@ -34,6 +34,7 @@ export async function createPartnerIncentive(input: {
   type: PartnerIncentiveType;
   rewardAmountInr: number;
   rewardMode?: "flat" | "guaranteed_total";
+  exclusive?: boolean;
   startsAt: string;
   endsAt: string;
   streakTarget?: number;
@@ -63,6 +64,7 @@ export async function updatePartnerIncentive(
     type: PartnerIncentiveType;
     rewardAmountInr: number;
     rewardMode: "flat" | "guaranteed_total";
+    exclusive?: boolean;
     status: PartnerIncentiveStatus;
     startsAt: string;
     endsAt: string;

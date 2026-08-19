@@ -300,10 +300,12 @@ export interface AdminGigBooking {
 }
 
 export type PartnerIncentiveType =
-  | 'challenge'
-  | 'clean_window'
-  | 'streak'
-  | 'daily_count';
+  | "challenge"
+  | "hourly"
+  | "order_bonus"
+  | "clean_window"
+  | "streak"
+  | "daily_count";
 export type PartnerIncentiveStatus =
   | 'draft'
   | 'scheduled'
@@ -345,6 +347,7 @@ export interface AdminPartnerIncentive {
   body: string;
   rewardAmountInr: number;
   rewardMode?: PartnerIncentiveRewardMode;
+  exclusive?: boolean;
   type: PartnerIncentiveType;
   startsAt: string;
   endsAt: string;
