@@ -383,7 +383,7 @@ export default function OrdersPage() {
     : null;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div>
         <h2 className="text-3xl font-bold tracking-tight">Orders</h2>
         <p className="text-sm text-white/50">
@@ -391,43 +391,47 @@ export default function OrdersPage() {
         </p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        <Card className="border-white/5 bg-[#002833] text-white">
-          <CardHeader className="pb-2">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        <Card className="gap-1 border-white/5 bg-[#002833] py-3 text-white">
+          <CardHeader className="px-4 pb-0">
             <CardTitle className="text-sm text-white/60">Total orders</CardTitle>
           </CardHeader>
-          <CardContent className="text-2xl font-bold">{summary.total}</CardContent>
+          <CardContent className="px-4 pt-0 text-2xl font-bold leading-none">
+            {summary.total}
+          </CardContent>
         </Card>
-        <Card className="border-white/5 bg-[#002833] text-white">
-          <CardHeader className="pb-2">
+        <Card className="gap-1 border-white/5 bg-[#002833] py-3 text-white">
+          <CardHeader className="px-4 pb-0">
             <CardTitle className="text-sm text-white/60">Active</CardTitle>
           </CardHeader>
-          <CardContent className="text-2xl font-bold">{summary.active}</CardContent>
+          <CardContent className="px-4 pt-0 text-2xl font-bold leading-none">
+            {summary.active}
+          </CardContent>
         </Card>
-        <Card className="border-white/5 bg-[#002833] text-white">
-          <CardHeader className="pb-2">
+        <Card className="gap-1 border-white/5 bg-[#002833] py-3 text-white">
+          <CardHeader className="px-4 pb-0">
             <CardTitle className="text-sm text-white/60">Cancellations</CardTitle>
           </CardHeader>
-          <CardContent className="text-2xl font-bold">
+          <CardContent className="px-4 pt-0 text-2xl font-bold leading-none">
             {summary.cancelled}
           </CardContent>
         </Card>
-        <Card className="border-white/5 bg-[#002833] text-white">
-          <CardHeader className="pb-2">
+        <Card className="gap-1 border-white/5 bg-[#002833] py-3 text-white">
+          <CardHeader className="px-4 pb-0">
             <CardTitle className="text-sm text-white/60">Delivered</CardTitle>
           </CardHeader>
-          <CardContent className="text-2xl font-bold">
+          <CardContent className="px-4 pt-0 text-2xl font-bold leading-none">
             {summary.delivered}
           </CardContent>
         </Card>
-        <Card className="border-white/5 bg-[#002833] text-white">
-          <CardHeader className="pb-2">
+        <Card className="gap-1 border-white/5 bg-[#002833] py-3 text-white">
+          <CardHeader className="px-4 pb-0">
             <CardTitle className="text-sm text-white/60">
               Earned commission
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold text-[#98E32F]">
+          <CardContent className="px-4 pt-0">
+            <p className="text-2xl font-bold leading-none text-[#98E32F]">
               {formatMoney(summary.platformCommission)}
             </p>
             <p className="mt-1 text-xs text-white/40">
@@ -438,12 +442,12 @@ export default function OrdersPage() {
             </p>
           </CardContent>
         </Card>
-        <Card className="border-white/5 bg-[#002833] text-white">
-          <CardHeader className="pb-2">
+        <Card className="gap-1 border-white/5 bg-[#002833] py-3 text-white">
+          <CardHeader className="px-4 pb-0">
             <CardTitle className="text-sm text-white/60">Avg commission</CardTitle>
           </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold text-[#98E32F]">
+          <CardContent className="px-4 pt-0">
+            <p className="text-2xl font-bold leading-none text-[#98E32F]">
               {formatMoney(summary.averageCommission)}
             </p>
             <p className="mt-1 text-xs text-white/40">
@@ -456,10 +460,10 @@ export default function OrdersPage() {
         </Card>
       </div>
 
-      <Card className="border-white/5 bg-[#002833] text-white">
-        <CardContent className="space-y-4 p-4">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-            <div className="space-y-1.5">
+      <Card className="gap-0 border-white/5 bg-[#002833] py-0 text-white">
+        <CardContent className="space-y-2 px-4 py-2">
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+            <div className="space-y-1">
               <label className="text-[10px] font-bold uppercase tracking-widest text-white/40">
                 Period
               </label>
@@ -477,7 +481,7 @@ export default function OrdersPage() {
                 ))}
               </select>
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               <label className="text-[10px] font-bold uppercase tracking-widest text-white/40">
                 Status
               </label>
@@ -499,7 +503,7 @@ export default function OrdersPage() {
                 ))}
               </select>
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               <label className="text-[10px] font-bold uppercase tracking-widest text-white/40">
                 Restaurant
               </label>
@@ -522,7 +526,7 @@ export default function OrdersPage() {
                 ))}
               </select>
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               <label className="text-[10px] font-bold uppercase tracking-widest text-white/40">
                 Partner
               </label>
