@@ -22,7 +22,6 @@ import {
   MapPin,
   Phone,
   Mail,
-  Store,
   User,
   Calendar,
   AlertCircle,
@@ -41,7 +40,6 @@ import {
   updateRestaurantPayoutMode,
   updateRestaurantZone,
 } from "@/lib/api/restaurants";
-import { RestaurantMessageThread } from "@/components/restaurants/RestaurantMessageThread";
 import { RestaurantProfileEditor } from "@/components/restaurants/RestaurantProfileEditor";
 import { RestaurantScheduleEditor } from "@/components/restaurants/RestaurantScheduleEditor";
 import { cn } from "@/lib/utils";
@@ -426,56 +424,11 @@ export default function VerifyRestaurantPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Left Column: Details & Contact */}
         <div className="lg:col-span-1 space-y-8">
-          {/* Cover + brand logo */}
           <Card className="bg-[#002833] border-white/5 overflow-hidden text-white">
-            <div className="relative h-48 bg-black/20">
-              {restaurant.image ? (
-                <NextImage
-                  src={restaurant.image}
-                  alt={restaurant.name}
-                  width={400}
-                  height={192}
-                  unoptimized
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-white/10">
-                  <Store size={48} />
-                  <span className="text-xs font-bold uppercase tracking-widest">
-                    No Cover Image
-                  </span>
-                </div>
-              )}
-            </div>
             <CardHeader className="pb-2">
               <CardTitle className="text-lg">Contact Information</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {restaurant.brandLogo ? (
-                <div className="flex items-center gap-3">
-                  <NextImage
-                    src={restaurant.brandLogo}
-                    alt={`${restaurant.name} brand logo`}
-                    width={56}
-                    height={56}
-                    unoptimized
-                    className="h-14 w-14 rounded-xl border border-white/10 object-cover bg-black/20"
-                  />
-                  <div>
-                    <p className="text-[10px] text-white/30 uppercase font-black tracking-widest">
-                      Brand logo
-                    </p>
-                    <a
-                      href={restaurant.brandLogo}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-[#98E32F] inline-flex items-center gap-1"
-                    >
-                      Open <ExternalLink size={12} />
-                    </a>
-                  </div>
-                </div>
-              ) : null}
               {(restaurant.restaurantTypes?.length ?? 0) > 0 && (
                 <div>
                   <p className="text-[10px] text-white/30 uppercase font-black tracking-widest mb-2">
@@ -752,14 +705,6 @@ export default function VerifyRestaurantPage() {
                 url={restaurant.legalDocs.tradeLicenseUrl}
                 number={restaurant.legalDocs.tradeLicenseNumber}
               />
-              <DocumentCard
-                title="Health Certificate"
-                url={restaurant.legalDocs.healthCertificateUrl}
-              />
-              <DocumentCard
-                title="PAN Card / Number"
-                number={restaurant.legalDocs.panNumber}
-              />
             </div>
           </section>
 
@@ -828,14 +773,6 @@ export default function VerifyRestaurantPage() {
               </div>
             </CardContent>
           </Card>
-
-          {/* ── Admin ↔ Restaurant Owner Messaging ── */}
-          {restaurant.owner?._id && (
-            <RestaurantMessageThread
-              ownerId={restaurant.owner._id}
-              restaurantName={restaurant.name}
-            />
-          )}
         </div>
       </div>
     </div>

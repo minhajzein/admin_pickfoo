@@ -99,8 +99,6 @@ export interface RestaurantLegalDocs {
   gstCertificateUrl?: string;
   tradeLicenseNumber?: string;
   tradeLicenseUrl?: string;
-  healthCertificateUrl?: string;
-  panNumber?: string;
 }
 
 export interface OpeningHour {
