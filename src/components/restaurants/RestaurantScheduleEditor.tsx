@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { getApiErrorMessage } from "@/lib/axios";
 import { updateRestaurantAvailability } from "@/lib/api/restaurants";
 import type { OpeningHour } from "@/types/models";
 
@@ -36,6 +37,17 @@ const DAY_NAMES = [
   "Saturday",
 ];
 
+function toHHmm(value: string | undefined, fallback: string): string {
+  const match = String(value ?? "")
+    .trim()
+    .match(/(\d{1,2}):(\d{2})/);
+  if (!match) return fallback;
+  const hour = Math.min(23, Math.max(0, Number(match[1])));
+  const minute = Math.min(59, Math.max(0, Number(match[2])));
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return fallback;
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
 function defaultHours(): OpeningHour[] {
   return DAY_NAMES.map((_, day) => ({
     day,
@@ -51,8 +63,8 @@ function normalizeHours(raw?: OpeningHour[] | null): OpeningHour[] {
     if (entry && entry.day >= 0 && entry.day <= 6) {
       byDay.set(entry.day, {
         day: entry.day,
-        openTime: (entry.openTime || "09:00").slice(0, 5),
-        closeTime: (entry.closeTime || "22:00").slice(0, 5),
+        openTime: toHHmm(entry.openTime, "09:00"),
+        closeTime: toHHmm(entry.closeTime, "22:00"),
         isClosed: Boolean(entry.isClosed),
       });
     }
@@ -133,7 +145,8 @@ export function RestaurantScheduleEditor({
         );
       }
     },
-    onError: () => toast.error("Failed to update schedule"),
+    onError: (err) =>
+      toast.error(getApiErrorMessage(err, "Failed to update schedule")),
   });
 
   const busy = mutation.isPending;
@@ -358,7 +371,7 @@ export function RestaurantScheduleEditor({
           className="w-full bg-[#98E32F] font-bold text-[#013644] hover:bg-[#86c926]"
           onClick={() =>
             mutation.mutate({
-              openingHours: hours,
+              openingHours: normalizeHours(hours),
               openStatusPriority: priority,
               ...(priority === "schedule" ? { resetOverride: true } : {}),
             })
