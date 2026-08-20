@@ -480,6 +480,7 @@ export default function HomeVideosPage() {
           restaurantId: video.restaurantId,
           menuItemId: video.menuItemId,
           menuItemIds: [...(video.menuItemIds ?? [])],
+          offerId: video.offerId ?? null,
           categoryId: video.categoryId,
           categoryName: video.categoryName,
           sortOrder: video.sortOrder,

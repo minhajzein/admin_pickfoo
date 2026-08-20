@@ -265,6 +265,7 @@ export default function CouponsPage() {
               {data && (
                 <ListPagination
                   page={page}
+                  total={data.total}
                   totalPages={data.totalPages}
                   onPageChange={setPage}
                 />

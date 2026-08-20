@@ -476,6 +476,7 @@ export default function BannersPage() {
           restaurantId: banner.restaurantId,
           menuItemId: banner.menuItemId,
           menuItemIds: [...(banner.menuItemIds ?? [])],
+          offerId: banner.offerId ?? null,
           sortOrder: banner.sortOrder,
           isActive: banner.isActive,
           startsAt: banner.startsAt,
