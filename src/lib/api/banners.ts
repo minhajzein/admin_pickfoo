@@ -7,7 +7,7 @@ import {
   type PaginatedResult,
 } from "@/lib/pagination";
 
-export type HomeBannerLinkType = "none" | "restaurant" | "dish" | "dishes";
+export type HomeBannerLinkType = "none" | "restaurant" | "dish" | "dishes" | "offer";
 
 export interface AdminHomeBanner {
   id: string;
@@ -19,6 +19,7 @@ export interface AdminHomeBanner {
   restaurantId: string | null;
   menuItemId: string | null;
   menuItemIds: string[];
+  offerId: string | null;
   sortOrder: number;
   isActive: boolean;
   startsAt: string | null;
@@ -32,6 +33,15 @@ export interface BannerRestaurantOption {
   name: string;
   city: string;
   image: string;
+}
+
+export interface BannerOfferOption {
+  id: string;
+  title: string;
+  subtitle: string;
+  type: string;
+  status: string;
+  badgeLabel: string;
 }
 
 export interface BannerMenuItemOption {
@@ -73,6 +83,7 @@ export async function createBanner(input: {
   restaurantId?: string | null;
   menuItemId?: string | null;
   menuItemIds?: string[];
+  offerId?: string | null;
   sortOrder?: number;
   isActive?: boolean;
   startsAt?: string | null;
@@ -99,6 +110,7 @@ export async function updateBanner(
     restaurantId: string | null;
     menuItemId: string | null;
     menuItemIds: string[];
+    offerId: string | null;
     sortOrder: number;
     isActive: boolean;
     startsAt: string | null;
@@ -188,6 +200,16 @@ export async function searchBannerRestaurants(
     city: r.address?.city ?? "",
     image: r.image ?? "",
   }));
+}
+
+export async function searchBannerOffers(
+  search: string,
+): Promise<BannerOfferOption[]> {
+  const sp = new URLSearchParams();
+  if (search.trim()) sp.set("search", search.trim());
+  sp.set("limit", "25");
+  const { data } = await api.get(`/banners/link-options/offers?${sp}`);
+  return data.data as BannerOfferOption[];
 }
 
 export async function searchBannerMenuItems(params: {

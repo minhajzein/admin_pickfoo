@@ -9,8 +9,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   searchBannerMenuItems,
+  searchBannerOffers,
   searchBannerRestaurants,
   type BannerMenuItemOption,
+  type BannerOfferOption,
   type BannerRestaurantOption,
   type HomeBannerLinkType,
 } from "@/lib/api/banners";
@@ -20,6 +22,7 @@ export type LinkTargetValue = {
   restaurantId: string;
   menuItemId: string;
   menuItemIds: string[];
+  offerId: string;
 };
 
 function apiErrorMessage(error: unknown, fallback: string) {
@@ -73,12 +76,15 @@ export function BannerLinkTargetPicker({
 }) {
   const restaurantSearchRef = useRef<HTMLInputElement>(null);
   const dishSearchRef = useRef<HTMLInputElement>(null);
+  const offerSearchRef = useRef<HTMLInputElement>(null);
   const [restaurantOptions, setRestaurantOptions] = useState<
     BannerRestaurantOption[]
   >([]);
   const [dishOptions, setDishOptions] = useState<BannerMenuItemOption[]>([]);
+  const [offerOptions, setOfferOptions] = useState<BannerOfferOption[]>([]);
   const [searchingRestaurants, setSearchingRestaurants] = useState(false);
   const [searchingDishes, setSearchingDishes] = useState(false);
+  const [searchingOffers, setSearchingOffers] = useState(false);
 
   // Local mirror so chip clicks paint immediately; parent notified in transition.
   const [local, setLocal] = useState<LinkTargetValue>(value);
@@ -144,6 +150,24 @@ export function BannerLinkTargetPicker({
     }
   };
 
+  const loadOffers = async () => {
+    const q = offerSearchRef.current?.value?.trim() ?? "";
+    setSearchingOffers(true);
+    try {
+      const rows = await searchBannerOffers(q);
+      startTransition(() => {
+        setOfferOptions(rows);
+        setSearchingOffers(false);
+      });
+      if (rows.length === 0) {
+        toast.message("No offers found");
+      }
+    } catch (error: unknown) {
+      setSearchingOffers(false);
+      toast.error(apiErrorMessage(error, "Failed to search offers"));
+    }
+  };
+
   const selectRestaurant = useCallback(
     (id: string) => {
       commit({ ...localRef.current, restaurantId: id });
@@ -169,6 +193,52 @@ export function BannerLinkTargetPicker({
   );
 
   if (linkType === "none") return null;
+
+  if (linkType === "offer") {
+    return (
+      <div className="space-y-2 rounded-lg border border-white/10 p-4 contain-layout">
+        <Label>Select customer offer</Label>
+        <div className="flex gap-2">
+          <Input
+            ref={offerSearchRef}
+            defaultValue=""
+            placeholder="Search offer title or code"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                void loadOffers();
+              }
+            }}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            disabled={searchingOffers}
+            onClick={() => void loadOffers()}
+          >
+            {searchingOffers ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              "Search"
+            )}
+          </Button>
+        </div>
+        <div className="mt-2 flex max-h-40 flex-wrap gap-2 overflow-y-auto">
+          {offerOptions.map((o) => (
+            <OptionChip
+              key={o.id}
+              selected={local.offerId === o.id}
+              label={`${o.title}${o.badgeLabel ? ` · ${o.badgeLabel}` : ""}`}
+              onSelect={() => commit({ ...localRef.current, offerId: o.id })}
+            />
+          ))}
+        </div>
+        {local.offerId ? (
+          <p className="text-xs text-white/50">Selected: {local.offerId}</p>
+        ) : null}
+      </div>
+    );
+  }
 
   const showRestaurant =
     linkType === "restaurant" || linkType === "dish" || linkType === "dishes";

@@ -11,7 +11,8 @@ export type HomeVideoLinkType =
   | "restaurant"
   | "dish"
   | "dishes"
-  | "category";
+  | "category"
+  | "offer";
 
 export interface AdminHomeVideo {
   id: string;
@@ -30,6 +31,7 @@ export interface AdminHomeVideo {
   menuItemIds: string[];
   categoryId: string | null;
   categoryName: string;
+  offerId: string | null;
   sortOrder: number;
   isActive: boolean;
   startsAt: string | null;
@@ -51,6 +53,15 @@ export interface HomeVideoMenuItemOption {
   image: string;
   price: number;
   restaurantIds: string[];
+}
+
+export interface HomeVideoOfferOption {
+  id: string;
+  title: string;
+  subtitle: string;
+  type: string;
+  status: string;
+  badgeLabel: string;
 }
 
 export interface HomeVideoCategoryOption {
@@ -114,6 +125,7 @@ export async function createHomeVideo(input: {
   menuItemId?: string | null;
   menuItemIds?: string[];
   categoryId?: string | null;
+  offerId?: string | null;
   sortOrder?: number;
   isActive?: boolean;
   startsAt?: string | null;
@@ -146,6 +158,7 @@ export async function updateHomeVideo(
     menuItemId: string | null;
     menuItemIds: string[];
     categoryId: string | null;
+    offerId: string | null;
     sortOrder: number;
     isActive: boolean;
     startsAt: string | null;
@@ -289,4 +302,14 @@ export async function searchHomeVideoCategories(
   sp.set("limit", "30");
   const { data } = await api.get(`/home-videos/link-options/categories?${sp}`);
   return data.data as HomeVideoCategoryOption[];
+}
+
+export async function searchHomeVideoOffers(
+  search: string,
+): Promise<HomeVideoOfferOption[]> {
+  const sp = new URLSearchParams();
+  if (search.trim()) sp.set("search", search.trim());
+  sp.set("limit", "25");
+  const { data } = await api.get(`/home-videos/link-options/offers?${sp}`);
+  return data.data as HomeVideoOfferOption[];
 }

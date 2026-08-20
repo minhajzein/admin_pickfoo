@@ -80,6 +80,7 @@ const linkTypeLabels: Record<HomeBannerLinkType, string> = {
   restaurant: "Restaurant",
   dish: "Single dish",
   dishes: "Multiple dishes",
+  offer: "Customer offer",
 };
 
 function linkSummary(banner: AdminHomeBanner) {
@@ -88,6 +89,7 @@ function linkSummary(banner: AdminHomeBanner) {
   if (banner.linkType === "dish") return `Dish: ${banner.menuItemId}`;
   if (banner.linkType === "dishes")
     return `${banner.menuItemIds.length} dishes`;
+  if (banner.linkType === "offer") return `Offer: ${banner.offerId}`;
   return "—";
 }
 

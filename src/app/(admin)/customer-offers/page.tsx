@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   keepPreviousData,
   useMutation,
@@ -33,10 +33,12 @@ import {
   createCustomerOffer,
   deleteCustomerOffer,
   fetchCustomerOffers,
+  previewCustomerOffer,
   searchOfferMenuItems,
   searchOfferRestaurants,
   updateCustomerOffer,
   type OfferMenuItemOption,
+  type OfferPreviewResult,
   type OfferRestaurantOption,
 } from "@/lib/api/customer-offers";
 import type {
@@ -49,6 +51,201 @@ import type {
 } from "@/types/models";
 import { ListPagination } from "@/components/ui/list-pagination";
 import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
+
+function inr(n: number | undefined | null) {
+  const v = Number(n) || 0;
+  return `₹${v.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+}
+
+function OfferImpactPreviewPanel({
+  preview,
+  loading,
+  error,
+  assumptions,
+  onAssumptionsChange,
+}: {
+  preview: OfferPreviewResult | undefined;
+  loading: boolean;
+  error: boolean;
+  assumptions: {
+    sampleCartAmount: number;
+    sampleDeliveryFee: number;
+    expectedOrderCount: number;
+  };
+  onAssumptionsChange: (patch: Partial<{
+    sampleCartAmount: number;
+    sampleDeliveryFee: number;
+    expectedOrderCount: number;
+  }>) => void;
+}) {
+  const per = preview?.perOrder;
+  const chance = preview?.purchaseChance;
+  const risk = preview?.riskSummary;
+  const plColor =
+    per?.platformProfitLoss === "profit"
+      ? "text-emerald-300"
+      : per?.platformProfitLoss === "loss"
+        ? "text-red-300"
+        : "text-amber-200";
+  const chanceColor =
+    chance?.score === "high"
+      ? "text-emerald-300"
+      : chance?.score === "low"
+        ? "text-red-300"
+        : "text-amber-200";
+
+  return (
+    <div className="space-y-3 rounded-lg border border-white/10 bg-black/20 p-3">
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold text-white">Impact preview</h3>
+        {loading && <Loader2 className="h-3.5 w-3.5 animate-spin text-white/60" />}
+      </div>
+      <p className="text-xs text-white/50">
+        Live estimate of customer savings, restaurant net, and platform profit/loss
+        using the same funding rules as checkout settlement.
+      </p>
+
+      <div className="grid grid-cols-3 gap-2">
+        <div className="grid gap-1">
+          <Label className="text-[10px] text-white/50">Sample cart ₹</Label>
+          <Input
+            type="number"
+            value={assumptions.sampleCartAmount}
+            onChange={(e) =>
+              onAssumptionsChange({ sampleCartAmount: Number(e.target.value) })
+            }
+          />
+        </div>
+        <div className="grid gap-1">
+          <Label className="text-[10px] text-white/50">Delivery fee ₹</Label>
+          <Input
+            type="number"
+            value={assumptions.sampleDeliveryFee}
+            onChange={(e) =>
+              onAssumptionsChange({ sampleDeliveryFee: Number(e.target.value) })
+            }
+          />
+        </div>
+        <div className="grid gap-1">
+          <Label className="text-[10px] text-white/50">Expected orders</Label>
+          <Input
+            type="number"
+            value={assumptions.expectedOrderCount}
+            onChange={(e) =>
+              onAssumptionsChange({ expectedOrderCount: Number(e.target.value) })
+            }
+          />
+        </div>
+      </div>
+
+      {error && (
+        <p className="text-xs text-red-300">Could not load preview. Check API.</p>
+      )}
+
+      {per && (
+        <>
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="rounded border border-white/10 p-2">
+              <p className="text-white/50">Customer saves</p>
+              <p className="text-base font-semibold text-[#98E32F]">
+                {inr(per.customerSaves)}
+              </p>
+              <p className="text-white/40">Pays {inr(per.customerPays)}</p>
+            </div>
+            <div className="rounded border border-white/10 p-2">
+              <p className="text-white/50">Restaurant receives</p>
+              <p className="text-base font-semibold text-white">
+                {inr(per.restaurantNet)}
+              </p>
+              <p className="text-white/40">
+                After offer &amp; commission {inr(per.commissionAfterOffer)}
+              </p>
+            </div>
+            <div className="rounded border border-white/10 p-2">
+              <p className="text-white/50">Platform net / order</p>
+              <p className={`text-base font-semibold ${plColor}`}>
+                {inr(per.platformNet)}
+              </p>
+              <p className="text-white/40">
+                Cost {inr(per.platformOfferCost)} · keeps {inr(per.platformCommissionRetained)}
+              </p>
+            </div>
+            <div className="rounded border border-white/10 p-2">
+              <p className="text-white/50">Funding</p>
+              <p className="text-sm font-semibold capitalize text-white">
+                {(preview?.fundingLabel || "none").replace(/-/g, " ")}
+              </p>
+              <p className="text-white/40">
+                Comm {inr(per.offerFunding.commission)} · Menu{" "}
+                {inr(per.offerFunding.menuItem)}
+              </p>
+            </div>
+          </div>
+
+          {risk && (
+            <div className="rounded border border-white/10 p-2 text-xs">
+              <p className="font-medium text-white">Profit / loss chance</p>
+              <p className={`mt-1 capitalize ${plColor}`}>
+                {risk.platformProfitLoss} · expected campaign net{" "}
+                {inr(risk.expectedCampaignPlatformNet)}
+              </p>
+              <p className="mt-1 text-white/50">{risk.note}</p>
+            </div>
+          )}
+
+          {chance && (
+            <div className="rounded border border-white/10 p-2 text-xs">
+              <p className="font-medium text-white">Customer purchase chance</p>
+              <p className={`mt-1 text-base font-semibold capitalize ${chanceColor}`}>
+                {chance.score} ({chance.scorePercent}%)
+              </p>
+              <p className="text-white/40">
+                Based on {chance.deliveredOrderCount} delivered orders · AOV{" "}
+                {inr(chance.avgOrderValue)}
+              </p>
+              <ul className="mt-2 list-disc space-y-1 pl-4 text-white/55">
+                {chance.explainers.slice(0, 4).map((e) => (
+                  <li key={e}>{e}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {preview?.scenarios?.length ? (
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-white/70">Campaign scenarios</p>
+              {preview.scenarios.map((s) => (
+                <div
+                  key={s.key}
+                  className="flex items-start justify-between gap-2 rounded border border-white/10 px-2 py-1.5 text-[11px]"
+                >
+                  <div>
+                    <p className="font-medium text-white">{s.label}</p>
+                    <p className="text-white/45">
+                      {Math.round(s.conversionRate * 100)}% conv · {s.orderCount} orders
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-white">Plat {inr(s.campaignPlatformNet)}</p>
+                    <p className="text-white/45">Rest {inr(s.campaignRestaurantNet)}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          {preview?.restaurant && (
+            <p className="text-[11px] text-white/40">
+              Using {preview.restaurant.name || "restaurant"} · commission{" "}
+              {preview.assumptions.commissionPercent}%
+              {preview.assumptions.gstRegistered ? " · GST registered" : ""}
+            </p>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
 
 const typeLabels: Record<CustomerOfferType, string> = {
   flat: "Flat ₹ off",
@@ -209,6 +406,12 @@ export default function CustomerOffersPage() {
   const [dishSearch, setDishSearch] = useState("");
   const [restoOptions, setRestoOptions] = useState<OfferRestaurantOption[]>([]);
   const [dishOptions, setDishOptions] = useState<OfferMenuItemOption[]>([]);
+  const [previewAssumptions, setPreviewAssumptions] = useState({
+    sampleCartAmount: 499,
+    sampleDeliveryFee: 40,
+    expectedOrderCount: 100,
+  });
+  const [debouncedPreviewKey, setDebouncedPreviewKey] = useState("");
 
   const listQuery = useQuery({
     queryKey: ["customer-offers", page],
@@ -288,15 +491,62 @@ export default function CustomerOffersPage() {
     return "Split the discount between commission and restaurant item amount.";
   }, [form.fundingSource]);
 
+  const previewPayload = useMemo(
+    () => ({
+      type: form.type,
+      minOrderAmount: form.minOrderAmount,
+      maxDiscountAmount: form.maxDiscountAmount,
+      discountValue: form.discountValue,
+      cashbackAmount: form.cashbackAmount,
+      fundingSource: form.fundingSource,
+      fundingShareMode: form.fundingShareMode,
+      commissionShare: form.commissionShare,
+      menuItemShare: form.menuItemShare,
+      freeDeliveryFundingSource: form.freeDeliveryFundingSource,
+      restaurantIds: form.restaurantIds,
+      comboRestaurantId: form.comboRestaurantId || null,
+      comboPrice: form.comboPrice,
+      sampleCartAmount: previewAssumptions.sampleCartAmount,
+      sampleDeliveryFee: previewAssumptions.sampleDeliveryFee,
+      expectedOrderCount: previewAssumptions.expectedOrderCount,
+    }),
+    [form, previewAssumptions],
+  );
+
+  useEffect(() => {
+    if (!open) return;
+    const t = window.setTimeout(() => {
+      setDebouncedPreviewKey(JSON.stringify(previewPayload));
+    }, 350);
+    return () => window.clearTimeout(t);
+  }, [open, previewPayload]);
+
+  const previewQuery = useQuery({
+    queryKey: ["customer-offer-preview", debouncedPreviewKey],
+    queryFn: () => previewCustomerOffer(JSON.parse(debouncedPreviewKey) as Record<string, unknown>),
+    enabled: open && Boolean(debouncedPreviewKey),
+    placeholderData: keepPreviousData,
+  });
+
   function openCreate() {
     setEditingId(null);
     setForm(emptyForm());
+    setPreviewAssumptions({
+      sampleCartAmount: 499,
+      sampleDeliveryFee: 40,
+      expectedOrderCount: 100,
+    });
     setOpen(true);
   }
 
   function openEdit(row: AdminCustomerOffer) {
     setEditingId(row.id);
     setForm(formFromOffer(row));
+    setPreviewAssumptions({
+      sampleCartAmount: Math.max(row.minOrderAmount || 0, 499),
+      sampleDeliveryFee: 40,
+      expectedOrderCount: 100,
+    });
     setOpen(true);
   }
 
@@ -421,13 +671,14 @@ export default function CustomerOffersPage() {
       </Card>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto border-white/10 bg-[#013644] sm:max-w-2xl">
+        <DialogContent className="max-h-[90vh] overflow-y-auto border-white/10 bg-[#013644] sm:max-w-5xl">
           <DialogHeader>
             <DialogTitle className="text-white">
               {editingId ? "Edit offer" : "Create offer"}
             </DialogTitle>
           </DialogHeader>
-          <div className="grid gap-4 py-2">
+          <div className="grid gap-4 py-2 lg:grid-cols-[minmax(0,1fr)_320px]">
+            <div className="grid gap-4">
             <div className="grid gap-2">
               <Label>Title</Label>
               <Input
@@ -977,6 +1228,19 @@ export default function CustomerOffersPage() {
                 "Create offer"
               )}
             </Button>
+            </div>
+
+            <div className="lg:sticky lg:top-0 lg:self-start">
+              <OfferImpactPreviewPanel
+                preview={previewQuery.data}
+                loading={previewQuery.isFetching}
+                error={previewQuery.isError}
+                assumptions={previewAssumptions}
+                onAssumptionsChange={(patch) =>
+                  setPreviewAssumptions((prev) => ({ ...prev, ...patch }))
+                }
+              />
+            </div>
           </div>
         </DialogContent>
       </Dialog>

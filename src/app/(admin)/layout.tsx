@@ -37,6 +37,7 @@ import {
   Clapperboard,
   Bell,
   Gift,
+  Ticket,
   IndianRupee,
   Loader2,
 } from "lucide-react";
@@ -64,6 +65,7 @@ const NAV_ITEMS: Array<{
   { name: "Partner updates", icon: Bell, href: "/partner-updates" },
   { name: "Partner incentives", icon: Gift, href: "/partner-incentives" },
   { name: "Customer offers", icon: Gift, href: "/customer-offers" },
+  { name: "Coupons & vouchers", icon: Ticket, href: "/coupons" },
   { name: "Delivery charges", icon: IndianRupee, href: "/delivery-charges" },
   { name: "Gigs", icon: ClipboardList, href: "/gigs" },
   { name: "Monitor", icon: Activity, href: "/monitor" },

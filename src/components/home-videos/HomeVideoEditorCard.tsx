@@ -42,6 +42,7 @@ const linkTypeLabels: Record<HomeVideoLinkType, string> = {
   dish: "Single dish",
   dishes: "Multiple dishes",
   category: "Category",
+  offer: "Customer offer",
 };
 
 type FormFields = {
@@ -87,6 +88,7 @@ function emptyLink(): HomeVideoLinkTargetValue {
     menuItemIds: [],
     categoryId: "",
     categoryName: "",
+    offerId: "",
   };
 }
 
@@ -143,6 +145,7 @@ function linkFromVideo(video: AdminHomeVideo): HomeVideoLinkTargetValue {
     menuItemIds: video.menuItemIds ?? [],
     categoryId: video.categoryId ?? "",
     categoryName: video.categoryName ?? "",
+    offerId: video.offerId ?? "",
   };
 }
 
@@ -203,6 +206,9 @@ export function HomeVideoEditorCard({
       if (fields.linkType === "category" && !link.categoryId) {
         throw new Error("Select a category for this link type");
       }
+      if (fields.linkType === "offer" && !link.offerId) {
+        throw new Error("Select a customer offer for this link type");
+      }
 
       const payload = {
         title: fields.title.trim(),
@@ -225,6 +231,7 @@ export function HomeVideoEditorCard({
         menuItemIds: fields.linkType === "dishes" ? link.menuItemIds : [],
         categoryId:
           fields.linkType === "category" ? link.categoryId || null : null,
+        offerId: fields.linkType === "offer" ? link.offerId || null : null,
         sortOrder: Number(fields.sortOrder) || 0,
         isActive: fields.isActive,
         startsAt: fromDatetimeLocalValue(fields.startsAt),

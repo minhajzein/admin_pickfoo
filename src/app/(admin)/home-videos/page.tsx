@@ -75,6 +75,7 @@ const linkTypeLabels: Record<HomeVideoLinkType, string> = {
   dish: "Single dish",
   dishes: "Multiple dishes",
   category: "Category",
+  offer: "Customer offer",
 };
 
 function linkSummary(video: AdminHomeVideo) {
@@ -85,6 +86,7 @@ function linkSummary(video: AdminHomeVideo) {
     return `${video.menuItemIds.length} dishes`;
   if (video.linkType === "category")
     return video.categoryName || video.categoryId || "—";
+  if (video.linkType === "offer") return `Offer: ${video.offerId}`;
   return "—";
 }
 

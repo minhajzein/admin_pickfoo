@@ -10,10 +10,12 @@ import { Label } from "@/components/ui/label";
 import {
   searchHomeVideoCategories,
   searchHomeVideoMenuItems,
+  searchHomeVideoOffers,
   searchHomeVideoRestaurants,
   type HomeVideoCategoryOption,
   type HomeVideoLinkType,
   type HomeVideoMenuItemOption,
+  type HomeVideoOfferOption,
   type HomeVideoRestaurantOption,
 } from "@/lib/api/homeVideos";
 import { cn } from "@/lib/utils";
@@ -24,6 +26,7 @@ export type HomeVideoLinkTargetValue = {
   menuItemIds: string[];
   categoryId: string;
   categoryName: string;
+  offerId: string;
 };
 
 function apiErrorMessage(error: unknown, fallback: string) {
@@ -74,6 +77,7 @@ export function HomeVideoLinkTargetPicker({
   const restaurantSearchRef = useRef<HTMLInputElement>(null);
   const dishSearchRef = useRef<HTMLInputElement>(null);
   const categorySearchRef = useRef<HTMLInputElement>(null);
+  const offerSearchRef = useRef<HTMLInputElement>(null);
   const [restaurantOptions, setRestaurantOptions] = useState<
     HomeVideoRestaurantOption[]
   >([]);
@@ -81,9 +85,11 @@ export function HomeVideoLinkTargetPicker({
   const [categoryOptions, setCategoryOptions] = useState<
     HomeVideoCategoryOption[]
   >([]);
+  const [offerOptions, setOfferOptions] = useState<HomeVideoOfferOption[]>([]);
   const [searchingRestaurants, setSearchingRestaurants] = useState(false);
   const [searchingDishes, setSearchingDishes] = useState(false);
   const [searchingCategories, setSearchingCategories] = useState(false);
+  const [searchingOffers, setSearchingOffers] = useState(false);
 
   const [local, setLocal] = useState<HomeVideoLinkTargetValue>(value);
   const localRef = useRef(local);
@@ -160,7 +166,71 @@ export function HomeVideoLinkTargetPicker({
     }
   };
 
+  const loadOffers = async () => {
+    const q = offerSearchRef.current?.value?.trim() ?? "";
+    setSearchingOffers(true);
+    try {
+      const rows = await searchHomeVideoOffers(q);
+      startTransition(() => {
+        setOfferOptions(rows);
+        setSearchingOffers(false);
+      });
+      if (rows.length === 0) {
+        toast.message("No offers found");
+      }
+    } catch (error: unknown) {
+      setSearchingOffers(false);
+      toast.error(apiErrorMessage(error, "Failed to search offers"));
+    }
+  };
+
   if (linkType === "none") return null;
+
+  if (linkType === "offer") {
+    return (
+      <div className="space-y-3 rounded-lg border border-white/10 bg-black/20 p-3">
+        <div className="space-y-2">
+          <Label>Customer offer</Label>
+          <div className="flex gap-2">
+            <Input
+              ref={offerSearchRef}
+              placeholder="Search offers"
+              defaultValue=""
+            />
+            <Button
+              type="button"
+              variant="outline"
+              disabled={searchingOffers}
+              onClick={() => void loadOffers()}
+            >
+              {searchingOffers ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                "Search"
+              )}
+            </Button>
+          </div>
+          {local.offerId ? (
+            <p className="text-xs text-white/60">
+              Selected: <span className="text-white/90">{local.offerId}</span>
+            </p>
+          ) : null}
+          <div className="flex flex-wrap gap-2">
+            {offerOptions.map((o) => (
+              <OptionChip
+                key={o.id}
+                selected={local.offerId === o.id}
+                label={`${o.title}${o.badgeLabel ? ` · ${o.badgeLabel}` : ""}`}
+                onSelect={() =>
+                  commit({ ...localRef.current, offerId: o.id })
+                }
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (linkType === "category") {
     return (

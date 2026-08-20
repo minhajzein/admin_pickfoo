@@ -39,6 +39,7 @@ const linkTypeLabels: Record<HomeBannerLinkType, string> = {
   restaurant: "Restaurant",
   dish: "Single dish",
   dishes: "Multiple dishes",
+  offer: "Customer offer",
 };
 
 type FormFields = {
@@ -68,7 +69,7 @@ function emptyFields(): FormFields {
 }
 
 function emptyLink(): LinkTargetValue {
-  return { restaurantId: "", menuItemId: "", menuItemIds: [] };
+  return { restaurantId: "", menuItemId: "", menuItemIds: [], offerId: "" };
 }
 
 function toDatetimeLocalValue(iso: string | null | undefined): string {
@@ -117,6 +118,7 @@ function linkFromBanner(banner: AdminHomeBanner): LinkTargetValue {
     restaurantId: banner.restaurantId ?? "",
     menuItemId: banner.menuItemId ?? "",
     menuItemIds: banner.menuItemIds ?? [],
+    offerId: banner.offerId ?? "",
   };
 }
 
@@ -180,6 +182,9 @@ export function BannerEditorCard({
       if (fields.linkType === "dishes" && link.menuItemIds.length === 0) {
         throw new Error("Select at least one dish for this link type");
       }
+      if (fields.linkType === "offer" && !link.offerId) {
+        throw new Error("Select a customer offer for this link type");
+      }
 
       const payload = {
         title: fields.title.trim(),
@@ -196,6 +201,7 @@ export function BannerEditorCard({
           fields.linkType === "dish" ? link.menuItemId || null : null,
         menuItemIds:
           fields.linkType === "dishes" ? link.menuItemIds : [],
+        offerId: fields.linkType === "offer" ? link.offerId || null : null,
         sortOrder: Number(fields.sortOrder) || 0,
         isActive: fields.isActive,
         startsAt: fromDatetimeLocalValue(fields.startsAt),

@@ -21,6 +21,90 @@ export type OfferMenuItemOption = {
   restaurantIds: string[];
 };
 
+export type OfferPreviewPerOrder = {
+  cartAmount: number;
+  discountAmount: number;
+  cashbackAmount: number;
+  deliveryFeeCharged: number;
+  deliveryFeeWaived: number;
+  customerPays: number;
+  customerSaves: number;
+  fundingLabel:
+    | "platform-funded"
+    | "restaurant-funded"
+    | "shared-funded"
+    | "cashback-only"
+    | "none";
+  commissionBeforeOffer: number;
+  commissionAfterOffer: number;
+  restaurantGrossBeforeOffer: number;
+  restaurantGrossAfterOffer: number;
+  restaurantNet: number;
+  platformCommissionRetained: number;
+  platformOfferCost: number;
+  platformNet: number;
+  platformProfitLoss: "profit" | "breakeven" | "loss";
+  offerFunding: {
+    commission: number;
+    menuItem: number;
+    platformDelivery: number;
+    restaurantDelivery: number;
+  };
+};
+
+export type OfferPreviewScenario = {
+  key: "bestCase" | "expectedCase" | "worstCase";
+  label: string;
+  description: string;
+  conversionRate: number;
+  orderCount: number;
+  perOrder: OfferPreviewPerOrder;
+  campaignPlatformNet: number;
+  campaignRestaurantNet: number;
+  campaignCustomerSavings: number;
+  campaignPlatformOfferCost: number;
+};
+
+export type OfferPreviewResult = {
+  restaurant: {
+    id: string;
+    name: string | null;
+    commissionPercent: number;
+    gstRegistered: boolean;
+  } | null;
+  assumptions: {
+    sampleCartAmount: number;
+    sampleDeliveryFee: number;
+    packingAmount: number;
+    commissionPercent: number;
+    gstRegistered: boolean;
+    gstRatePercent: number;
+    tipAmount: number;
+    expectedOrderCount: number;
+  };
+  fundingLabel: OfferPreviewPerOrder["fundingLabel"];
+  perOrder: OfferPreviewPerOrder;
+  scenarios: OfferPreviewScenario[];
+  purchaseChance: {
+    score: "high" | "medium" | "low";
+    scorePercent: number;
+    explainers: string[];
+    sampleSize: number;
+    avgOrderValue: number;
+    deliveredOrderCount: number;
+  };
+  riskSummary: {
+    platformProfitLoss: "profit" | "breakeven" | "loss";
+    expectedCampaignPlatformNet: number;
+    expectedCampaignPlatformCost: number;
+    note: string;
+  };
+  analyticsFollowUp?: {
+    supported: boolean;
+    message: string;
+  };
+};
+
 export async function fetchCustomerOffers(params?: {
   status?: CustomerOfferStatus;
   type?: string;
@@ -85,4 +169,11 @@ export async function searchOfferMenuItems(params: {
     },
   });
   return (data.data ?? []) as OfferMenuItemOption[];
+}
+
+export async function previewCustomerOffer(
+  input: Record<string, unknown>,
+): Promise<OfferPreviewResult> {
+  const { data } = await api.post("/customer-offers/preview", input);
+  return data.data as OfferPreviewResult;
 }
