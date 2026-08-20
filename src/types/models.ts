@@ -386,3 +386,76 @@ export interface AdminPartnerIncentiveProgress {
   expiredAt?: string | null;
   ledgerEntryId?: string | null;
 }
+
+export type CustomerOfferType =
+  | "flat"
+  | "percent"
+  | "free_delivery"
+  | "bogo"
+  | "combo"
+  | "order_cashback"
+  | "order_count_cashback";
+
+export type CustomerOfferStatus =
+  | "draft"
+  | "scheduled"
+  | "active"
+  | "ended"
+  | "cancelled";
+
+export type CustomerOfferScope = "all" | "restaurants" | "items";
+export type OfferFundingSource = "commission" | "menu_item" | "both";
+export type OfferFundingShareMode = "percent" | "amount";
+export type FreeDeliveryFundingSource = "platform" | "restaurant";
+
+export interface AdminCustomerOfferComboItem {
+  menuItemId: string;
+  quantity: number;
+  name?: string;
+}
+
+export interface AdminCustomerOffer {
+  id: string;
+  title: string;
+  subtitle: string;
+  description: string;
+  badgeLabel: string;
+  badgeStyle: "green" | "blue" | "red";
+  type: CustomerOfferType;
+  status: CustomerOfferStatus;
+  isActive: boolean;
+  autoApply: boolean;
+  code?: string;
+  startsAt: string | null;
+  endsAt: string | null;
+  minOrderAmount: number;
+  maxDiscountAmount: number;
+  discountValue: number;
+  scope: CustomerOfferScope;
+  restaurantIds: string[];
+  menuItemIds: string[];
+  buyMenuItemId: string | null;
+  buyQty: number;
+  getMenuItemId: string | null;
+  getQty: number;
+  getDiscountType: "free" | "percent" | "flat";
+  getDiscountValue: number;
+  comboRestaurantId: string | null;
+  comboItems: AdminCustomerOfferComboItem[];
+  comboPrice: number;
+  cashbackAmount: number;
+  orderCountTarget: number;
+  fundingSource: OfferFundingSource;
+  fundingShareMode: OfferFundingShareMode;
+  commissionShare: number;
+  menuItemShare: number;
+  maxDistanceKm: number;
+  freeDeliveryFundingSource: FreeDeliveryFundingSource;
+  usageLimit: number;
+  usagePerUser: number;
+  sendPushOnPublish: boolean;
+  pushSentAt?: string | null;
+  priority: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
