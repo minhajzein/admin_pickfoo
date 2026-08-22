@@ -121,11 +121,11 @@ export function CommissionFreeDeliverySettingsCard() {
           Auto free delivery (item-total rule)
         </CardTitle>
         <p className="text-sm text-white/60 leading-relaxed">
-          When a restaurant&apos;s platform share on an order is at least{" "}
-          <span className="text-white/80">multiplier × delivery fee</span>, the
-          customer gets free delivery. The delivery partner is still paid from
-          the restaurant commission pool. Customers only see item totals in the
-          app — never commission.
+          Uses the live distance-based delivery fee for each order (km + tier).
+          When platform share on food items is at least{" "}
+          <span className="text-white/80">multiplier × that delivery fee</span>,
+          the customer gets free delivery and the partner is still paid from
+          the restaurant commission pool.
         </p>
       </CardHeader>
       <CardContent className="space-y-5">
