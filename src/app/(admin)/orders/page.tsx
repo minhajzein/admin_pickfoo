@@ -183,7 +183,7 @@ function redispatchReasonLabel(reason?: string): string {
 
 function AmountBreakdown({ row }: { row: AdminOrderRow }) {
   return (
-    <div className="min-w-[11rem] space-y-0.5 text-xs leading-snug">
+    <div className="min-w-44 space-y-0.5 text-xs leading-snug">
       <div className="flex justify-between gap-3 font-medium text-white">
         <span className="text-white/50">Total</span>
         <span>{formatMoney(row.totalAmount)}</span>
@@ -590,7 +590,7 @@ export default function OrdersPage() {
                       setPage(1);
                     });
                   }}
-                  className="h-9 w-[11rem] border-white/15 bg-black/20 text-white"
+                  className="h-9 w-44 border-white/15 bg-black/20 text-white"
                 />
               </div>
               <div className="space-y-1">
@@ -605,7 +605,7 @@ export default function OrdersPage() {
                       setPage(1);
                     });
                   }}
-                  className="h-9 w-[11rem] border-white/15 bg-black/20 text-white"
+                  className="h-9 w-44 border-white/15 bg-black/20 text-white"
                 />
               </div>
             </div>
@@ -702,7 +702,7 @@ export default function OrdersPage() {
                           ) : null}
                         </div>
                       </TableCell>
-                      <TableCell className="max-w-[180px] text-white/80">
+                      <TableCell className="max-w-45 text-white/80">
                         <span className="line-clamp-2">
                           {row.restaurantName || "—"}
                         </span>
@@ -742,7 +742,7 @@ export default function OrdersPage() {
                         <AmountBreakdown row={row} />
                       </TableCell>
                       <TableCell>
-                        <div className="flex min-w-[9rem] flex-col gap-0.5">
+                        <div className="flex min-w-36 flex-col gap-0.5">
                           <span
                             className={
                               partnerName
