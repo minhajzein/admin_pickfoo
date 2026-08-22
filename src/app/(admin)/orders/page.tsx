@@ -198,7 +198,19 @@ function AmountBreakdown({ row }: { row: AdminOrderRow }) {
       </div>
       <div className="flex justify-between gap-3 text-white/70">
         <span className="text-white/40">Delivery</span>
-        <span>{formatMoney(row.deliveryFee)}</span>
+        <span>
+          {(row.partnerDeliveryFee ?? 0) > 0 &&
+          (row.partnerDeliveryFee ?? 0) !== (row.deliveryFee ?? 0) ? (
+            <>
+              {formatMoney(0)}{" "}
+              <span className="text-[10px] text-white/35">
+                (partner {formatMoney(row.partnerDeliveryFee ?? 0)})
+              </span>
+            </>
+          ) : (
+            formatMoney(row.deliveryFee)
+          )}
+        </span>
       </div>
       <div className="flex justify-between gap-3 border-t border-white/10 pt-0.5 font-medium text-[#98E32F]">
         <span className="text-white/50">

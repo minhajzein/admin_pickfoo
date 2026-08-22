@@ -14,6 +14,9 @@ export interface AdminOrderRow {
   /** Packing subtotal (packingCharge × qty). */
   packingTotal?: number | null;
   deliveryFee?: number | null;
+  /** Full km/tier fee credited to partner (even when customer delivery is free). */
+  partnerDeliveryFee?: number | null;
+  customerDeliveryFee?: number | null;
   /** Company commission only (not restaurant item totals). */
   platformCommission?: number | null;
   commissionPercent?: number | null;
@@ -121,6 +124,8 @@ export interface AdminOrderDetail {
   itemTotal: number;
   packingTotal: number;
   deliveryFee: number;
+  partnerDeliveryFee?: number;
+  customerDeliveryFee?: number;
   discountAmount: number;
   tipAmount: number;
   taxableAmount?: number | null;

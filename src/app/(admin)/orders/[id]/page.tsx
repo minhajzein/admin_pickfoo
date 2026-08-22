@@ -640,7 +640,28 @@ export default function OrderDetailPage() {
           <CardContent>
             <DetailRow label="Items" value={formatMoney(order.itemTotal)} />
             <DetailRow label="Packing" value={formatMoney(order.packingTotal)} />
-            <DetailRow label="Delivery" value={formatMoney(order.deliveryFee)} />
+            <DetailRow
+              label="Delivery (customer)"
+              value={
+                (order.customerDeliveryFee ?? order.deliveryFee) > 0 ||
+                (order.partnerDeliveryFee ?? 0) <= 0 ? (
+                  formatMoney(order.customerDeliveryFee ?? order.deliveryFee)
+                ) : (
+                  <span>
+                    {formatMoney(0)}{" "}
+                    <span className="text-xs text-white/45">(free delivery)</span>
+                  </span>
+                )
+              }
+            />
+            {(order.partnerDeliveryFee ?? 0) > 0 &&
+            (order.partnerDeliveryFee ?? 0) !==
+              (order.customerDeliveryFee ?? order.deliveryFee) ? (
+              <DetailRow
+                label="Partner delivery"
+                value={formatMoney(order.partnerDeliveryFee ?? 0)}
+              />
+            ) : null}
             <DetailRow
               label="Discount"
               value={formatMoney(order.discountAmount)}
