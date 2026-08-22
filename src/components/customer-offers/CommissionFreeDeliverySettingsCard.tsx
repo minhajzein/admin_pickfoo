@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { DeliveryDining, Loader2, Save } from "lucide-react";
+import { Loader2, Save, Truck } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -117,7 +117,7 @@ export function CommissionFreeDeliverySettingsCard() {
     <Card className="border-[#98E32F]/25 bg-[#042c38] text-white shadow-none">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-lg">
-          <DeliveryDining className="h-5 w-5 text-[#98E32F]" />
+          <Truck className="h-5 w-5 text-[#98E32F]" />
           Auto free delivery (item-total rule)
         </CardTitle>
         <p className="text-sm text-white/60 leading-relaxed">
