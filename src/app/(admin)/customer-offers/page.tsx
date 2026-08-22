@@ -51,6 +51,7 @@ import type {
 } from "@/types/models";
 import { ListPagination } from "@/components/ui/list-pagination";
 import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
+import { CommissionFreeDeliverySettingsCard } from "@/components/customer-offers/CommissionFreeDeliverySettingsCard";
 
 function inr(n: number | undefined | null) {
   const v = Number(n) || 0;
@@ -574,6 +575,8 @@ export default function CustomerOffersPage() {
           New offer
         </Button>
       </div>
+
+      <CommissionFreeDeliverySettingsCard />
 
       <Card className="border-white/10 bg-[#042c38]">
         <CardHeader>

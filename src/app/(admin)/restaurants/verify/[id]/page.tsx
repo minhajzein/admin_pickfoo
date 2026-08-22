@@ -683,96 +683,100 @@ export default function VerifyRestaurantPage() {
             restaurant={restaurant}
           />
 
-          <section>
-            <div className="flex items-center gap-4 mb-6">
-              <h2 className="text-xl font-bold">Legal Documents</h2>
-              <div className="h-px flex-1 bg-white/5"></div>
-            </div>
+          {restaurant.status !== "active" && (
+            <section>
+              <div className="flex items-center gap-4 mb-6">
+                <h2 className="text-xl font-bold">Legal Documents</h2>
+                <div className="h-px flex-1 bg-white/5"></div>
+              </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <DocumentCard
-                title="FSSAI Certificate"
-                url={restaurant.legalDocs.fssaiCertificateUrl}
-                number={restaurant.legalDocs.fssaiLicenseNumber}
-              />
-              <DocumentCard
-                title="GST Certificate"
-                url={restaurant.legalDocs.gstCertificateUrl}
-                number={restaurant.legalDocs.gstNumber}
-              />
-              <DocumentCard
-                title="Trade License"
-                url={restaurant.legalDocs.tradeLicenseUrl}
-                number={restaurant.legalDocs.tradeLicenseNumber}
-              />
-            </div>
-          </section>
-
-          {/* Review Action */}
-          <Card className="bg-[#002833] border-[#98E32F]/20 border-2 overflow-hidden shadow-[0_0_50px_rgba(152,227,47,0.05)]">
-            <CardHeader className="bg-[#98E32F]/5 border-b border-[#98E32F]/10">
-              <CardTitle className="text-lg">Assessment & Action</CardTitle>
-              <CardDescription className="text-white/40">
-                Provide feedback and update verification status
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="p-6 space-y-6">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-white/40">
-                  Verification Notes
-                </label>
-                <Textarea
-                  placeholder="Reason for approval/rejection or things that need improvement..."
-                  className="bg-black/20 border-white/5 focus:border-[#98E32F]/50 h-32 resize-none text-sm p-4 text-white"
-                  value={notes}
-                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
-                    setNotes(e.target.value)
-                  }
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <DocumentCard
+                  title="FSSAI Certificate"
+                  url={restaurant.legalDocs.fssaiCertificateUrl}
+                  number={restaurant.legalDocs.fssaiLicenseNumber}
+                />
+                <DocumentCard
+                  title="GST Certificate"
+                  url={restaurant.legalDocs.gstCertificateUrl}
+                  number={restaurant.legalDocs.gstNumber}
+                />
+                <DocumentCard
+                  title="Trade License"
+                  url={restaurant.legalDocs.tradeLicenseUrl}
+                  number={restaurant.legalDocs.tradeLicenseNumber}
                 />
               </div>
+            </section>
+          )}
 
-              <div className="flex flex-col sm:flex-row gap-4 pt-2">
-                <Button
-                  className="flex-1 h-14 bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500 hover:text-white transition-all rounded-2xl font-bold flex items-center justify-center gap-2 group"
-                  disabled={updateStatusMutation.isPending}
-                  onClick={() =>
-                    updateStatusMutation.mutate({
-                      status: "rejected",
-                      verificationNotes: notes,
-                    })
-                  }
-                >
-                  <XCircle
-                    size={20}
-                    className="group-hover:scale-110 transition-transform"
+          {/* Review Action — only for restaurants not yet verified */}
+          {restaurant.status !== "active" && (
+            <Card className="bg-[#002833] border-[#98E32F]/20 border-2 overflow-hidden shadow-[0_0_50px_rgba(152,227,47,0.05)]">
+              <CardHeader className="bg-[#98E32F]/5 border-b border-[#98E32F]/10">
+                <CardTitle className="text-lg">Assessment & Action</CardTitle>
+                <CardDescription className="text-white/40">
+                  Provide feedback and update verification status
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-6 space-y-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-white/40">
+                    Verification Notes
+                  </label>
+                  <Textarea
+                    placeholder="Reason for approval/rejection or things that need improvement..."
+                    className="bg-black/20 border-white/5 focus:border-[#98E32F]/50 h-32 resize-none text-sm p-4 text-white"
+                    value={notes}
+                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                      setNotes(e.target.value)
+                    }
                   />
-                  Reject Restaurant
-                </Button>
-                <Button
-                  className="flex-[1.5] h-14 bg-[#98E32F] text-[#013644] hover:bg-[#86c926] transition-all rounded-2xl font-black text-lg shadow-[0_10px_30px_rgba(152,227,47,0.2)] flex items-center justify-center gap-2 group"
-                  disabled={updateStatusMutation.isPending}
-                  onClick={() =>
-                    updateStatusMutation.mutate({
-                      status: "active",
-                      verificationNotes: notes,
-                    })
-                  }
-                >
-                  {updateStatusMutation.isPending ? (
-                    <Loader2 className="animate-spin" size={24} />
-                  ) : (
-                    <>
-                      <CheckCircle2
-                        size={24}
-                        className="group-hover:scale-110 transition-transform"
-                      />
-                      Approve Business
-                    </>
-                  )}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-4 pt-2">
+                  <Button
+                    className="flex-1 h-14 bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500 hover:text-white transition-all rounded-2xl font-bold flex items-center justify-center gap-2 group"
+                    disabled={updateStatusMutation.isPending}
+                    onClick={() =>
+                      updateStatusMutation.mutate({
+                        status: "rejected",
+                        verificationNotes: notes,
+                      })
+                    }
+                  >
+                    <XCircle
+                      size={20}
+                      className="group-hover:scale-110 transition-transform"
+                    />
+                    Reject Restaurant
+                  </Button>
+                  <Button
+                    className="flex-[1.5] h-14 bg-[#98E32F] text-[#013644] hover:bg-[#86c926] transition-all rounded-2xl font-black text-lg shadow-[0_10px_30px_rgba(152,227,47,0.2)] flex items-center justify-center gap-2 group"
+                    disabled={updateStatusMutation.isPending}
+                    onClick={() =>
+                      updateStatusMutation.mutate({
+                        status: "active",
+                        verificationNotes: notes,
+                      })
+                    }
+                  >
+                    {updateStatusMutation.isPending ? (
+                      <Loader2 className="animate-spin" size={24} />
+                    ) : (
+                      <>
+                        <CheckCircle2
+                          size={24}
+                          className="group-hover:scale-110 transition-transform"
+                        />
+                        Approve Business
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
     </div>
