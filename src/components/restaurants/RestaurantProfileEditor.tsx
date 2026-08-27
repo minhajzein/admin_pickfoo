@@ -201,8 +201,8 @@ export function RestaurantProfileEditor({
       <CardHeader className="pb-2">
         <CardTitle className="text-lg">Restaurant details</CardTitle>
         <CardDescription className="text-white/40">
-          Update brand name, mobile number, description, logo, and storefront
-          cover shown to customers.
+          Update brand name, login &amp; contact mobile, description, logo, and
+          storefront cover shown to customers.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
@@ -222,7 +222,7 @@ export function RestaurantProfileEditor({
 
         <div className="space-y-1.5">
           <label className="text-[10px] font-black uppercase tracking-widest text-white/40">
-            Mobile number
+            Login &amp; contact mobile
           </label>
           <input
             type="tel"
@@ -230,8 +230,13 @@ export function RestaurantProfileEditor({
             onChange={(e) => setContactNumber(e.target.value)}
             disabled={busy}
             className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white focus:border-[#98E32F]/50 focus:outline-none disabled:opacity-60"
-            placeholder="Restaurant contact number"
+            placeholder="10-digit mobile (login + contact)"
+            inputMode="numeric"
+            maxLength={14}
           />
+          <p className="text-[11px] text-white/35">
+            Same number is used for restaurant app OTP login.
+          </p>
         </div>
 
         <div className="space-y-1.5">
@@ -274,8 +279,10 @@ export function RestaurantProfileEditor({
               toast.error("Brand name is required");
               return;
             }
-            if (!contactNumber.trim()) {
-              toast.error("Mobile number is required");
+            const digits = contactNumber.replace(/\D/g, "");
+            const ten = digits.length >= 10 ? digits.slice(-10) : digits;
+            if (!/^[6-9]\d{9}$/.test(ten)) {
+              toast.error("Enter a valid 10-digit Indian mobile number");
               return;
             }
             saveMutation.mutate();
