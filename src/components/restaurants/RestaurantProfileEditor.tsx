@@ -66,7 +66,7 @@ function ImagePicker({
               unoptimized
               className="object-cover"
             />
-            <div className="absolute inset-0 flex items-end bg-gradient-to-t from-black/70 to-transparent p-3">
+            <div className="absolute inset-0 flex items-end bg-linear-to-t from-black/70 to-transparent p-3">
               <span className="inline-flex items-center gap-1.5 text-xs font-bold text-white">
                 {uploading ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
