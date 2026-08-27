@@ -826,7 +826,7 @@ export default function OrderDetailPage() {
           }
         }}
       >
-        <DialogContent className="border-white/10 bg-[#002833] text-white sm:max-w-md">
+        <DialogContent className="max-h-[90vh] overflow-y-auto border-white/10 bg-[#002833] text-white sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-white">
               {canCleanupRefundedDispatch

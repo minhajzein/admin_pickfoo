@@ -582,7 +582,7 @@ export default function CustomerPaymentsPage() {
           }
         }}
       >
-        <DialogContent className="bg-[#002833] border-white/10 text-white sm:max-w-md">
+        <DialogContent className="max-h-[90vh] overflow-y-auto bg-[#002833] border-white/10 text-white sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Refund payment</DialogTitle>
           </DialogHeader>
