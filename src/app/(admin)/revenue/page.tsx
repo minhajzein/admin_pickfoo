@@ -37,7 +37,9 @@ import {
 } from "@/lib/date-presets";
 import {
   fetchPlatformLedger,
+  fetchPlatformSettlement,
   fetchPlatformWallet,
+  pickBank,
   type PlatformLedgerEntry,
   type PlatformLedgerKind,
 } from "@/lib/api/platform-ledger";
@@ -294,6 +296,16 @@ export default function RevenuePage() {
     refetchInterval: 60_000,
   });
 
+  const {
+    data: settlement,
+    isLoading: isSettlementLoading,
+  } = useQuery({
+    queryKey: ["platform-ledger-settlement"],
+    queryFn: fetchPlatformSettlement,
+    staleTime: 60_000,
+    refetchInterval: 60_000,
+  });
+
   // All-time commission — changes rarely; keep off the filter click path.
   const { data: allTimeData } = useQuery({
     queryKey: ["platform-ledger-all-time"],
@@ -338,7 +350,7 @@ export default function RevenuePage() {
   const total = data?.total ?? 0;
   const totalPages = data?.totalPages ?? 1;
   const showListFetching = isFetching && !isLoading;
-  const bank = wallet?.bank;
+  const bank = pickBank(settlement, data?.summary.bank, wallet?.bank);
 
   const selectPreset = (next: DatePreset) => {
     startTransition(() => {
@@ -389,7 +401,7 @@ export default function RevenuePage() {
               Expected in platform bank
             </p>
             <p className="mt-2 text-3xl font-black">
-              {isWalletLoading ? (
+              {isSettlementLoading && !settlement ? (
                 <Loader2 className="h-7 w-7 animate-spin" />
               ) : (
                 formatMoney(bank?.expectedBankBalance)
@@ -415,7 +427,7 @@ export default function RevenuePage() {
               </p>
             </div>
             <p className="mt-2 text-2xl font-bold text-amber-200">
-              {isWalletLoading ? (
+              {isSettlementLoading && !settlement ? (
                 <Loader2 className="h-6 w-6 animate-spin text-[#98E32F]" />
               ) : (
                 formatMoney(bank?.pendingRazorpaySettlement)
@@ -427,6 +439,11 @@ export default function RevenuePage() {
                 ? ` · next ${formatMoney(bank.pendingByDate[0].amount)}`
                 : ""}
             </p>
+            {bank?.pendingByDate && bank.pendingByDate.length > 0 ? (
+              <div className="mt-3">
+                <PendingSettlementBatches batches={bank.pendingByDate} />
+              </div>
+            ) : null}
           </CardContent>
         </Card>
 
@@ -474,19 +491,6 @@ export default function RevenuePage() {
           </CardContent>
         </Card>
       </div>
-
-      {bank?.pendingByDate && bank.pendingByDate.length > 0 ? (
-        <Card className="border-amber-500/20 bg-white/5 text-white">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold text-amber-200">
-              Razorpay settlement batches
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <PendingSettlementBatches batches={bank.pendingByDate} />
-          </CardContent>
-        </Card>
-      ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
         <MiniStat

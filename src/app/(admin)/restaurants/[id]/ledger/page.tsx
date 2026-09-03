@@ -144,17 +144,64 @@ function settlementLabel(tx: RestaurantLedgerTransaction): string {
   if (tx.razorpaySettled === true) return "Settled";
   if (tx.withdrawableAt) {
     try {
-      return `Settles ${new Date(tx.withdrawableAt).toLocaleDateString("en-IN", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-        timeZone: "Asia/Kolkata",
-      })}`;
+      return `Settles on ${new Date(tx.withdrawableAt).toLocaleDateString(
+        "en-IN",
+        {
+          day: "numeric",
+          month: "short",
+          year: "numeric",
+          timeZone: "Asia/Kolkata",
+        },
+      )}`;
     } catch {
       return "Pending";
     }
   }
   return "Pending";
+}
+
+function batchesFromTransactions(txs: RestaurantLedgerTransaction[]) {
+  const now = Date.now();
+  const byDay = new Map<string, { amount: number; settleAt: string }>();
+  for (const tx of txs) {
+    if (tx.type !== "credit") continue;
+    if (tx.razorpaySettled === true) continue;
+    const settleAt = tx.withdrawableAt;
+    if (!settleAt) continue;
+    const ready = new Date(settleAt).getTime();
+    if (Number.isNaN(ready) || ready <= now) continue;
+    const ymd = new Date(settleAt).toLocaleDateString("en-CA", {
+      timeZone: "Asia/Kolkata",
+    });
+    const amount = Number(tx.amount) || 0;
+    const existing = byDay.get(ymd);
+    if (existing) {
+      existing.amount = Math.round((existing.amount + amount) * 100) / 100;
+    } else {
+      byDay.set(ymd, { amount, settleAt });
+    }
+  }
+  return [...byDay.values()].sort(
+    (a, b) => new Date(a.settleAt).getTime() - new Date(b.settleAt).getTime(),
+  );
+}
+
+function ledgerSettlementBatches(
+  summary: NonNullable<
+    Awaited<ReturnType<typeof fetchRestaurantLedger>>
+  >["summary"],
+  txs: RestaurantLedgerTransaction[],
+) {
+  if (summary.pendingByDate && summary.pendingByDate.length > 0) {
+    return summary.pendingByDate;
+  }
+  const fromTx = batchesFromTransactions(txs);
+  if (fromTx.length > 0) return fromTx;
+  const amount = summary.pendingSettlement ?? 0;
+  if (amount > 0 && summary.nextSettlementAt) {
+    return [{ amount, settleAt: summary.nextSettlementAt }];
+  }
+  return [];
 }
 
 type Tab = "transactions" | "withdrawals";
@@ -314,6 +361,21 @@ export default function RestaurantLedgerPage() {
 
   const summary = ledger?.summary;
   const restaurant = ledger?.restaurant;
+  const pendingBatches = summary
+    ? ledgerSettlementBatches(summary, transactions)
+    : [];
+  const pendingSettlement =
+    summary?.pendingSettlement ??
+    pendingBatches.reduce((sum, batch) => sum + batch.amount, 0);
+  const withdrawable =
+    typeof summary?.withdrawable === "number"
+      ? summary.withdrawable
+      : Math.max(
+          0,
+          (summary?.walletBalance ?? summary?.availableBalance ?? 0) -
+            pendingSettlement -
+            (summary?.openWithdrawalHold ?? 0),
+        );
 
   const titleName =
     restaurant?.name || restaurantMeta?.name || "Restaurant ledger";
@@ -431,11 +493,11 @@ export default function RestaurantLedgerPage() {
               Withdrawable
             </p>
             <p className="text-3xl font-black mt-2">
-              {inr(summary.withdrawable)}
+              {inr(withdrawable)}
             </p>
             <p className="text-[11px] mt-2 opacity-70">
               Wallet {inr(summary.walletBalance ?? summary.settledBalance)} ·
-              pending settlement {inr(summary.pendingSettlement ?? 0)}
+              pending settlement {inr(pendingSettlement)}
             </p>
           </CardContent>
         </Card>
@@ -449,7 +511,7 @@ export default function RestaurantLedgerPage() {
               </p>
             </div>
             <p className="text-2xl font-bold mt-2 text-amber-200">
-              {inr(summary.pendingSettlement ?? 0)}
+              {inr(pendingSettlement)}
             </p>
             <p className="text-[11px] text-white/35 mt-2">
               T+2 still with Razorpay
@@ -457,6 +519,13 @@ export default function RestaurantLedgerPage() {
                 ? ` · ${inr(summary.pendingCredits)} awaiting pickup`
                 : ""}
             </p>
+            <div className="mt-3">
+              <PendingSettlementBatches
+                batches={pendingBatches}
+                restaurantName={restaurant.name}
+                emptyLabel="No upcoming settlement dates"
+              />
+            </div>
           </CardContent>
         </Card>
 
@@ -511,19 +580,6 @@ export default function RestaurantLedgerPage() {
           </CardContent>
         </Card>
       </div>
-
-      {(summary.pendingByDate?.length ?? 0) > 0 ? (
-        <Card className="border-amber-500/20 bg-white/5 text-white">
-          <CardContent className="p-4">
-            <p className="text-xs font-semibold uppercase tracking-wider text-amber-200/80 mb-2">
-              Razorpay settlement batches
-            </p>
-            <PendingSettlementBatches
-              batches={summary.pendingByDate ?? []}
-            />
-          </CardContent>
-        </Card>
-      ) : null}
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card className="bg-white/5 border-white/10 text-white">

@@ -17,7 +17,6 @@ const money = new Intl.NumberFormat("en-IN", {
 function formatSettleDay(iso: string): string {
   try {
     return new Date(iso).toLocaleDateString("en-IN", {
-      weekday: "short",
       day: "numeric",
       month: "short",
       year: "numeric",
@@ -30,10 +29,12 @@ function formatSettleDay(iso: string): string {
 
 export function PendingSettlementBatches({
   batches,
+  restaurantName,
   emptyLabel = "No pending Razorpay settlements",
   className,
 }: {
   batches: PendingSettlementBatch[];
+  restaurantName?: string | null;
   emptyLabel?: string;
   className?: string;
 }) {
@@ -43,15 +44,18 @@ export function PendingSettlementBatches({
     );
   }
 
+  const name = restaurantName?.trim();
+
   return (
     <div className={cn("space-y-2", className)}>
-      {batches.map((batch) => (
+      {batches.map((batch, index) => (
         <div
-          key={batch.settleAt}
+          key={`${batch.settleAt}-${index}`}
           className="flex items-center gap-2 rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2"
         >
           <Clock size={14} className="shrink-0 text-amber-300" />
           <p className="flex-1 text-xs text-white/70">
+            {name ? `${name} · ` : ""}
             Settles on {formatSettleDay(batch.settleAt)}
           </p>
           <p className="text-sm font-semibold tabular-nums text-amber-200">

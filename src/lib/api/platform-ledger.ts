@@ -106,6 +106,7 @@ export interface PlatformLedgerResponse {
     filtered: PlatformLedgerTotals;
     allTime: PlatformLedgerTotals;
     wallet: PlatformWalletSummary | null;
+    bank?: PlatformBankSettlement | null;
   };
   kind: PlatformLedgerKind;
   data: PlatformLedgerEntry[];
@@ -224,9 +225,40 @@ function mapWallet(raw: unknown): PlatformWalletSummary {
   };
 }
 
+function isEmptyBank(bank: PlatformBankSettlement): boolean {
+  return (
+    bank.pendingRazorpaySettlement === 0 &&
+    bank.expectedBankBalance === 0 &&
+    bank.settledCollections === 0 &&
+    bank.collections === 0 &&
+    bank.restaurantWithdrawalsPaid === 0 &&
+    bank.partnerPayoutsPaid === 0
+  );
+}
+
+export function pickBank(
+  ...candidates: Array<PlatformBankSettlement | null | undefined>
+): PlatformBankSettlement {
+  for (const candidate of candidates) {
+    if (candidate && !isEmptyBank(candidate)) return candidate;
+  }
+  return emptyBank();
+}
+
+export async function fetchPlatformSettlement(): Promise<PlatformBankSettlement> {
+  const { data } = await api.get(`/platform-ledger/settlement`, {
+    timeout: 30000,
+  });
+  return mapBank(data.bank ?? data.data ?? data);
+}
+
 export async function fetchPlatformWallet(): Promise<PlatformWalletSummary> {
-  const { data } = await api.get(`/platform-ledger/wallet`);
-  return mapWallet(data.wallet);
+  const { data } = await api.get(`/platform-ledger/wallet`, {
+    timeout: 30000,
+  });
+  const wallet = mapWallet(data.wallet ?? data.data ?? data);
+  const bank = pickBank(mapBank(data.bank), wallet.bank);
+  return { ...wallet, bank };
 }
 
 export async function fetchPlatformLedger(params?: {
@@ -282,6 +314,7 @@ export async function fetchPlatformLedger(params?: {
         restaurantGstPaid: Number(allTime.restaurantGstPaid) || 0,
       },
       wallet: walletRaw ? mapWallet(walletRaw) : null,
+      bank: mapBank(data.summary?.bank ?? data.bank),
     },
     kind: (data.kind as PlatformLedgerKind) || params?.kind || "all",
     data: data.data ?? [],
