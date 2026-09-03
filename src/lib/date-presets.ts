@@ -23,73 +23,86 @@ export const DATE_PRESETS: Array<{ id: DatePreset; label: string }> = [
   { id: "custom", label: "Custom" },
 ];
 
+const IST = "Asia/Kolkata";
+
+/** IST calendar day as YYYY-MM-DD (matches admin-api date filters). */
+export function toYmdIst(d: Date = new Date()): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: IST,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(d);
+}
+
 export function toYmd(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+  return toYmdIst(d);
 }
 
 export function startOfLocalDay(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const ymd = toYmdIst(d);
+  return new Date(`${ymd}T00:00:00+05:30`);
 }
 
-/** Monday as start of week (local calendar). */
+function addDaysYmd(ymd: string, days: number): string {
+  const [y, m, d] = ymd.split("-").map(Number);
+  return toYmdIst(new Date(Date.UTC(y, m - 1, d + days, 6, 30, 0)));
+}
+
+function weekdayIst(ymd: string): number {
+  const [y, m, d] = ymd.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d, 6, 30, 0)).getUTCDay();
+}
+
+/** Monday as start of week (IST calendar). */
 export function startOfWeekMonday(d: Date): Date {
-  const day = d.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  return startOfLocalDay(
-    new Date(d.getFullYear(), d.getMonth(), d.getDate() + diff),
-  );
+  const ymd = toYmdIst(d);
+  const dow = weekdayIst(ymd);
+  const diff = dow === 0 ? -6 : 1 - dow;
+  return startOfLocalDay(new Date(`${addDaysYmd(ymd, diff)}T00:00:00+05:30`));
 }
 
 export function rangeForPreset(preset: DatePreset): {
   from?: string;
   to?: string;
 } {
-  const now = new Date();
-  const today = startOfLocalDay(now);
+  const todayYmd = toYmdIst(new Date());
 
   switch (preset) {
     case "all":
       return {};
     case "today":
-      return { from: toYmd(today), to: toYmd(today) };
+      return { from: todayYmd, to: todayYmd };
     case "yesterday": {
-      const y = new Date(today);
-      y.setDate(y.getDate() - 1);
-      return { from: toYmd(y), to: toYmd(y) };
+      const y = addDaysYmd(todayYmd, -1);
+      return { from: y, to: y };
     }
-    case "last_7_days": {
-      const start = new Date(today);
-      start.setDate(start.getDate() - 6);
-      return { from: toYmd(start), to: toYmd(today) };
-    }
+    case "last_7_days":
+      return { from: addDaysYmd(todayYmd, -6), to: todayYmd };
     case "this_week": {
-      const start = startOfWeekMonday(today);
-      return { from: toYmd(start), to: toYmd(today) };
+      const dow = weekdayIst(todayYmd);
+      const diff = dow === 0 ? -6 : 1 - dow;
+      return { from: addDaysYmd(todayYmd, diff), to: todayYmd };
     }
     case "last_week": {
-      const thisWeekStart = startOfWeekMonday(today);
-      const lastWeekStart = new Date(thisWeekStart);
-      lastWeekStart.setDate(lastWeekStart.getDate() - 7);
-      const lastWeekEnd = new Date(thisWeekStart);
-      lastWeekEnd.setDate(lastWeekEnd.getDate() - 1);
-      return { from: toYmd(lastWeekStart), to: toYmd(lastWeekEnd) };
+      const dow = weekdayIst(todayYmd);
+      const diff = dow === 0 ? -6 : 1 - dow;
+      const thisWeekStart = addDaysYmd(todayYmd, diff);
+      return {
+        from: addDaysYmd(thisWeekStart, -7),
+        to: addDaysYmd(thisWeekStart, -1),
+      };
     }
-    case "this_month": {
-      const start = new Date(today.getFullYear(), today.getMonth(), 1);
-      return { from: toYmd(start), to: toYmd(today) };
-    }
+    case "this_month":
+      return { from: `${todayYmd.slice(0, 8)}01`, to: todayYmd };
     case "last_month": {
-      const start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-      const end = new Date(today.getFullYear(), today.getMonth(), 0);
-      return { from: toYmd(start), to: toYmd(end) };
+      const [y, m] = todayYmd.split("-").map(Number);
+      const lastMonthEnd = addDaysYmd(`${y}-${String(m).padStart(2, "0")}-01`, -1);
+      const lastMonthStart = `${lastMonthEnd.slice(0, 8)}01`;
+      return { from: lastMonthStart, to: lastMonthEnd };
     }
-    case "this_year": {
-      const start = new Date(today.getFullYear(), 0, 1);
-      return { from: toYmd(start), to: toYmd(today) };
-    }
+    case "this_year":
+      return { from: `${todayYmd.slice(0, 4)}-01-01`, to: todayYmd };
     default:
       return {};
   }

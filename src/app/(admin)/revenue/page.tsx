@@ -76,6 +76,28 @@ function formatMoney(value?: number | null) {
   return money.format(value);
 }
 
+function roundMoney(n: number): number {
+  return Math.round((Number(n) || 0) * 100) / 100;
+}
+
+/** GST cards must add up: collected = platform + restaurants. */
+function splitGst(totals?: {
+  totalGst?: number;
+  platformGstRetained?: number;
+  restaurantGstPaid?: number;
+} | null) {
+  const platform = roundMoney(Number(totals?.platformGstRetained) || 0);
+  const collected = roundMoney(Number(totals?.totalGst) || 0);
+  const reportedRestaurant = roundMoney(Number(totals?.restaurantGstPaid) || 0);
+  const restaurant =
+    reportedRestaurant > 0
+      ? reportedRestaurant
+      : roundMoney(Math.max(0, collected - platform));
+  const total =
+    collected > 0 ? collected : roundMoney(platform + restaurant);
+  return { platform, restaurant, total };
+}
+
 function entryAmount(row: PlatformLedgerEntry): number {
   // Prefer full transaction total; fall back to amount / rebuilt parts.
   const total = Number(row.totalAmount);
@@ -241,7 +263,7 @@ function statusBadge(status?: string | null) {
 
 export default function RevenuePage() {
   const [page, setPage] = useState(1);
-  const [preset, setPreset] = useState<DatePreset>("today");
+  const [preset, setPreset] = useState<DatePreset>("last_7_days");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
   const [kind, setKind] = useState<PlatformLedgerKind>("commission");
@@ -310,6 +332,8 @@ export default function RevenuePage() {
 
   const filtered = data?.summary.filtered;
   const allTime = allTimeData;
+  const periodGst = splitGst(filtered);
+  const allTimeGst = splitGst(allTime);
   const rows = data?.data ?? [];
   const total = data?.total ?? 0;
   const totalPages = data?.totalPages ?? 1;
@@ -373,7 +397,8 @@ export default function RevenuePage() {
             </p>
             <p className="mt-2 text-[11px] opacity-70">
               Settled collections {formatMoney(bank?.settledCollections)} −
-              paid out {formatMoney(
+              paid out{" "}
+              {formatMoney(
                 (bank?.restaurantWithdrawalsPaid ?? 0) +
                   (bank?.partnerPayoutsPaid ?? 0),
               )}
@@ -397,8 +422,10 @@ export default function RevenuePage() {
               )}
             </p>
             <p className="mt-2 text-[11px] text-white/35">
-              Still with Razorpay (T+2) · restaurant wallets{" "}
-              {formatMoney(bank?.restaurantPendingSettlement)}
+              Matches Razorpay available (T+2 not in bank yet)
+              {bank?.pendingByDate?.[0]
+                ? ` · next ${formatMoney(bank.pendingByDate[0].amount)}`
+                : ""}
             </p>
           </CardContent>
         </Card>
@@ -415,12 +442,12 @@ export default function RevenuePage() {
               {isLoading ? (
                 <Loader2 className="h-6 w-6 animate-spin text-[#98E32F]" />
               ) : (
-                formatMoney(filtered?.platformGstRetained)
+                formatMoney(periodGst.platform)
               )}
             </p>
             <p className="mt-2 text-[11px] text-white/35">
-              Collected from restaurants without a valid GSTIN · all time{" "}
-              {formatMoney(allTime?.platformGstRetained)}
+              No GSTIN · retained by PickFoo · all time{" "}
+              {formatMoney(allTimeGst.platform)}
             </p>
           </CardContent>
         </Card>
@@ -437,12 +464,12 @@ export default function RevenuePage() {
               {isLoading ? (
                 <Loader2 className="h-6 w-6 animate-spin text-[#98E32F]" />
               ) : (
-                formatMoney(filtered?.restaurantGstPaid)
+                formatMoney(periodGst.restaurant)
               )}
             </p>
             <p className="mt-2 text-[11px] text-white/35">
-              Paid into wallets of GST-registered restaurants · all time{" "}
-              {formatMoney(allTime?.restaurantGstPaid)}
+              Valid GSTIN wallet credit · all time{" "}
+              {formatMoney(allTimeGst.restaurant)}
             </p>
           </CardContent>
         </Card>
@@ -499,8 +526,8 @@ export default function RevenuePage() {
         />
         <MiniStat
           label={`GST collected · ${periodLabel}`}
-          value={formatMoney(filtered?.totalGst)}
-          hint={`Platform ${formatMoney(filtered?.platformGstRetained)} · restaurants ${formatMoney(filtered?.restaurantGstPaid)}`}
+          value={formatMoney(periodGst.total)}
+          hint={`Platform ${formatMoney(periodGst.platform)} · restaurants ${formatMoney(periodGst.restaurant)}`}
           loading={isLoading}
           icon={<Percent size={14} className="text-sky-300" />}
         />
@@ -735,12 +762,13 @@ export default function RevenuePage() {
       </Card>
 
       <p className="text-xs text-white/40">
-        Expected bank = Razorpay T+2 settled customer collections minus
+        Expected bank = customer collections already past Razorpay T+2, minus
         restaurant withdrawals and partner payouts already marked paid. Pending
-        settlement is still with Razorpay. GST collected from customers is split:
+        Razorpay settlement should match the Razorpay dashboard available
+        balance (money not yet deposited). GST is split from each paid order:
         platform keeps GST when the restaurant has no valid GSTIN; otherwise GST
-        is paid into the restaurant wallet. Date filters apply to commission, GST,
-        and ledger entries. Bank and pending settlement are live snapshots.
+        is credited to the restaurant. Date filters use IST and apply to
+        commission, GST, and ledger entries. Bank figures are live.
       </p>
     </div>
   );

@@ -431,11 +431,11 @@ export default function RestaurantLedgerPage() {
               Withdrawable
             </p>
             <p className="text-3xl font-black mt-2">
-              {inr(summary.withdrawable ?? summary.availableBalance)}
+              {inr(summary.withdrawable)}
             </p>
             <p className="text-[11px] mt-2 opacity-70">
               Wallet {inr(summary.walletBalance ?? summary.settledBalance)} ·
-              hold {inr(summary.openWithdrawalHold)}
+              pending settlement {inr(summary.pendingSettlement ?? 0)}
             </p>
           </CardContent>
         </Card>
@@ -470,10 +470,14 @@ export default function RestaurantLedgerPage() {
             </div>
             <p className="text-2xl font-bold mt-2 text-[#98E32F]">
               {inr(
-                summary.period?.gstToRestaurant ??
-                  summary.gstToRestaurant ??
-                  summary.totalGstInWallet ??
-                  0,
+                datePreset === "all"
+                  ? (summary.gstToRestaurant ??
+                      summary.totalGstInWallet ??
+                      0)
+                  : (summary.period?.gstToRestaurant ??
+                      summary.gstToRestaurant ??
+                      summary.totalGstInWallet ??
+                      0),
               )}
             </p>
             <p className="text-[11px] text-white/35 mt-2">
@@ -493,7 +497,11 @@ export default function RestaurantLedgerPage() {
             </div>
             <p className="text-2xl font-bold mt-2 text-amber-200">
               {inr(
-                summary.period?.gstToPlatform ?? summary.gstToPlatform ?? 0,
+                datePreset === "all"
+                  ? (summary.gstToPlatform ?? 0)
+                  : (summary.period?.gstToPlatform ??
+                      summary.gstToPlatform ??
+                      0),
               )}
             </p>
             <p className="text-[11px] text-white/35 mt-2">
