@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams, useRouter } from "next/navigation";
-import Image from "next/image";
+import { CdnImage } from "@/lib/cdn-image";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -116,12 +116,11 @@ function UploadedAssetCard({
         </a>
       </div>
       {imageAsset ? (
-        <Image
+        <CdnImage
           src={url}
           alt={title}
           width={480}
           height={240}
-          unoptimized
           className="h-40 w-full rounded-md border border-white/10 object-cover"
         />
       ) : isPdfAsset(url) ? (

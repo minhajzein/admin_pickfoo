@@ -1,7 +1,7 @@
 "use client";
 
 import { memo } from "react";
-import NextImage from "next/image";
+import { CdnImage } from "@/lib/cdn-image";
 import { Clock, Edit2, ImageIcon, Loader2, Star, Trash2 } from "lucide-react";
 import type { AdminMenuItem } from "@/lib/api/menu";
 
@@ -53,11 +53,10 @@ export const CustomerStyleMenuCard = memo(function CustomerStyleMenuCard({
           }`}
         >
           {item.image ? (
-            <NextImage
+            <CdnImage
               src={item.image}
               alt={item.name}
               fill
-              unoptimized
               loading="lazy"
               decoding="async"
               className="object-cover"

@@ -133,6 +133,7 @@ const BannerImagePreview = memo(function BannerImagePreview({
     <img
       src={src}
       alt="Preview"
+      key={src}
       loading="lazy"
       decoding="async"
       fetchPriority="low"
@@ -315,6 +316,12 @@ export function BannerEditorCard({
               </option>
             ))}
           </select>
+          {fields.linkType === "offer" && (
+            <p className="text-xs text-white/50">
+              Tapping the banner opens that offer’s detail page. Combo offers
+              add the set to cart; restaurant offers go to the restaurant menu.
+            </p>
+          )}
         </div>
         <div className="space-y-2">
           <Label>Starts at (optional)</Label>

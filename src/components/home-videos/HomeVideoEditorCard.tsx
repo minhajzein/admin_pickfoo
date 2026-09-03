@@ -153,6 +153,7 @@ const VideoPreview = memo(function VideoPreview({ src }: { src: string }) {
   return (
     <video
       src={src}
+      key={src}
       muted
       playsInline
       loop

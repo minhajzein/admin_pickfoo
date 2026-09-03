@@ -43,15 +43,19 @@ import {
 } from "@/lib/api/customer-offers";
 import type {
   AdminCustomerOffer,
+  AdminOfferAudienceRules,
+  AudienceLifecycle,
+  CustomerOfferAudience,
   CustomerOfferScope,
   CustomerOfferType,
+  FreeDeliveryUnlock,
   OfferFundingShareMode,
   OfferFundingSource,
   FreeDeliveryFundingSource,
+  RestaurantAffinity,
 } from "@/types/models";
 import { ListPagination } from "@/components/ui/list-pagination";
 import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
-import { CommissionFreeDeliverySettingsCard } from "@/components/customer-offers/CommissionFreeDeliverySettingsCard";
 
 function inr(n: number | undefined | null) {
   const v = Number(n) || 0;
@@ -242,6 +246,31 @@ function OfferImpactPreviewPanel({
               {preview.assumptions.gstRegistered ? " · GST registered" : ""}
             </p>
           )}
+
+          {preview?.audienceSize && (
+            <div className="rounded border border-white/10 p-2 text-xs">
+              <p className="font-medium text-white">Audience size</p>
+              <p className="mt-1 text-base font-semibold text-[#98E32F]">
+                {preview.audienceSize.matchingUsers.toLocaleString("en-IN")} customers
+              </p>
+              <p className="text-white/50">{preview.audienceSize.explainer}</p>
+            </div>
+          )}
+
+          {preview?.comboEconomics && (
+            <div className="rounded border border-white/10 p-2 text-xs">
+              <p className="font-medium text-white">Combo economics</p>
+              <p className="mt-1 text-white/80">
+                Catalog {inr(preview.comboEconomics.catalogTotal)} → combo{" "}
+                {inr(preview.comboEconomics.comboPrice)} (save{" "}
+                {inr(preview.comboEconomics.comboSave)})
+              </p>
+              <p className="text-white/50">
+                Commission captured on combo price {inr(preview.comboEconomics.commissionCaptured)}{" "}
+                ({preview.comboEconomics.commissionPercent}%)
+              </p>
+            </div>
+          )}
         </>
       )}
     </div>
@@ -256,6 +285,16 @@ const typeLabels: Record<CustomerOfferType, string> = {
   combo: "Combo meal",
   order_cashback: "Spend and get cashback",
   order_count_cashback: "Complete N orders cashback",
+};
+
+type AudiencePreset = "everyone" | "new" | "returning" | "lapsed" | "custom";
+
+type ComboFormItem = {
+  menuItemId: string;
+  quantity: number;
+  name: string;
+  variantName: string;
+  unitPrice: number;
 };
 
 type FormState = {
@@ -279,8 +318,10 @@ type FormState = {
   getQty: number;
   getDiscountType: "free" | "percent" | "flat";
   getDiscountValue: number;
+  buyVariantName: string;
+  getVariantName: string;
   comboRestaurantId: string;
-  comboItems: { menuItemId: string; quantity: number; name: string }[];
+  comboItems: ComboFormItem[];
   comboPrice: number;
   fundingSource: OfferFundingSource;
   fundingShareMode: OfferFundingShareMode;
@@ -288,6 +329,11 @@ type FormState = {
   menuItemShare: number;
   maxDistanceKm: number;
   freeDeliveryFundingSource: FreeDeliveryFundingSource;
+  freeDeliveryUnlock: FreeDeliveryUnlock;
+  commissionCoverMultiplier: number;
+  audience: CustomerOfferAudience;
+  audiencePreset: AudiencePreset;
+  audienceRules: AdminOfferAudienceRules;
   startsAt: string;
   endsAt: string;
   autoApply: boolean;
@@ -296,6 +342,94 @@ type FormState = {
   usageLimit: number;
   usagePerUser: number;
 };
+
+function defaultAudienceRules(): AdminOfferAudienceRules {
+  return {
+    lifecycle: "all",
+    lapsedAfterDays: 30,
+    minOrderCount: 0,
+    maxOrderCount: 0,
+    minAov: 0,
+    maxAov: 0,
+    restaurantAffinity: "any",
+  };
+}
+
+function audiencePresetFromOffer(
+  audience: CustomerOfferAudience | undefined,
+  rules: AdminOfferAudienceRules,
+): AudiencePreset {
+  if (!audience || audience === "all") return "everyone";
+  const custom =
+    rules.minOrderCount > 0 ||
+    rules.maxOrderCount > 0 ||
+    rules.minAov > 0 ||
+    rules.maxAov > 0 ||
+    rules.restaurantAffinity !== "any";
+  if (custom) return "custom";
+  if (rules.lifecycle === "new") return "new";
+  if (rules.lifecycle === "returning") return "returning";
+  if (rules.lifecycle === "lapsed") return "lapsed";
+  return "custom";
+}
+
+function applyAudiencePreset(
+  preset: AudiencePreset,
+  rules: AdminOfferAudienceRules,
+): Pick<FormState, "audience" | "audiencePreset" | "audienceRules"> {
+  if (preset === "everyone") {
+    return {
+      audience: "all",
+      audiencePreset: preset,
+      audienceRules: { ...rules, lifecycle: "all" },
+    };
+  }
+  const lifecycle: AudienceLifecycle =
+    preset === "new" ? "new" : preset === "returning" ? "returning" : preset === "lapsed" ? "lapsed" : rules.lifecycle;
+  return {
+    audience: "segment",
+    audiencePreset: preset,
+    audienceRules: { ...rules, lifecycle },
+  };
+}
+
+function comboLinePrice(item: ComboFormItem, dishes: OfferMenuItemOption[]): number {
+  const dish = dishes.find((d) => d.id === item.menuItemId);
+  if (dish) {
+    if (item.variantName) {
+      const v = dish.variants?.find((x) => x.name === item.variantName);
+      if (v) return v.price;
+    }
+    return dish.price;
+  }
+  return item.unitPrice || 0;
+}
+
+function addOrIncrementComboItem(
+  items: ComboFormItem[],
+  dish: OfferMenuItemOption,
+  variantName = "",
+): ComboFormItem[] {
+  const idx = items.findIndex(
+    (c) => c.menuItemId === dish.id && (c.variantName || "") === variantName,
+  );
+  if (idx >= 0) {
+    return items.map((c, i) => (i === idx ? { ...c, quantity: c.quantity + 1 } : c));
+  }
+  const unit = variantName
+    ? dish.variants?.find((v) => v.name === variantName)?.price ?? dish.price
+    : dish.price;
+  return [
+    ...items,
+    {
+      menuItemId: dish.id,
+      quantity: 1,
+      name: dish.name,
+      variantName,
+      unitPrice: unit,
+    },
+  ];
+}
 
 const emptyForm = (): FormState => ({
   title: "",
@@ -318,6 +452,8 @@ const emptyForm = (): FormState => ({
   getQty: 1,
   getDiscountType: "free",
   getDiscountValue: 0,
+  buyVariantName: "",
+  getVariantName: "",
   comboRestaurantId: "",
   comboItems: [],
   comboPrice: 0,
@@ -327,6 +463,11 @@ const emptyForm = (): FormState => ({
   menuItemShare: 0,
   maxDistanceKm: 0,
   freeDeliveryFundingSource: "platform",
+  freeDeliveryUnlock: "min_order",
+  commissionCoverMultiplier: 2,
+  audience: "all",
+  audiencePreset: "everyone",
+  audienceRules: defaultAudienceRules(),
   startsAt: "",
   endsAt: "",
   autoApply: true,
@@ -359,11 +500,15 @@ function formFromOffer(row: AdminCustomerOffer): FormState {
     getQty: row.getQty,
     getDiscountType: row.getDiscountType,
     getDiscountValue: row.getDiscountValue,
+    buyVariantName: row.buyVariantName || "",
+    getVariantName: row.getVariantName || "",
     comboRestaurantId: row.comboRestaurantId || "",
     comboItems: row.comboItems.map((c) => ({
       menuItemId: c.menuItemId,
       quantity: c.quantity,
       name: c.name || "",
+      variantName: c.variantName || "",
+      unitPrice: 0,
     })),
     comboPrice: row.comboPrice,
     fundingSource: row.fundingSource,
@@ -372,6 +517,17 @@ function formFromOffer(row: AdminCustomerOffer): FormState {
     menuItemShare: row.menuItemShare,
     maxDistanceKm: row.maxDistanceKm || 0,
     freeDeliveryFundingSource: row.freeDeliveryFundingSource || "platform",
+    freeDeliveryUnlock: row.freeDeliveryUnlock || "min_order",
+    commissionCoverMultiplier: row.commissionCoverMultiplier || 2,
+    audience: row.audience || "all",
+    audiencePreset: audiencePresetFromOffer(row.audience, {
+      ...defaultAudienceRules(),
+      ...(row.audienceRules || {}),
+    }),
+    audienceRules: {
+      ...defaultAudienceRules(),
+      ...(row.audienceRules || {}),
+    },
     startsAt: row.startsAt ? row.startsAt.slice(0, 16) : "",
     endsAt: row.endsAt ? row.endsAt.slice(0, 16) : "",
     autoApply: row.autoApply,
@@ -382,7 +538,7 @@ function formFromOffer(row: AdminCustomerOffer): FormState {
   };
 }
 
-function payloadFromForm(form: FormState) {
+function payloadFromForm(form: FormState, forecastSnapshot?: Record<string, unknown>) {
   return {
     ...form,
     restaurantIds: form.restaurantIds,
@@ -390,10 +546,21 @@ function payloadFromForm(form: FormState) {
     buyMenuItemId: form.buyMenuItemId || null,
     getMenuItemId: form.getMenuItemId || null,
     comboRestaurantId: form.comboRestaurantId || null,
+    comboItems: form.comboItems.map((c) => ({
+      menuItemId: c.menuItemId,
+      quantity: c.quantity,
+      name: c.name,
+      variantName: c.variantName || "",
+    })),
+    audience: form.audience,
+    audienceRules: form.audienceRules,
+    freeDeliveryUnlock: form.freeDeliveryUnlock,
+    commissionCoverMultiplier: form.commissionCoverMultiplier,
     startsAt: form.startsAt || null,
     endsAt: form.endsAt || null,
     publishNow: form.publishNow,
     status: form.publishNow ? "active" : "draft",
+    ...(forecastSnapshot ? { forecastSnapshot } : {}),
   };
 }
 
@@ -504,9 +671,19 @@ export default function CustomerOffersPage() {
       commissionShare: form.commissionShare,
       menuItemShare: form.menuItemShare,
       freeDeliveryFundingSource: form.freeDeliveryFundingSource,
+      freeDeliveryUnlock: form.freeDeliveryUnlock,
+      commissionCoverMultiplier: form.commissionCoverMultiplier,
       restaurantIds: form.restaurantIds,
       comboRestaurantId: form.comboRestaurantId || null,
       comboPrice: form.comboPrice,
+      comboItems: form.comboItems.map((c) => ({
+        menuItemId: c.menuItemId,
+        quantity: c.quantity,
+        name: c.name,
+        variantName: c.variantName || "",
+      })),
+      audience: form.audience,
+      audienceRules: form.audienceRules,
       sampleCartAmount: previewAssumptions.sampleCartAmount,
       sampleDeliveryFee: previewAssumptions.sampleDeliveryFee,
       expectedOrderCount: previewAssumptions.expectedOrderCount,
@@ -552,7 +729,7 @@ export default function CustomerOffersPage() {
   }
 
   function save() {
-    const payload = payloadFromForm(form);
+    const payload = payloadFromForm(form, previewQuery.data?.forecastSnapshot);
     if (!form.title.trim()) {
       toast.error("Title is required");
       return;
@@ -576,8 +753,6 @@ export default function CustomerOffersPage() {
         </Button>
       </div>
 
-      <CommissionFreeDeliverySettingsCard />
-
       <Card className="border-white/10 bg-[#042c38]">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-white">
@@ -597,7 +772,8 @@ export default function CustomerOffersPage() {
                   <TableRow>
                     <TableHead>Offer</TableHead>
                     <TableHead>Type</TableHead>
-                    <TableHead>Funding</TableHead>
+                    <TableHead>Audience</TableHead>
+                    <TableHead>Live vs forecast</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
@@ -611,26 +787,33 @@ export default function CustomerOffersPage() {
                       </TableCell>
                       <TableCell className="text-white/80">{typeLabels[row.type]}</TableCell>
                       <TableCell className="text-white/80">
-                        <div>
-                          {row.fundingSource === "both"
-                            ? `Both (${row.commissionShare}/${row.menuItemShare})`
-                            : row.fundingSource === "menu_item"
-                              ? "Menu item"
-                              : "Commission"}
+                        <div className="capitalize">
+                          {row.audience === "segment"
+                            ? row.audienceRules?.lifecycle || "segment"
+                            : "Everyone"}
                         </div>
                         {row.maxDistanceKm > 0 && (
                           <div className="text-xs text-white/50">
                             ≤ {row.maxDistanceKm} km
                           </div>
                         )}
-                        {row.type === "free_delivery" && (
-                          <div className="text-xs text-white/50">
-                            Delivery:{" "}
-                            {row.freeDeliveryFundingSource === "restaurant"
-                              ? "restaurant"
-                              : "platform"}
+                      </TableCell>
+                      <TableCell className="text-white/80">
+                        <div className="text-sm">
+                          {row.liveMetrics?.redemptions ?? 0} uses ·{" "}
+                          {row.liveMetrics?.uniqueUsers ?? 0} users
+                        </div>
+                        <div className="text-xs text-white/50">
+                          Saved {inr(row.liveMetrics?.customerSavings)} · GMV{" "}
+                          {inr(row.liveMetrics?.gmv)}
+                        </div>
+                        {row.forecastSnapshot ? (
+                          <div className="text-xs text-white/45">
+                            Forecast save {inr(row.forecastSnapshot.campaignCustomerSavings)} · cost{" "}
+                            {inr(row.forecastSnapshot.campaignPlatformOfferCost)} vs actual{" "}
+                            {inr(row.liveMetrics?.platformCost)}
                           </div>
-                        )}
+                        ) : null}
                       </TableCell>
                       <TableCell>
                         <Badge variant="secondary">{row.status}</Badge>
@@ -702,9 +885,14 @@ export default function CustomerOffersPage() {
                 <select
                   className="h-10 rounded-md border border-white/15 bg-transparent px-3 text-sm text-white"
                   value={form.type}
-                  onChange={(e) =>
-                    setForm({ ...form, type: e.target.value as CustomerOfferType })
-                  }
+                  onChange={(e) => {
+                    const type = e.target.value as CustomerOfferType;
+                    setForm({
+                      ...form,
+                      type,
+                      fundingSource: type === "combo" ? "menu_item" : form.fundingSource,
+                    });
+                  }}
                 >
                   {Object.entries(typeLabels).map(([k, v]) => (
                     <option key={k} value={k} className="bg-[#013644]">
@@ -720,6 +908,153 @@ export default function CustomerOffersPage() {
                   onChange={(e) => setForm({ ...form, badgeLabel: e.target.value })}
                 />
               </div>
+            </div>
+
+            <div className="space-y-2 rounded-md border border-white/10 p-3">
+              <Label>Who sees this offer</Label>
+              <select
+                className="h-10 rounded-md border border-white/15 bg-transparent px-3 text-sm text-white"
+                value={form.audiencePreset}
+                onChange={(e) => {
+                  const preset = e.target.value as AudiencePreset;
+                  setForm({ ...form, ...applyAudiencePreset(preset, form.audienceRules) });
+                }}
+              >
+                <option className="bg-[#013644]" value="everyone">Everyone</option>
+                <option className="bg-[#013644]" value="new">New customers (0 orders)</option>
+                <option className="bg-[#013644]" value="returning">Returning customers</option>
+                <option className="bg-[#013644]" value="lapsed">Lapsed customers</option>
+                <option className="bg-[#013644]" value="custom">Custom segment</option>
+              </select>
+              {form.audiencePreset === "lapsed" && (
+                <div className="grid gap-2">
+                  <Label>Lapsed after (days)</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={form.audienceRules.lapsedAfterDays}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        audienceRules: {
+                          ...form.audienceRules,
+                          lapsedAfterDays: Number(e.target.value) || 30,
+                        },
+                      })
+                    }
+                  />
+                </div>
+              )}
+              {form.audiencePreset === "custom" && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="grid gap-2">
+                    <Label>Lifecycle</Label>
+                    <select
+                      className="h-10 rounded-md border border-white/15 bg-transparent px-3 text-sm text-white"
+                      value={form.audienceRules.lifecycle}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          audience: "segment",
+                          audienceRules: {
+                            ...form.audienceRules,
+                            lifecycle: e.target.value as AudienceLifecycle,
+                          },
+                        })
+                      }
+                    >
+                      <option className="bg-[#013644]" value="all">Any</option>
+                      <option className="bg-[#013644]" value="new">New</option>
+                      <option className="bg-[#013644]" value="returning">Returning</option>
+                      <option className="bg-[#013644]" value="lapsed">Lapsed</option>
+                    </select>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>Restaurant affinity</Label>
+                    <select
+                      className="h-10 rounded-md border border-white/15 bg-transparent px-3 text-sm text-white"
+                      value={form.audienceRules.restaurantAffinity}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          audienceRules: {
+                            ...form.audienceRules,
+                            restaurantAffinity: e.target.value as RestaurantAffinity,
+                          },
+                        })
+                      }
+                    >
+                      <option className="bg-[#013644]" value="any">Any</option>
+                      <option className="bg-[#013644]" value="has_ordered">Has ordered here</option>
+                      <option className="bg-[#013644]" value="never_ordered">Never ordered here</option>
+                    </select>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>Min orders</Label>
+                    <Input
+                      type="number"
+                      value={form.audienceRules.minOrderCount}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          audienceRules: {
+                            ...form.audienceRules,
+                            minOrderCount: Number(e.target.value) || 0,
+                          },
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>Max orders (0 = none)</Label>
+                    <Input
+                      type="number"
+                      value={form.audienceRules.maxOrderCount}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          audienceRules: {
+                            ...form.audienceRules,
+                            maxOrderCount: Number(e.target.value) || 0,
+                          },
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>Min AOV ₹</Label>
+                    <Input
+                      type="number"
+                      value={form.audienceRules.minAov}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          audienceRules: {
+                            ...form.audienceRules,
+                            minAov: Number(e.target.value) || 0,
+                          },
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>Max AOV ₹ (0 = none)</Label>
+                    <Input
+                      type="number"
+                      value={form.audienceRules.maxAov}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          audienceRules: {
+                            ...form.audienceRules,
+                            maxAov: Number(e.target.value) || 0,
+                          },
+                        })
+                      }
+                    />
+                  </div>
+                </div>
+              )}
             </div>
 
             {(form.type === "flat" || form.type === "percent") && (
@@ -763,15 +1098,59 @@ export default function CustomerOffersPage() {
             )}
 
             {form.type === "free_delivery" && (
-              <div className="grid gap-2">
-                <Label>Min order ₹ for free delivery</Label>
-                <Input
-                  type="number"
-                  value={form.minOrderAmount}
-                  onChange={(e) =>
-                    setForm({ ...form, minOrderAmount: Number(e.target.value) })
-                  }
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div className="grid gap-2">
+                  <Label>Unlock when</Label>
+                  <select
+                    className="h-10 rounded-md border border-white/15 bg-transparent px-3 text-sm text-white"
+                    value={form.freeDeliveryUnlock}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        freeDeliveryUnlock: e.target.value as FreeDeliveryUnlock,
+                      })
+                    }
+                  >
+                    <option className="bg-[#013644]" value="min_order">
+                      Min order amount
+                    </option>
+                    <option className="bg-[#013644]" value="commission_cover">
+                      Commission covers delivery
+                    </option>
+                  </select>
+                </div>
+                {form.freeDeliveryUnlock === "min_order" ? (
+                  <div className="grid gap-2">
+                    <Label>Min order ₹ for free delivery</Label>
+                    <Input
+                      type="number"
+                      value={form.minOrderAmount}
+                      onChange={(e) =>
+                        setForm({ ...form, minOrderAmount: Number(e.target.value) })
+                      }
+                    />
+                  </div>
+                ) : (
+                  <div className="grid gap-2">
+                    <Label>Commission × delivery fee</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={20}
+                      step={0.5}
+                      value={form.commissionCoverMultiplier}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          commissionCoverMultiplier: Number(e.target.value) || 2,
+                        })
+                      }
+                    />
+                    <p className="text-xs text-white/50">
+                      Unlocks when restaurant commission ≥ this × delivery fee (e.g. 2×).
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 
@@ -882,8 +1261,33 @@ export default function CustomerOffersPage() {
                   ))}
                 </div>
                 <p className="text-xs text-white/50">
-                  Buy item: {form.buyMenuItemId || "—"} · Get item: {form.getMenuItemId || "same / pick"}
+                  Buy item: {form.buyMenuItemId || "—"}
+                  {form.buyVariantName ? ` (${form.buyVariantName})` : ""} · Get item:{" "}
+                  {form.getMenuItemId || "same / pick"}
+                  {form.getVariantName ? ` (${form.getVariantName})` : ""}
                 </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="grid gap-2">
+                    <Label>Buy variant (optional)</Label>
+                    <Input
+                      placeholder="Exact variant name"
+                      value={form.buyVariantName}
+                      onChange={(e) =>
+                        setForm({ ...form, buyVariantName: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>Get variant (optional)</Label>
+                    <Input
+                      placeholder="Exact variant name"
+                      value={form.getVariantName}
+                      onChange={(e) =>
+                        setForm({ ...form, getVariantName: e.target.value })
+                      }
+                    />
+                  </div>
+                </div>
               </div>
             )}
 
@@ -928,49 +1332,160 @@ export default function CustomerOffersPage() {
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {dishOptions.map((d) => (
-                    <button
-                      key={d.id}
-                      type="button"
-                      className="rounded border border-white/20 px-2 py-1 text-xs text-white"
-                      onClick={() =>
-                        setForm((f) => ({
-                          ...f,
-                          comboItems: f.comboItems.some((c) => c.menuItemId === d.id)
-                            ? f.comboItems
-                            : [
-                                ...f.comboItems,
-                                { menuItemId: d.id, quantity: 1, name: d.name },
-                              ],
-                        }))
-                      }
-                    >
-                      + {d.name} ₹{d.price}
-                    </button>
-                  ))}
-                </div>
-                <ul className="space-y-1 text-sm text-white/80">
-                  {form.comboItems.map((c) => (
-                    <li key={c.menuItemId} className="flex items-center justify-between">
-                      <span>
-                        {c.name || c.menuItemId} ×{c.quantity}
-                      </span>
+                    <div key={d.id} className="flex flex-wrap items-center gap-1">
                       <button
                         type="button"
-                        className="text-red-300"
+                        className="rounded border border-white/20 px-2 py-1 text-xs text-white"
                         onClick={() =>
                           setForm((f) => ({
                             ...f,
-                            comboItems: f.comboItems.filter(
-                              (x) => x.menuItemId !== c.menuItemId,
-                            ),
+                            comboItems: addOrIncrementComboItem(f.comboItems, d),
                           }))
                         }
                       >
-                        Remove
+                        + {d.name} ₹{d.price}
                       </button>
-                    </li>
+                      {(d.variants || []).map((v) => (
+                        <button
+                          key={`${d.id}-${v.name}`}
+                          type="button"
+                          className="rounded border border-white/10 px-2 py-1 text-[11px] text-white/80"
+                          onClick={() =>
+                            setForm((f) => ({
+                              ...f,
+                              comboItems: addOrIncrementComboItem(f.comboItems, d, v.name),
+                            }))
+                          }
+                        >
+                          {v.name} ₹{v.price}
+                        </button>
+                      ))}
+                    </div>
                   ))}
+                </div>
+                <ul className="space-y-2 text-sm text-white/80">
+                  {form.comboItems.map((c, idx) => {
+                    const dish = dishOptions.find((d) => d.id === c.menuItemId);
+                    const unit = comboLinePrice(c, dishOptions);
+                    const lineTotal = unit * Math.max(1, c.quantity);
+                    return (
+                      <li
+                        key={`${c.menuItemId}:${c.variantName}:${idx}`}
+                        className="rounded border border-white/10 p-2"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span>
+                            {c.name || c.menuItemId}
+                            {c.variantName ? ` · ${c.variantName}` : ""}
+                          </span>
+                          <button
+                            type="button"
+                            className="text-red-300"
+                            onClick={() =>
+                              setForm((f) => ({
+                                ...f,
+                                comboItems: f.comboItems.filter((_, i) => i !== idx),
+                              }))
+                            }
+                          >
+                            Remove
+                          </button>
+                        </div>
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            className="h-7 w-7 rounded border border-white/20 text-white"
+                            onClick={() =>
+                              setForm((f) => ({
+                                ...f,
+                                comboItems: f.comboItems.map((item, i) =>
+                                  i === idx
+                                    ? { ...item, quantity: Math.max(1, item.quantity - 1) }
+                                    : item,
+                                ),
+                              }))
+                            }
+                          >
+                            −
+                          </button>
+                          <Input
+                            className="h-8 w-16"
+                            type="number"
+                            min={1}
+                            value={c.quantity}
+                            onChange={(e) =>
+                              setForm((f) => ({
+                                ...f,
+                                comboItems: f.comboItems.map((item, i) =>
+                                  i === idx
+                                    ? {
+                                        ...item,
+                                        quantity: Math.max(1, Number(e.target.value) || 1),
+                                      }
+                                    : item,
+                                ),
+                              }))
+                            }
+                          />
+                          <button
+                            type="button"
+                            className="h-7 w-7 rounded border border-white/20 text-white"
+                            onClick={() =>
+                              setForm((f) => ({
+                                ...f,
+                                comboItems: f.comboItems.map((item, i) =>
+                                  i === idx ? { ...item, quantity: item.quantity + 1 } : item,
+                                ),
+                              }))
+                            }
+                          >
+                            +
+                          </button>
+                          {(dish?.variants?.length ?? 0) > 0 && (
+                            <select
+                              className="h-8 rounded-md border border-white/15 bg-transparent px-2 text-xs text-white"
+                              value={c.variantName}
+                              onChange={(e) =>
+                                setForm((f) => ({
+                                  ...f,
+                                  comboItems: f.comboItems.map((item, i) =>
+                                    i === idx
+                                      ? { ...item, variantName: e.target.value }
+                                      : item,
+                                  ),
+                                }))
+                              }
+                            >
+                              <option className="bg-[#013644]" value="">
+                                Any variant
+                              </option>
+                              {dish?.variants?.map((v) => (
+                                <option key={v.name} className="bg-[#013644]" value={v.name}>
+                                  {v.name} ₹{v.price}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                          <span className="ml-auto text-xs text-white/60">
+                            {c.quantity} × {inr(unit)} = {inr(lineTotal)}
+                          </span>
+                        </div>
+                      </li>
+                    );
+                  })}
                 </ul>
+                {form.comboItems.length > 0 && (
+                  <p className="text-xs text-white/60">
+                    Catalog total{" "}
+                    {inr(
+                      form.comboItems.reduce(
+                        (sum, c) => sum + comboLinePrice(c, dishOptions) * Math.max(1, c.quantity),
+                        0,
+                      ),
+                    )}{" "}
+                    vs combo {inr(form.comboPrice)}
+                  </p>
+                )}
                 <div className="grid gap-2">
                   <Label>Combo offer price ₹</Label>
                   <Input
@@ -980,6 +1495,9 @@ export default function CustomerOffersPage() {
                       setForm({ ...form, comboPrice: Number(e.target.value) })
                     }
                   />
+                  <p className="text-xs text-white/50">
+                    Restaurant commission is taken on this combo selling price, not catalog.
+                  </p>
                 </div>
               </div>
             )}

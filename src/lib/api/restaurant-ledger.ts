@@ -40,11 +40,29 @@ export interface RestaurantLedgerSummary {
     commissionEarned: number;
     commissionParsedCount: number;
     totalGstInWallet?: number;
+    gstToRestaurant?: number;
+    gstToPlatform?: number;
+    pendingCredits?: number;
+    pendingSettlement?: number;
+    withdrawable?: number;
+    walletBalance?: number;
+    nextSettlementAt?: string | null;
+    pendingByDate?: Array<{ amount: number; settleAt: string }>;
     openWithdrawalHold: number;
     withdrawalsByStatus: Record<
       string,
       { total: number; count: number }
     >;
+    period?: {
+      from: string | null;
+      to: string | null;
+      creditCount: number;
+      totalGrossSales: number;
+      totalFoodSales: number;
+      commissionEarned: number;
+      gstToRestaurant: number;
+      gstToPlatform: number;
+    };
   };
 }
 
@@ -64,6 +82,9 @@ export interface RestaurantLedgerTransaction {
   packingAmount?: number | null;
   gstAmount?: number | null;
   gstInRestaurantWallet?: boolean | null;
+  gstDestination?: "restaurant" | "platform" | null;
+  withdrawableAt?: string | null;
+  razorpaySettled?: boolean | null;
   /** Linked withdrawal lifecycle status for payout rows. */
   withdrawalStatus?: WithdrawalStatus | string | null;
   displayStatus?: string | null;
@@ -84,8 +105,17 @@ export interface RestaurantLedgerTransaction {
 
 export async function fetchRestaurantLedger(
   restaurantId: string,
+  params?: {
+    from?: string;
+    to?: string;
+  },
 ): Promise<RestaurantLedgerSummary> {
-  const { data } = await api.get(`/restaurants/${restaurantId}/ledger`);
+  const { data } = await api.get(`/restaurants/${restaurantId}/ledger`, {
+    params: {
+      from: params?.from || undefined,
+      to: params?.to || undefined,
+    },
+  });
   return data.data;
 }
 

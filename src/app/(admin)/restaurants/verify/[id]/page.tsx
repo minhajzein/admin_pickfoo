@@ -32,7 +32,7 @@ import {
 import { useEffect, useMemo, useState, startTransition } from "react";
 import { toast } from "sonner";
 import Link from "next/link";
-import NextImage from "next/image";
+import { CdnImage } from "@/lib/cdn-image";
 import { fetchZones, suggestZoneForPoint } from "@/lib/api/zones";
 import {
   updateRestaurantAvailability,
@@ -94,12 +94,11 @@ const DocumentCard = ({
         {url ? (
           <div className="relative aspect-video rounded-xl bg-black/40 overflow-hidden border border-white/5">
             {isImage ? (
-              <NextImage
+              <CdnImage
                 src={url}
                 alt={title}
                 width={400}
                 height={225}
-                unoptimized
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
               />
             ) : (

@@ -407,11 +407,43 @@ export type CustomerOfferScope = "all" | "restaurants" | "items";
 export type OfferFundingSource = "commission" | "menu_item" | "both";
 export type OfferFundingShareMode = "percent" | "amount";
 export type FreeDeliveryFundingSource = "platform" | "restaurant";
+export type FreeDeliveryUnlock = "min_order" | "commission_cover";
+export type CustomerOfferAudience = "all" | "segment";
+export type AudienceLifecycle = "all" | "new" | "returning" | "lapsed";
+export type RestaurantAffinity = "any" | "has_ordered" | "never_ordered";
 
 export interface AdminCustomerOfferComboItem {
   menuItemId: string;
   quantity: number;
   name?: string;
+  variantName?: string;
+}
+
+export interface AdminOfferAudienceRules {
+  lifecycle: AudienceLifecycle;
+  lapsedAfterDays: number;
+  minOrderCount: number;
+  maxOrderCount: number;
+  minAov: number;
+  maxAov: number;
+  restaurantAffinity: RestaurantAffinity;
+}
+
+export interface AdminOfferLiveMetrics {
+  redemptions: number;
+  uniqueUsers: number;
+  customerSavings: number;
+  gmv: number;
+  platformCost: number;
+}
+
+export interface AdminOfferForecastSnapshot {
+  orderCount: number;
+  campaignPlatformNet: number;
+  campaignPlatformOfferCost: number;
+  campaignCustomerSavings: number;
+  purchaseChancePercent: number;
+  capturedAt?: string | null;
 }
 
 export interface AdminCustomerOffer {
@@ -440,6 +472,8 @@ export interface AdminCustomerOffer {
   getQty: number;
   getDiscountType: "free" | "percent" | "flat";
   getDiscountValue: number;
+  buyVariantName?: string;
+  getVariantName?: string;
   comboRestaurantId: string | null;
   comboItems: AdminCustomerOfferComboItem[];
   comboPrice: number;
@@ -451,6 +485,12 @@ export interface AdminCustomerOffer {
   menuItemShare: number;
   maxDistanceKm: number;
   freeDeliveryFundingSource: FreeDeliveryFundingSource;
+  freeDeliveryUnlock: FreeDeliveryUnlock;
+  commissionCoverMultiplier: number;
+  audience: CustomerOfferAudience;
+  audienceRules: AdminOfferAudienceRules;
+  forecastSnapshot?: AdminOfferForecastSnapshot | null;
+  liveMetrics?: AdminOfferLiveMetrics;
   usageLimit: number;
   usagePerUser: number;
   sendPushOnPublish: boolean;

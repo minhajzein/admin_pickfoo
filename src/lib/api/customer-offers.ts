@@ -19,6 +19,7 @@ export type OfferMenuItemOption = {
   image: string;
   price: number;
   restaurantIds: string[];
+  variants?: { name: string; price: number }[];
 };
 
 export type OfferPreviewPerOrder = {
@@ -102,6 +103,24 @@ export type OfferPreviewResult = {
   analyticsFollowUp?: {
     supported: boolean;
     message: string;
+  };
+  audienceSize?: {
+    matchingUsers: number;
+    explainer: string;
+  };
+  comboEconomics?: {
+    catalogTotal: number;
+    comboPrice: number;
+    comboSave: number;
+    commissionCaptured: number;
+    commissionPercent: number;
+  } | null;
+  forecastSnapshot?: {
+    orderCount: number;
+    campaignPlatformNet: number;
+    campaignPlatformOfferCost: number;
+    campaignCustomerSavings: number;
+    purchaseChancePercent: number;
   };
 };
 

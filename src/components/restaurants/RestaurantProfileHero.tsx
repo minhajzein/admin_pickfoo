@@ -1,6 +1,6 @@
 "use client";
 
-import NextImage from "next/image";
+import { CdnImage } from "@/lib/cdn-image";
 import { MapPin, Star, BadgeCheck, Crown } from "lucide-react";
 
 type RestaurantHeroData = {
@@ -63,11 +63,10 @@ export function RestaurantProfileHero({
   return (
     <div className="relative overflow-hidden rounded-2xl shadow-lg min-h-[220px]">
       {imageUrl ? (
-        <NextImage
+        <CdnImage
           src={imageUrl}
           alt={restaurant.name}
           fill
-          unoptimized
           className="object-cover"
         />
       ) : (

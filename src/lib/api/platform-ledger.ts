@@ -35,6 +35,7 @@ export interface PlatformLedgerEntry {
   cgstAmount?: number;
   /** GST retained by platform when restaurant is not GST-registered */
   platformGst?: number;
+  gstDestination?: "restaurant" | "platform" | null;
   totalAmount?: number | null;
   commissionPercent?: number;
   platformCommission?: number;
@@ -47,6 +48,7 @@ export interface PlatformLedgerTotals {
   avgCommission: number;
   totalGst: number;
   platformGstRetained: number;
+  restaurantGstPaid: number;
 }
 
 export interface WalletStatusBucket {
@@ -70,11 +72,29 @@ export interface PlatformWalletSide {
   withdrawalsByStatus: Record<string, WalletStatusBucket>;
 }
 
+export interface PlatformSettlementBatch {
+  amount: number;
+  settleAt: string;
+}
+
+export interface PlatformBankSettlement {
+  expectedBankBalance: number;
+  collections: number;
+  settledCollections: number;
+  pendingRazorpaySettlement: number;
+  restaurantPendingSettlement: number;
+  restaurantWithdrawalsPaid: number;
+  partnerPayoutsPaid: number;
+  nextSettlementAt: string | null;
+  pendingByDate: PlatformSettlementBatch[];
+}
+
 export interface PlatformWalletSummary {
   availableBalance: number;
   pendingPayouts: number;
   totalCredits: number;
   totalDebits: number;
+  bank?: PlatformBankSettlement | null;
   restaurant: PlatformWalletSide;
   partner: PlatformWalletSide;
 }
@@ -108,12 +128,27 @@ function emptyWalletSide(): PlatformWalletSide {
   };
 }
 
+function emptyBank(): PlatformBankSettlement {
+  return {
+    expectedBankBalance: 0,
+    collections: 0,
+    settledCollections: 0,
+    pendingRazorpaySettlement: 0,
+    restaurantPendingSettlement: 0,
+    restaurantWithdrawalsPaid: 0,
+    partnerPayoutsPaid: 0,
+    nextSettlementAt: null,
+    pendingByDate: [],
+  };
+}
+
 function emptyWallet(): PlatformWalletSummary {
   return {
     availableBalance: 0,
     pendingPayouts: 0,
     totalCredits: 0,
     totalDebits: 0,
+    bank: emptyBank(),
     restaurant: emptyWalletSide(),
     partner: emptyWalletSide(),
   };
@@ -149,6 +184,32 @@ function mapWalletSide(raw: unknown): PlatformWalletSide {
   };
 }
 
+function mapBank(raw: unknown): PlatformBankSettlement {
+  if (!raw || typeof raw !== "object") return emptyBank();
+  const b = raw as Record<string, unknown>;
+  const batches = Array.isArray(b.pendingByDate) ? b.pendingByDate : [];
+  return {
+    expectedBankBalance: Number(b.expectedBankBalance) || 0,
+    collections: Number(b.collections) || 0,
+    settledCollections: Number(b.settledCollections) || 0,
+    pendingRazorpaySettlement: Number(b.pendingRazorpaySettlement) || 0,
+    restaurantPendingSettlement: Number(b.restaurantPendingSettlement) || 0,
+    restaurantWithdrawalsPaid: Number(b.restaurantWithdrawalsPaid) || 0,
+    partnerPayoutsPaid: Number(b.partnerPayoutsPaid) || 0,
+    nextSettlementAt:
+      typeof b.nextSettlementAt === "string" ? b.nextSettlementAt : null,
+    pendingByDate: batches
+      .map((row) => {
+        const r = row as { amount?: number; settleAt?: string };
+        return {
+          amount: Number(r.amount) || 0,
+          settleAt: String(r.settleAt || ""),
+        };
+      })
+      .filter((row) => row.amount > 0 && row.settleAt),
+  };
+}
+
 function mapWallet(raw: unknown): PlatformWalletSummary {
   if (!raw || typeof raw !== "object") return emptyWallet();
   const walletRaw = raw as Record<string, unknown>;
@@ -157,6 +218,7 @@ function mapWallet(raw: unknown): PlatformWalletSummary {
     pendingPayouts: Number(walletRaw.pendingPayouts) || 0,
     totalCredits: Number(walletRaw.totalCredits) || 0,
     totalDebits: Number(walletRaw.totalDebits) || 0,
+    bank: mapBank(walletRaw.bank),
     restaurant: mapWalletSide(walletRaw.restaurant),
     partner: mapWalletSide(walletRaw.partner),
   };
@@ -209,6 +271,7 @@ export async function fetchPlatformLedger(params?: {
         avgCommission: Number(filtered.avgCommission) || 0,
         totalGst: Number(filtered.totalGst) || 0,
         platformGstRetained: Number(filtered.platformGstRetained) || 0,
+        restaurantGstPaid: Number(filtered.restaurantGstPaid) || 0,
       },
       allTime: {
         totalCommission: Number(allTime.totalCommission) || 0,
@@ -216,6 +279,7 @@ export async function fetchPlatformLedger(params?: {
         avgCommission: Number(allTime.avgCommission) || 0,
         totalGst: Number(allTime.totalGst) || 0,
         platformGstRetained: Number(allTime.platformGstRetained) || 0,
+        restaurantGstPaid: Number(allTime.restaurantGstPaid) || 0,
       },
       wallet: walletRaw ? mapWallet(walletRaw) : null,
     },

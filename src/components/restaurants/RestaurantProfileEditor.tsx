@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import NextImage from "next/image";
+import { CdnImage } from "@/lib/cdn-image";
 import { ImagePlus, Loader2, Save, Store } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -59,11 +59,10 @@ function ImagePicker({
       >
         {previewUrl ? (
           <div className={`relative ${aspectClass}`}>
-            <NextImage
+            <CdnImage
               src={previewUrl}
               alt={label}
               fill
-              unoptimized
               className="object-cover"
             />
             <div className="absolute inset-0 flex items-end bg-linear-to-t from-black/70 to-transparent p-3">

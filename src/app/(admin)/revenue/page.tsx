@@ -4,10 +4,10 @@ import { startTransition, useMemo, useState, type ReactNode } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import {
-  ArrowDownLeft,
   ArrowUpRight,
   Banknote,
   Clock,
+  Landmark,
   Loader2,
   Percent,
   Wallet,
@@ -25,7 +25,16 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ListPagination } from "@/components/ui/list-pagination";
+import { PendingSettlementBatches } from "@/components/ledger/PendingSettlementBatches";
 import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
+import {
+  DATE_PRESETS,
+  periodLabelFor,
+  rangeForPreset,
+  startOfLocalDay,
+  toYmd,
+  type DatePreset,
+} from "@/lib/date-presets";
 import {
   fetchPlatformLedger,
   fetchPlatformWallet,
@@ -40,82 +49,12 @@ const money = new Intl.NumberFormat("en-IN", {
   maximumFractionDigits: 2,
 });
 
-type DatePreset =
-  | "all"
-  | "today"
-  | "yesterday"
-  | "this_week"
-  | "this_month"
-  | "this_year"
-  | "custom";
-
-const PRESETS: Array<{ id: DatePreset; label: string }> = [
-  { id: "all", label: "All time" },
-  { id: "today", label: "Today" },
-  { id: "yesterday", label: "Yesterday" },
-  { id: "this_week", label: "This week" },
-  { id: "this_month", label: "This month" },
-  { id: "this_year", label: "This year" },
-  { id: "custom", label: "Custom" },
-];
-
 const KIND_TABS: Array<{ id: PlatformLedgerKind; label: string }> = [
   { id: "all", label: "All activity" },
   { id: "commission", label: "Commission credits" },
   { id: "restaurant_withdrawal", label: "Restaurant withdrawals" },
   { id: "partner_payout", label: "Partner payouts" },
 ];
-
-function toYmd(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-function startOfLocalDay(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
-}
-
-/** Monday as start of week (local calendar). */
-function startOfWeekMonday(d: Date): Date {
-  const day = d.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  return startOfLocalDay(
-    new Date(d.getFullYear(), d.getMonth(), d.getDate() + diff),
-  );
-}
-
-function rangeForPreset(preset: DatePreset): { from?: string; to?: string } {
-  const now = new Date();
-  const today = startOfLocalDay(now);
-
-  switch (preset) {
-    case "all":
-      return {};
-    case "today":
-      return { from: toYmd(today), to: toYmd(today) };
-    case "yesterday": {
-      const y = new Date(today);
-      y.setDate(y.getDate() - 1);
-      return { from: toYmd(y), to: toYmd(y) };
-    }
-    case "this_week": {
-      const start = startOfWeekMonday(today);
-      return { from: toYmd(start), to: toYmd(today) };
-    }
-    case "this_month": {
-      const start = new Date(today.getFullYear(), today.getMonth(), 1);
-      return { from: toYmd(start), to: toYmd(today) };
-    }
-    case "this_year": {
-      const start = new Date(today.getFullYear(), 0, 1);
-      return { from: toYmd(start), to: toYmd(today) };
-    }
-    default:
-      return {};
-  }
-}
 
 function formatDate(iso?: string | null) {
   if (!iso) return "—";
@@ -189,6 +128,17 @@ function entryPlatformGst(row: PlatformLedgerEntry): number | null {
   if (entryKind(row) !== "commission") return null;
   const g = Number(row.platformGst);
   if (Number.isFinite(g) && g > 0) return g;
+  return null;
+}
+
+function entryGstDestination(
+  row: PlatformLedgerEntry,
+): "restaurant" | "platform" | null {
+  if (row.gstDestination) return row.gstDestination;
+  const platformGst = entryPlatformGst(row);
+  if (platformGst != null && platformGst > 0) return "platform";
+  const gst = entryGst(row);
+  if (gst != null && gst > 0) return "restaurant";
   return null;
 }
 
@@ -307,14 +257,7 @@ export default function RevenuePage() {
   }, [preset, customFrom, customTo]);
 
   const periodLabel = useMemo(() => {
-    if (preset === "all") return "All time";
-    if (preset === "custom") {
-      if (customFrom && customTo) return `${customFrom} → ${customTo}`;
-      if (customFrom) return `From ${customFrom}`;
-      if (customTo) return `Until ${customTo}`;
-      return "Custom range";
-    }
-    return PRESETS.find((p) => p.id === preset)?.label ?? "Period";
+    return periodLabelFor(preset, customFrom, customTo);
   }, [preset, customFrom, customTo]);
 
   // Heavy wallet aggregates — independent of date/kind filters so clicks stay snappy.
@@ -330,7 +273,7 @@ export default function RevenuePage() {
   });
 
   // All-time commission — changes rarely; keep off the filter click path.
-  const { data: allTimeData, isLoading: isAllTimeLoading } = useQuery({
+  const { data: allTimeData } = useQuery({
     queryKey: ["platform-ledger-all-time"],
     queryFn: () =>
       fetchPlatformLedger({
@@ -371,6 +314,7 @@ export default function RevenuePage() {
   const total = data?.total ?? 0;
   const totalPages = data?.totalPages ?? 1;
   const showListFetching = isFetching && !isLoading;
+  const bank = wallet?.bank;
 
   const selectPreset = (next: DatePreset) => {
     startTransition(() => {
@@ -404,8 +348,8 @@ export default function RevenuePage() {
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Platform ledger</h2>
           <p className="text-sm text-white/50">
-            Credit / debit view of commission, restaurant withdrawals, and
-            partner payouts — with wallet available and payout pending.
+            Expected Razorpay bank balance, pending T+2 settlements, GST to
+            platform vs GST-registered restaurants, and payout activity.
           </p>
         </div>
         {showListFetching || isWalletFetching ? (
@@ -416,20 +360,23 @@ export default function RevenuePage() {
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Card className="border-0 bg-[#98E32F] text-[#013644] overflow-hidden">
           <CardContent className="relative p-5">
-            <Wallet className="absolute right-3 top-3 opacity-20" size={48} />
+            <Landmark className="absolute right-3 top-3 opacity-20" size={48} />
             <p className="text-[10px] font-black uppercase tracking-widest opacity-70">
-              Available in wallet
+              Expected in platform bank
             </p>
             <p className="mt-2 text-3xl font-black">
               {isWalletLoading ? (
                 <Loader2 className="h-7 w-7 animate-spin" />
               ) : (
-                formatMoney(wallet?.availableBalance)
+                formatMoney(bank?.expectedBankBalance)
               )}
             </p>
             <p className="mt-2 text-[11px] opacity-70">
-              Restaurants {formatMoney(wallet?.restaurant.availableBalance)} ·
-              Partners {formatMoney(wallet?.partner.availableBalance)}
+              Settled collections {formatMoney(bank?.settledCollections)} −
+              paid out {formatMoney(
+                (bank?.restaurantWithdrawalsPaid ?? 0) +
+                  (bank?.partnerPayoutsPaid ?? 0),
+              )}
             </p>
           </CardContent>
         </Card>
@@ -439,23 +386,19 @@ export default function RevenuePage() {
             <div className="flex items-center gap-2 text-white/40">
               <Clock size={16} className="text-amber-300" />
               <p className="text-[10px] font-bold uppercase tracking-widest">
-                Payout pending
+                Pending Razorpay settlement
               </p>
             </div>
             <p className="mt-2 text-2xl font-bold text-amber-200">
               {isWalletLoading ? (
                 <Loader2 className="h-6 w-6 animate-spin text-[#98E32F]" />
               ) : (
-                formatMoney(wallet?.pendingPayouts)
+                formatMoney(bank?.pendingRazorpaySettlement)
               )}
             </p>
             <p className="mt-2 text-[11px] text-white/35">
-              Restaurant{" "}
-              {formatMoney(
-                wallet?.restaurant.openWithdrawalHold ??
-                  wallet?.restaurant.pendingPayouts,
-              )}{" "}
-              · Partner {formatMoney(wallet?.partner.pendingPayouts)}
+              Still with Razorpay (T+2) · restaurant wallets{" "}
+              {formatMoney(bank?.restaurantPendingSettlement)}
             </p>
           </CardContent>
         </Card>
@@ -463,21 +406,21 @@ export default function RevenuePage() {
         <Card className="border-white/10 bg-white/5 text-white">
           <CardContent className="p-5">
             <div className="flex items-center gap-2 text-white/40">
-              <ArrowUpRight size={16} className="text-[#98E32F]" />
+              <Percent size={16} className="text-amber-300" />
               <p className="text-[10px] font-bold uppercase tracking-widest">
-                Total credits
+                GST to platform · {periodLabel}
               </p>
             </div>
-            <p className="mt-2 text-2xl font-bold">
-              {isWalletLoading ? (
+            <p className="mt-2 text-2xl font-bold text-amber-200">
+              {isLoading ? (
                 <Loader2 className="h-6 w-6 animate-spin text-[#98E32F]" />
               ) : (
-                formatMoney(wallet?.totalCredits)
+                formatMoney(filtered?.platformGstRetained)
               )}
             </p>
             <p className="mt-2 text-[11px] text-white/35">
-              Restaurant {wallet?.restaurant.creditCount ?? 0} · Partner{" "}
-              {wallet?.partner.creditCount ?? 0} entries
+              Collected from restaurants without a valid GSTIN · all time{" "}
+              {formatMoney(allTime?.platformGstRetained)}
             </p>
           </CardContent>
         </Card>
@@ -485,28 +428,54 @@ export default function RevenuePage() {
         <Card className="border-white/10 bg-white/5 text-white">
           <CardContent className="p-5">
             <div className="flex items-center gap-2 text-white/40">
-              <ArrowDownLeft size={16} className="text-red-300" />
+              <Percent size={16} className="text-[#98E32F]" />
               <p className="text-[10px] font-bold uppercase tracking-widest">
-                Total debits
+                GST to restaurants · {periodLabel}
               </p>
             </div>
-            <p className="mt-2 text-2xl font-bold">
-              {isWalletLoading ? (
+            <p className="mt-2 text-2xl font-bold text-[#98E32F]">
+              {isLoading ? (
                 <Loader2 className="h-6 w-6 animate-spin text-[#98E32F]" />
               ) : (
-                formatMoney(wallet?.totalDebits)
+                formatMoney(filtered?.restaurantGstPaid)
               )}
             </p>
             <p className="mt-2 text-[11px] text-white/35">
-              Withdrawals paid{" "}
-              {formatMoney(wallet?.restaurant.withdrawalsPaid)} · Partner paid{" "}
-              {formatMoney(wallet?.partner.payoutsPaid)}
+              Paid into wallets of GST-registered restaurants · all time{" "}
+              {formatMoney(allTime?.restaurantGstPaid)}
             </p>
           </CardContent>
         </Card>
       </div>
 
+      {bank?.pendingByDate && bank.pendingByDate.length > 0 ? (
+        <Card className="border-amber-500/20 bg-white/5 text-white">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold text-amber-200">
+              Razorpay settlement batches
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <PendingSettlementBatches batches={bank.pendingByDate} />
+          </CardContent>
+        </Card>
+      ) : null}
+
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+        <MiniStat
+          label="Owed in wallets"
+          value={formatMoney(wallet?.availableBalance)}
+          hint={`Restaurants ${formatMoney(wallet?.restaurant.availableBalance)} · Partners ${formatMoney(wallet?.partner.availableBalance)}`}
+          loading={isWalletLoading}
+          icon={<Wallet size={14} className="text-[#98E32F]" />}
+        />
+        <MiniStat
+          label="Payout pending"
+          value={formatMoney(wallet?.pendingPayouts)}
+          hint={`Restaurant ${formatMoney(wallet?.restaurant.openWithdrawalHold ?? wallet?.restaurant.pendingPayouts)} · Partner ${formatMoney(wallet?.partner.pendingPayouts)}`}
+          loading={isWalletLoading}
+          icon={<Clock size={14} className="text-amber-300" />}
+        />
         <MiniStat
           label="Restaurant withdrawals paid"
           value={formatMoney(wallet?.restaurant.withdrawalsPaid)}
@@ -529,30 +498,16 @@ export default function RevenuePage() {
           icon={<ArrowUpRight size={14} className="text-[#98E32F]" />}
         />
         <MiniStat
-          label={`GST on orders · ${periodLabel}`}
+          label={`GST collected · ${periodLabel}`}
           value={formatMoney(filtered?.totalGst)}
-          hint={`Platform retained ${formatMoney(filtered?.platformGstRetained)}`}
+          hint={`Platform ${formatMoney(filtered?.platformGstRetained)} · restaurants ${formatMoney(filtered?.restaurantGstPaid)}`}
           loading={isLoading}
-          icon={<Percent size={14} className="text-amber-300" />}
-        />
-        <MiniStat
-          label="Commission · All time"
-          value={formatMoney(allTime?.totalCommission)}
-          hint={`${allTime?.orderCount ?? 0} orders · avg ${formatMoney(allTime?.avgCommission)}`}
-          loading={isAllTimeLoading}
-          icon={<ArrowUpRight size={14} className="text-amber-300" />}
-        />
-        <MiniStat
-          label="GST · All time"
-          value={formatMoney(allTime?.totalGst)}
-          hint={`Platform retained ${formatMoney(allTime?.platformGstRetained)}`}
-          loading={isAllTimeLoading}
           icon={<Percent size={14} className="text-sky-300" />}
         />
       </div>
 
       <div className="flex flex-wrap gap-2">
-        {PRESETS.map((p) => (
+        {DATE_PRESETS.map((p) => (
           <Button
             key={p.id}
             type="button"
@@ -676,7 +631,7 @@ export default function RevenuePage() {
                     const amount = entryAmount(row);
                     const commission = entryCommission(row);
                     const gst = entryGst(row);
-                    const platformGst = entryPlatformGst(row);
+                    const gstDestination = entryGstDestination(row);
                     const kindKey = entryKind(row);
                     const href = entryHref(row);
                     const amountClass =
@@ -739,14 +694,20 @@ export default function RevenuePage() {
                           {formatMoney(amount)}
                         </TableCell>
                         <TableCell className="text-right text-sm tabular-nums text-sky-200/90">
-                          {gst != null ? (
+                          {gst != null && gst > 0 ? (
                             <div className="flex flex-col items-end gap-0.5">
                               <span>{formatMoney(gst)}</span>
-                              {platformGst != null ? (
-                                <span className="text-[10px] text-amber-200/80">
-                                  platform {formatMoney(platformGst)}
-                                </span>
-                              ) : null}
+                              <span
+                                className={
+                                  gstDestination === "platform"
+                                    ? "text-[10px] text-amber-200/80"
+                                    : "text-[10px] text-[#98E32F]/80"
+                                }
+                              >
+                                {gstDestination === "platform"
+                                  ? "to platform"
+                                  : "to restaurant"}
+                              </span>
                             </div>
                           ) : (
                             "—"
@@ -774,11 +735,12 @@ export default function RevenuePage() {
       </Card>
 
       <p className="text-xs text-white/40">
-        Available = restaurant + partner wallet balances still unpaid. Payout
-        pending = open restaurant withdrawals + open partner payouts. Amount is
-        the full customer payment (includes GST). Platform GST is retained when
-        the restaurant is not GST-registered; otherwise GST stays with the
-        restaurant. Commission is food × restaurant %.
+        Expected bank = Razorpay T+2 settled customer collections minus
+        restaurant withdrawals and partner payouts already marked paid. Pending
+        settlement is still with Razorpay. GST collected from customers is split:
+        platform keeps GST when the restaurant has no valid GSTIN; otherwise GST
+        is paid into the restaurant wallet. Date filters apply to commission, GST,
+        and ledger entries. Bank and pending settlement are live snapshots.
       </p>
     </div>
   );
