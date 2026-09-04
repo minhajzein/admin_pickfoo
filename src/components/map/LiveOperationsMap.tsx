@@ -22,7 +22,7 @@ import type {
   ExpressionSpecification,
   MapLayerMouseEvent,
 } from "mapbox-gl";
-import "mapbox-gl/dist/mapbox-gl.css";
+import { mapboxMapLib } from "@/lib/mapbox";
 import type {
   LiveMapPartnerMarker,
   LiveMapRestaurantMarker,
@@ -60,6 +60,7 @@ function LiveOperationsMap({
   const mapRef = useRef<MapRef>(null);
   const [selected, setSelected] = useState<SelectedMarker | null>(null);
   const [cursor, setCursor] = useState<"grab" | "pointer">("grab");
+  const [mapError, setMapError] = useState<string | null>(null);
   const hasFittedRef = useRef(false);
 
   const partnersById = useMemo(() => {
@@ -226,26 +227,40 @@ function LiveOperationsMap({
 
   const handleMouseEnter = useCallback(() => setCursor("pointer"), []);
   const handleMouseLeave = useCallback(() => setCursor("grab"), []);
+  const handleMapLoad = useCallback(() => {
+    mapRef.current?.resize();
+  }, []);
+  const handleMapError = useCallback((event: { target: unknown; error?: { message?: string } }) => {
+    if (event.target) return;
+    setMapError(event.error?.message || "Map failed to initialize");
+  }, []);
 
   return (
     <div className="relative h-[min(72vh,760px)] min-h-[420px] overflow-hidden rounded-xl border border-white/10">
+      {mapError ? (
+        <div className="absolute inset-0 z-10 flex items-center justify-center p-6 text-center text-sm text-amber-200">
+          Map failed to load. {mapError}
+        </div>
+      ) : null}
       <MapGL
         ref={mapRef}
+        mapLib={mapboxMapLib}
         mapboxAccessToken={accessToken}
         initialViewState={WAYANAD_VIEW}
         mapStyle="mapbox://styles/mapbox/streets-v12"
         interactiveLayerIds={INTERACTIVE_LAYER_IDS}
         cursor={cursor}
+        onLoad={handleMapLoad}
+        onError={handleMapError}
         onClick={handleMapClick}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         dragRotate={false}
         pitchWithRotate={false}
-        reuseMaps
         attributionControl={false}
         fadeDuration={0}
         renderWorldCopies={false}
-        style={{ width: "100%", height: "100%" }}
+        style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
       >
         <NavigationControl position="top-right" showCompass={false} />
 

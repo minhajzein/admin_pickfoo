@@ -7,11 +7,11 @@ import Map, {
   Source,
   type MapRef,
 } from "react-map-gl/mapbox";
-import mapboxgl, {
+import {
   type Map as MapboxMap,
   type MapLayerMouseEvent,
 } from "mapbox-gl";
-import "mapbox-gl/dist/mapbox-gl.css";
+import { mapboxMapLib } from "@/lib/mapbox";
 import MapboxDraw from "@mapbox/mapbox-gl-draw";
 import "@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css";
 import type {
@@ -194,8 +194,9 @@ export default function ZoneMapEditor({
   const handleLoad = useCallback(
     (e: { target: MapboxMap }) => {
       const map = e.target;
+      map.resize();
       map.addControl(
-        new mapboxgl.AttributionControl({ compact: true }),
+        new mapboxMapLib.AttributionControl({ compact: true }),
         "bottom-right",
       );
       const draw = new MapboxDraw({
@@ -360,9 +361,10 @@ export default function ZoneMapEditor({
     <div className="relative h-full min-h-0 w-full">
       <Map
         ref={mapRef}
+        mapLib={mapboxMapLib}
         mapboxAccessToken={accessToken}
         initialViewState={WAYANAD_VIEW}
-        style={{ width: "100%", height: "100%" }}
+        style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
         mapStyle="mapbox://styles/mapbox/streets-v12"
         attributionControl={false}
         onLoad={handleLoad}

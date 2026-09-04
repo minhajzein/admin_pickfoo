@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "mapbox-gl/dist/mapbox-gl.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -173,4 +174,16 @@
   *::-webkit-scrollbar-corner {
     background: var(--scrollbar-corner);
   }
+}
+
+/* Mapbox: fill the relatively-positioned admin containers */
+.mapboxgl-map {
+  width: 100%;
+  height: 100%;
+}
+
+.mapboxgl-canvas-container,
+.mapboxgl-canvas {
+  width: 100%;
+  height: 100%;
 }

@@ -10,7 +10,7 @@ import MapGL, {
   type MapRef,
 } from "react-map-gl/mapbox";
 import type { LineLayerSpecification } from "mapbox-gl";
-import "mapbox-gl/dist/mapbox-gl.css";
+import { mapboxMapLib } from "@/lib/mapbox";
 import { Loader2, MapPin, Store } from "lucide-react";
 import {
   fetchDispatchOrderRoute,
@@ -145,9 +145,10 @@ export default function OrderRouteMap({ orderRef }: { orderRef: string }) {
           </p>
         </div>
       </div>
-      <div className="h-[320px] overflow-hidden rounded-lg border border-white/10">
+      <div className="relative h-[320px] overflow-hidden rounded-lg border border-white/10">
         <MapGL
           ref={mapRef}
+          mapLib={mapboxMapLib}
           mapboxAccessToken={token}
           initialViewState={{
             longitude: route.origin.lng,
@@ -155,7 +156,11 @@ export default function OrderRouteMap({ orderRef }: { orderRef: string }) {
             zoom: 12,
           }}
           mapStyle="mapbox://styles/mapbox/streets-v12"
-          onLoad={() => fitRoute(mapRef.current, route)}
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
+          onLoad={() => {
+            mapRef.current?.resize();
+            fitRoute(mapRef.current, route);
+          }}
         >
           <NavigationControl position="top-right" />
           {routeGeoJson ? (
