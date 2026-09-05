@@ -25,7 +25,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ListPagination } from "@/components/ui/list-pagination";
-import { PendingSettlementBatches } from "@/components/ledger/PendingSettlementBatches";
+import {
+  formatSettleDay,
+  PendingSettlementBatches,
+} from "@/components/ledger/PendingSettlementBatches";
 import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import {
   DATE_PRESETS,
@@ -393,9 +396,9 @@ export default function RevenuePage() {
         ) : null}
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Card className="border-0 bg-[#98E32F] text-[#013644] overflow-hidden">
-          <CardContent className="relative p-5">
+      <div className="grid items-stretch gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Card className="h-full overflow-hidden border-0 bg-[#98E32F] text-[#013644]">
+          <CardContent className="relative flex h-full flex-1 flex-col p-5">
             <Landmark className="absolute right-3 top-3 opacity-20" size={48} />
             <p className="text-[10px] font-black uppercase tracking-widest opacity-70">
               Expected in platform bank
@@ -407,7 +410,7 @@ export default function RevenuePage() {
                 formatMoney(bank?.expectedBankBalance)
               )}
             </p>
-            <p className="mt-2 text-[11px] opacity-70">
+            <p className="mt-auto pt-2 text-[11px] opacity-70">
               Settled collections {formatMoney(bank?.settledCollections)} −
               paid out{" "}
               {formatMoney(
@@ -418,8 +421,8 @@ export default function RevenuePage() {
           </CardContent>
         </Card>
 
-        <Card className="border-white/10 bg-white/5 text-white">
-          <CardContent className="p-5">
+        <Card className="h-full border-white/10 bg-white/5 text-white">
+          <CardContent className="flex h-full flex-1 flex-col p-5">
             <div className="flex items-center gap-2 text-white/40">
               <Clock size={16} className="text-amber-300" />
               <p className="text-[10px] font-bold uppercase tracking-widest">
@@ -433,22 +436,16 @@ export default function RevenuePage() {
                 formatMoney(bank?.pendingRazorpaySettlement)
               )}
             </p>
-            <p className="mt-2 text-[11px] text-white/35">
-              Matches Razorpay available (T+2 not in bank yet)
+            <p className="mt-auto pt-2 text-[11px] text-white/35">
               {bank?.pendingByDate?.[0]
-                ? ` · next ${formatMoney(bank.pendingByDate[0].amount)}`
-                : ""}
+                ? `Next ${formatSettleDay(bank.pendingByDate[0].settleAt)} · ${formatMoney(bank.pendingByDate[0].amount)}`
+                : "Matches Razorpay available (T+2 not in bank yet)"}
             </p>
-            {bank?.pendingByDate && bank.pendingByDate.length > 0 ? (
-              <div className="mt-3">
-                <PendingSettlementBatches batches={bank.pendingByDate} />
-              </div>
-            ) : null}
           </CardContent>
         </Card>
 
-        <Card className="border-white/10 bg-white/5 text-white">
-          <CardContent className="p-5">
+        <Card className="h-full border-white/10 bg-white/5 text-white">
+          <CardContent className="flex h-full flex-1 flex-col p-5">
             <div className="flex items-center gap-2 text-white/40">
               <Percent size={16} className="text-amber-300" />
               <p className="text-[10px] font-bold uppercase tracking-widest">
@@ -462,15 +459,15 @@ export default function RevenuePage() {
                 formatMoney(periodGst.platform)
               )}
             </p>
-            <p className="mt-2 text-[11px] text-white/35">
+            <p className="mt-auto pt-2 text-[11px] text-white/35">
               No GSTIN · retained by PickFoo · all time{" "}
               {formatMoney(allTimeGst.platform)}
             </p>
           </CardContent>
         </Card>
 
-        <Card className="border-white/10 bg-white/5 text-white">
-          <CardContent className="p-5">
+        <Card className="h-full border-white/10 bg-white/5 text-white">
+          <CardContent className="flex h-full flex-1 flex-col p-5">
             <div className="flex items-center gap-2 text-white/40">
               <Percent size={16} className="text-[#98E32F]" />
               <p className="text-[10px] font-bold uppercase tracking-widest">
@@ -484,13 +481,36 @@ export default function RevenuePage() {
                 formatMoney(periodGst.restaurant)
               )}
             </p>
-            <p className="mt-2 text-[11px] text-white/35">
+            <p className="mt-auto pt-2 text-[11px] text-white/35">
               Valid GSTIN wallet credit · all time{" "}
               {formatMoney(allTimeGst.restaurant)}
             </p>
           </CardContent>
         </Card>
       </div>
+
+      {bank?.pendingByDate && bank.pendingByDate.length > 0 ? (
+        <Card className="border-amber-500/20 bg-white/5 text-white">
+          <CardContent className="p-4 sm:p-5">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-white/50">
+                <Clock size={16} className="text-amber-300" />
+                <p className="text-[10px] font-bold uppercase tracking-widest">
+                  Upcoming Razorpay settlements
+                </p>
+              </div>
+              <p className="text-[11px] text-white/35">
+                T+2 not in bank yet · {bank.pendingByDate.length}{" "}
+                {bank.pendingByDate.length === 1 ? "batch" : "batches"}
+              </p>
+            </div>
+            <PendingSettlementBatches
+              batches={bank.pendingByDate}
+              layout="row"
+            />
+          </CardContent>
+        </Card>
+      ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
         <MiniStat

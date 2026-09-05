@@ -32,7 +32,10 @@ import {
   type WithdrawalStatus,
 } from "@/lib/api/withdrawals";
 import { WithdrawalAccountDetails } from "@/components/withdrawals/WithdrawalAccountDetails";
-import { PendingSettlementBatches } from "@/components/ledger/PendingSettlementBatches";
+import {
+  formatSettleDay,
+  PendingSettlementBatches,
+} from "@/components/ledger/PendingSettlementBatches";
 import {
   DATE_PRESETS,
   periodLabelFor,
@@ -485,59 +488,53 @@ export default function RestaurantLedgerPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        <Card className="bg-[#98E32F] border-0 text-[#013644] overflow-hidden">
-          <CardContent className="p-5 relative">
+      <div className="grid grid-cols-1 items-stretch gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Card className="h-full overflow-hidden border-0 bg-[#98E32F] text-[#013644]">
+          <CardContent className="relative flex h-full flex-1 flex-col p-5">
             <Wallet className="absolute right-3 top-3 opacity-20" size={48} />
             <p className="text-[10px] font-black uppercase tracking-widest opacity-70">
               Withdrawable
             </p>
-            <p className="text-3xl font-black mt-2">
+            <p className="mt-2 text-3xl font-black">
               {inr(withdrawable)}
             </p>
-            <p className="text-[11px] mt-2 opacity-70">
+            <p className="mt-auto pt-2 text-[11px] opacity-70">
               Wallet {inr(summary.walletBalance ?? summary.settledBalance)} ·
               pending settlement {inr(pendingSettlement)}
             </p>
           </CardContent>
         </Card>
 
-        <Card className="bg-white/5 border-white/10 text-white">
-          <CardContent className="p-5">
+        <Card className="h-full border-white/10 bg-white/5 text-white">
+          <CardContent className="flex h-full flex-1 flex-col p-5">
             <div className="flex items-center gap-2 text-white/40">
               <Clock size={16} className="text-amber-300" />
               <p className="text-[10px] font-bold uppercase tracking-widest">
                 Pending Razorpay settlement
               </p>
             </div>
-            <p className="text-2xl font-bold mt-2 text-amber-200">
+            <p className="mt-2 text-2xl font-bold text-amber-200">
               {inr(pendingSettlement)}
             </p>
-            <p className="text-[11px] text-white/35 mt-2">
-              T+2 still with Razorpay
-              {summary.pendingCredits
-                ? ` · ${inr(summary.pendingCredits)} awaiting pickup`
-                : ""}
+            <p className="mt-auto pt-2 text-[11px] text-white/35">
+              {pendingBatches[0]
+                ? `Next ${formatSettleDay(pendingBatches[0].settleAt)} · ${inr(pendingBatches[0].amount)}`
+                : summary.pendingCredits
+                  ? `${inr(summary.pendingCredits)} awaiting pickup`
+                  : "T+2 still with Razorpay"}
             </p>
-            <div className="mt-3">
-              <PendingSettlementBatches
-                batches={pendingBatches}
-                restaurantName={restaurant.name}
-                emptyLabel="No upcoming settlement dates"
-              />
-            </div>
           </CardContent>
         </Card>
 
-        <Card className="bg-white/5 border-white/10 text-white">
-          <CardContent className="p-5">
+        <Card className="h-full border-white/10 bg-white/5 text-white">
+          <CardContent className="flex h-full flex-1 flex-col p-5">
             <div className="flex items-center gap-2 text-white/40">
               <Percent size={16} className="text-[#98E32F]" />
               <p className="text-[10px] font-bold uppercase tracking-widest">
                 GST to restaurant · {periodLabel}
               </p>
             </div>
-            <p className="text-2xl font-bold mt-2 text-[#98E32F]">
+            <p className="mt-2 text-2xl font-bold text-[#98E32F]">
               {inr(
                 datePreset === "all"
                   ? (summary.gstToRestaurant ??
@@ -549,22 +546,22 @@ export default function RestaurantLedgerPage() {
                       0),
               )}
             </p>
-            <p className="text-[11px] text-white/35 mt-2">
+            <p className="mt-auto pt-2 text-[11px] text-white/35">
               Valid GSTIN wallet credit · all time{" "}
               {inr(summary.gstToRestaurant ?? summary.totalGstInWallet ?? 0)}
             </p>
           </CardContent>
         </Card>
 
-        <Card className="bg-white/5 border-white/10 text-white">
-          <CardContent className="p-5">
+        <Card className="h-full border-white/10 bg-white/5 text-white">
+          <CardContent className="flex h-full flex-1 flex-col p-5">
             <div className="flex items-center gap-2 text-white/40">
               <Percent size={16} className="text-amber-300" />
               <p className="text-[10px] font-bold uppercase tracking-widest">
                 GST to platform · {periodLabel}
               </p>
             </div>
-            <p className="text-2xl font-bold mt-2 text-amber-200">
+            <p className="mt-2 text-2xl font-bold text-amber-200">
               {inr(
                 datePreset === "all"
                   ? (summary.gstToPlatform ?? 0)
@@ -573,13 +570,40 @@ export default function RestaurantLedgerPage() {
                       0),
               )}
             </p>
-            <p className="text-[11px] text-white/35 mt-2">
+            <p className="mt-auto pt-2 text-[11px] text-white/35">
               Retained by PickFoo (no valid GSTIN) · all time{" "}
               {inr(summary.gstToPlatform ?? 0)}
             </p>
           </CardContent>
         </Card>
       </div>
+
+      {pendingBatches.length > 0 ? (
+        <Card className="border-amber-500/20 bg-white/5 text-white">
+          <CardContent className="p-4 sm:p-5">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-white/50">
+                <Clock size={16} className="text-amber-300" />
+                <p className="text-[10px] font-bold uppercase tracking-widest">
+                  Upcoming Razorpay settlements
+                </p>
+              </div>
+              <p className="text-[11px] text-white/35">
+                T+2 still with Razorpay
+                {summary.pendingCredits
+                  ? ` · ${inr(summary.pendingCredits)} awaiting pickup`
+                  : ""}
+              </p>
+            </div>
+            <PendingSettlementBatches
+              batches={pendingBatches}
+              restaurantName={restaurant.name}
+              layout="row"
+              emptyLabel="No upcoming settlement dates"
+            />
+          </CardContent>
+        </Card>
+      ) : null}
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card className="bg-white/5 border-white/10 text-white">

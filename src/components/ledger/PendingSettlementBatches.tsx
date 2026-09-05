@@ -14,7 +14,7 @@ const money = new Intl.NumberFormat("en-IN", {
   maximumFractionDigits: 2,
 });
 
-function formatSettleDay(iso: string): string {
+export function formatSettleDay(iso: string): string {
   try {
     return new Date(iso).toLocaleDateString("en-IN", {
       day: "numeric",
@@ -31,11 +31,13 @@ export function PendingSettlementBatches({
   batches,
   restaurantName,
   emptyLabel = "No pending Razorpay settlements",
+  layout = "stack",
   className,
 }: {
   batches: PendingSettlementBatch[];
   restaurantName?: string | null;
   emptyLabel?: string;
+  layout?: "stack" | "row";
   className?: string;
 }) {
   if (batches.length === 0) {
@@ -45,20 +47,28 @@ export function PendingSettlementBatches({
   }
 
   const name = restaurantName?.trim();
+  const row = layout === "row";
 
   return (
-    <div className={cn("space-y-2", className)}>
+    <div
+      className={cn(
+        row
+          ? "grid gap-2 sm:grid-cols-2 xl:grid-cols-3"
+          : "space-y-2",
+        className,
+      )}
+    >
       {batches.map((batch, index) => (
         <div
           key={`${batch.settleAt}-${index}`}
-          className="flex items-center gap-2 rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2"
+          className="flex min-w-0 items-center gap-2 rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2"
         >
           <Clock size={14} className="shrink-0 text-amber-300" />
-          <p className="flex-1 text-xs text-white/70">
+          <p className="min-w-0 flex-1 truncate text-xs text-white/70">
             {name ? `${name} · ` : ""}
-            Settles on {formatSettleDay(batch.settleAt)}
+            {formatSettleDay(batch.settleAt)}
           </p>
-          <p className="text-sm font-semibold tabular-nums text-amber-200">
+          <p className="shrink-0 text-sm font-semibold tabular-nums text-amber-200">
             {money.format(batch.amount)}
           </p>
         </div>
