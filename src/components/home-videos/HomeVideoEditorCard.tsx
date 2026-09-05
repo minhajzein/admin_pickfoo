@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, startTransition, useCallback, useState } from "react";
+import { memo, startTransition, useCallback, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -139,13 +139,16 @@ function fieldsFromVideo(video: AdminHomeVideo): FormFields {
 }
 
 function linkFromVideo(video: AdminHomeVideo): HomeVideoLinkTargetValue {
+  const ids = (video.menuItemIds ?? [])
+    .map((id) => String(id ?? "").trim())
+    .filter(Boolean);
   return {
-    restaurantId: video.restaurantId ?? "",
-    menuItemId: video.menuItemId ?? "",
-    menuItemIds: video.menuItemIds ?? [],
-    categoryId: video.categoryId ?? "",
+    restaurantId: video.restaurantId ? String(video.restaurantId) : "",
+    menuItemId: video.menuItemId ? String(video.menuItemId) : "",
+    menuItemIds: Array.from(new Set(ids)),
+    categoryId: video.categoryId ? String(video.categoryId) : "",
     categoryName: video.categoryName ?? "",
-    offerId: video.offerId ?? "",
+    offerId: video.offerId ? String(video.offerId) : "",
   };
 }
 
@@ -186,28 +189,31 @@ export function HomeVideoEditorCard({
   const [link, setLink] = useState<HomeVideoLinkTargetValue>(() =>
     initialVideo ? linkFromVideo(initialVideo) : emptyLink(),
   );
+  const linkRef = useRef(link);
+  linkRef.current = link;
   const [uploading, setUploading] = useState(false);
 
   const saveMutation = useMutation({
     mutationFn: async () => {
+      const currentLink = linkRef.current;
       const videoStaticUrl =
         fields.videoStaticUrl.trim() || fields.videoPreview.trim();
       if (!videoStaticUrl) {
         throw new Error("Please upload a home video first");
       }
-      if (fields.linkType === "restaurant" && !link.restaurantId) {
+      if (fields.linkType === "restaurant" && !currentLink.restaurantId) {
         throw new Error("Select a restaurant for this link type");
       }
-      if (fields.linkType === "dish" && !link.menuItemId) {
+      if (fields.linkType === "dish" && !currentLink.menuItemId) {
         throw new Error("Select a dish for this link type");
       }
-      if (fields.linkType === "dishes" && link.menuItemIds.length === 0) {
+      if (fields.linkType === "dishes" && currentLink.menuItemIds.length === 0) {
         throw new Error("Select at least one dish for this link type");
       }
-      if (fields.linkType === "category" && !link.categoryId) {
+      if (fields.linkType === "category" && !currentLink.categoryId) {
         throw new Error("Select a category for this link type");
       }
-      if (fields.linkType === "offer" && !link.offerId) {
+      if (fields.linkType === "offer" && !currentLink.offerId) {
         throw new Error("Select a customer offer for this link type");
       }
 
@@ -225,14 +231,16 @@ export function HomeVideoEditorCard({
           fields.linkType === "restaurant" ||
           fields.linkType === "dish" ||
           fields.linkType === "dishes"
-            ? link.restaurantId || null
+            ? currentLink.restaurantId || null
             : null,
         menuItemId:
-          fields.linkType === "dish" ? link.menuItemId || null : null,
-        menuItemIds: fields.linkType === "dishes" ? link.menuItemIds : [],
+          fields.linkType === "dish" ? currentLink.menuItemId || null : null,
+        menuItemIds:
+          fields.linkType === "dishes" ? currentLink.menuItemIds : [],
         categoryId:
-          fields.linkType === "category" ? link.categoryId || null : null,
-        offerId: fields.linkType === "offer" ? link.offerId || null : null,
+          fields.linkType === "category" ? currentLink.categoryId || null : null,
+        offerId:
+          fields.linkType === "offer" ? currentLink.offerId || null : null,
         sortOrder: Number(fields.sortOrder) || 0,
         isActive: fields.isActive,
         startsAt: fromDatetimeLocalValue(fields.startsAt),
@@ -281,6 +289,7 @@ export function HomeVideoEditorCard({
   };
 
   const onLinkChange = useCallback((next: HomeVideoLinkTargetValue) => {
+    linkRef.current = next;
     setLink(next);
   }, []);
 
@@ -331,7 +340,9 @@ export function HomeVideoEditorCard({
             onChange={(e) => {
               const linkType = e.target.value as HomeVideoLinkType;
               setFields((f) => ({ ...f, linkType }));
-              setLink(emptyLink());
+              const cleared = emptyLink();
+              linkRef.current = cleared;
+              setLink(cleared);
             }}
           >
             {Object.entries(linkTypeLabels).map(([value, label]) => (

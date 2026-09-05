@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, startTransition, useCallback, useState } from "react";
+import { memo, startTransition, useCallback, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -114,11 +114,14 @@ function fieldsFromBanner(banner: AdminHomeBanner): FormFields {
 }
 
 function linkFromBanner(banner: AdminHomeBanner): LinkTargetValue {
+  const ids = (banner.menuItemIds ?? [])
+    .map((id) => String(id ?? "").trim())
+    .filter(Boolean);
   return {
-    restaurantId: banner.restaurantId ?? "",
-    menuItemId: banner.menuItemId ?? "",
-    menuItemIds: banner.menuItemIds ?? [],
-    offerId: banner.offerId ?? "",
+    restaurantId: banner.restaurantId ? String(banner.restaurantId) : "",
+    menuItemId: banner.menuItemId ? String(banner.menuItemId) : "",
+    menuItemIds: Array.from(new Set(ids)),
+    offerId: banner.offerId ? String(banner.offerId) : "",
   };
 }
 
@@ -165,25 +168,28 @@ export function BannerEditorCard({
   const [link, setLink] = useState<LinkTargetValue>(() =>
     initialBanner ? linkFromBanner(initialBanner) : emptyLink(),
   );
+  const linkRef = useRef(link);
+  linkRef.current = link;
   const [uploading, setUploading] = useState(false);
 
   const saveMutation = useMutation({
     mutationFn: async () => {
+      const currentLink = linkRef.current;
       const imageStaticUrl =
         fields.imageStaticUrl.trim() || fields.imagePreview.trim();
       if (!imageStaticUrl) {
         throw new Error("Please upload a banner image first");
       }
-      if (fields.linkType === "restaurant" && !link.restaurantId) {
+      if (fields.linkType === "restaurant" && !currentLink.restaurantId) {
         throw new Error("Select a restaurant for this link type");
       }
-      if (fields.linkType === "dish" && !link.menuItemId) {
+      if (fields.linkType === "dish" && !currentLink.menuItemId) {
         throw new Error("Select a dish for this link type");
       }
-      if (fields.linkType === "dishes" && link.menuItemIds.length === 0) {
+      if (fields.linkType === "dishes" && currentLink.menuItemIds.length === 0) {
         throw new Error("Select at least one dish for this link type");
       }
-      if (fields.linkType === "offer" && !link.offerId) {
+      if (fields.linkType === "offer" && !currentLink.offerId) {
         throw new Error("Select a customer offer for this link type");
       }
 
@@ -196,13 +202,13 @@ export function BannerEditorCard({
           fields.linkType === "restaurant" ||
           fields.linkType === "dish" ||
           fields.linkType === "dishes"
-            ? link.restaurantId || null
+            ? currentLink.restaurantId || null
             : null,
         menuItemId:
-          fields.linkType === "dish" ? link.menuItemId || null : null,
+          fields.linkType === "dish" ? currentLink.menuItemId || null : null,
         menuItemIds:
-          fields.linkType === "dishes" ? link.menuItemIds : [],
-        offerId: fields.linkType === "offer" ? link.offerId || null : null,
+          fields.linkType === "dishes" ? currentLink.menuItemIds : [],
+        offerId: fields.linkType === "offer" ? currentLink.offerId || null : null,
         sortOrder: Number(fields.sortOrder) || 0,
         isActive: fields.isActive,
         startsAt: fromDatetimeLocalValue(fields.startsAt),
@@ -246,6 +252,7 @@ export function BannerEditorCard({
   };
 
   const onLinkChange = useCallback((next: LinkTargetValue) => {
+    linkRef.current = next;
     setLink(next);
   }, []);
 
@@ -307,7 +314,9 @@ export function BannerEditorCard({
             onChange={(e) => {
               const linkType = e.target.value as HomeBannerLinkType;
               setFields((f) => ({ ...f, linkType }));
-              setLink(emptyLink());
+              const cleared = emptyLink();
+              linkRef.current = cleared;
+              setLink(cleared);
             }}
           >
             {Object.entries(linkTypeLabels).map(([value, label]) => (

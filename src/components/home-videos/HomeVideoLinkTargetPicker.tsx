@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, startTransition, useCallback, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
@@ -38,6 +38,13 @@ function apiErrorMessage(error: unknown, fallback: string) {
   }
   if (error instanceof Error && error.message) return error.message;
   return fallback;
+}
+
+function mergeById<T extends { id: string }>(primary: T[], extra: T[]): T[] {
+  const map = new Map<string, T>();
+  for (const row of extra) map.set(row.id, row);
+  for (const row of primary) map.set(row.id, row);
+  return [...map.values()];
 }
 
 const OptionChip = memo(function OptionChip({
@@ -90,6 +97,7 @@ export function HomeVideoLinkTargetPicker({
   const [searchingDishes, setSearchingDishes] = useState(false);
   const [searchingCategories, setSearchingCategories] = useState(false);
   const [searchingOffers, setSearchingOffers] = useState(false);
+  const [hydrating, setHydrating] = useState(true);
 
   const [local, setLocal] = useState<HomeVideoLinkTargetValue>(value);
   const localRef = useRef(local);
@@ -100,30 +108,87 @@ export function HomeVideoLinkTargetPicker({
     [local.menuItemIds],
   );
 
+  const selectedRestaurant = restaurantOptions.find(
+    (r) => r.id === local.restaurantId,
+  );
+  const selectedSingleDish = dishOptions.find((d) => d.id === local.menuItemId);
+  const selectedCategory = categoryOptions.find(
+    (c) => c.id === local.categoryId,
+  );
+  const selectedOffer = offerOptions.find((o) => o.id === local.offerId);
+
   const commit = useCallback(
     (next: HomeVideoLinkTargetValue) => {
       setLocal(next);
       localRef.current = next;
-      startTransition(() => onChange(next));
+      onChange(next);
     },
     [onChange],
   );
+
+  useEffect(() => {
+    let cancelled = false;
+    const hydrate = async () => {
+      try {
+        const restaurantId = value.restaurantId.trim();
+        const dishIds = [...value.menuItemIds, value.menuItemId].filter(
+          (id, i, arr) => id && arr.indexOf(id) === i,
+        );
+        const categoryId = value.categoryId.trim();
+        const offerId = value.offerId.trim();
+
+        const [restaurants, dishes, categories, offers] = await Promise.all([
+          restaurantId
+            ? searchHomeVideoRestaurants("", { ids: [restaurantId] })
+            : Promise.resolve([]),
+          dishIds.length
+            ? searchHomeVideoMenuItems({ ids: dishIds })
+            : Promise.resolve([]),
+          categoryId
+            ? searchHomeVideoCategories("", { ids: [categoryId] })
+            : Promise.resolve([]),
+          offerId
+            ? searchHomeVideoOffers("", { ids: [offerId] })
+            : Promise.resolve([]),
+        ]);
+        if (cancelled) return;
+        setRestaurantOptions(restaurants);
+        setDishOptions(dishes);
+        setCategoryOptions(categories);
+        setOfferOptions(offers);
+      } catch (error: unknown) {
+        if (!cancelled) {
+          toast.error(
+            apiErrorMessage(error, "Failed to load saved link targets"),
+          );
+        }
+      } finally {
+        if (!cancelled) setHydrating(false);
+      }
+    };
+    void hydrate();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const loadRestaurants = async () => {
     const q = restaurantSearchRef.current?.value?.trim() ?? "";
     setSearchingRestaurants(true);
     try {
       const rows = await searchHomeVideoRestaurants(q);
-      startTransition(() => {
-        setRestaurantOptions(rows);
-        setSearchingRestaurants(false);
+      setRestaurantOptions((prev) => {
+        const selected = prev.filter(
+          (r) => r.id === localRef.current.restaurantId,
+        );
+        return mergeById(rows, selected);
       });
-      if (rows.length === 0) {
-        toast.message("No restaurants found");
-      }
+      if (rows.length === 0) toast.message("No restaurants found");
     } catch (error: unknown) {
-      setSearchingRestaurants(false);
       toast.error(apiErrorMessage(error, "Failed to search restaurants"));
+    } finally {
+      setSearchingRestaurants(false);
     }
   };
 
@@ -135,16 +200,19 @@ export function HomeVideoLinkTargetPicker({
         search: q,
         restaurantId: localRef.current.restaurantId || undefined,
       });
-      startTransition(() => {
-        setDishOptions(rows);
-        setSearchingDishes(false);
+      const keepIds = new Set([
+        ...localRef.current.menuItemIds,
+        localRef.current.menuItemId,
+      ]);
+      setDishOptions((prev) => {
+        const kept = prev.filter((d) => keepIds.has(d.id));
+        return mergeById(rows, kept);
       });
-      if (rows.length === 0) {
-        toast.message("No dishes found");
-      }
+      if (rows.length === 0) toast.message("No dishes found");
     } catch (error: unknown) {
-      setSearchingDishes(false);
       toast.error(apiErrorMessage(error, "Failed to search dishes"));
+    } finally {
+      setSearchingDishes(false);
     }
   };
 
@@ -153,16 +221,17 @@ export function HomeVideoLinkTargetPicker({
     setSearchingCategories(true);
     try {
       const rows = await searchHomeVideoCategories(q);
-      startTransition(() => {
-        setCategoryOptions(rows);
-        setSearchingCategories(false);
+      setCategoryOptions((prev) => {
+        const selected = prev.filter(
+          (c) => c.id === localRef.current.categoryId,
+        );
+        return mergeById(rows, selected);
       });
-      if (rows.length === 0) {
-        toast.message("No categories found");
-      }
+      if (rows.length === 0) toast.message("No categories found");
     } catch (error: unknown) {
-      setSearchingCategories(false);
       toast.error(apiErrorMessage(error, "Failed to search categories"));
+    } finally {
+      setSearchingCategories(false);
     }
   };
 
@@ -171,16 +240,15 @@ export function HomeVideoLinkTargetPicker({
     setSearchingOffers(true);
     try {
       const rows = await searchHomeVideoOffers(q);
-      startTransition(() => {
-        setOfferOptions(rows);
-        setSearchingOffers(false);
+      setOfferOptions((prev) => {
+        const selected = prev.filter((o) => o.id === localRef.current.offerId);
+        return mergeById(rows, selected);
       });
-      if (rows.length === 0) {
-        toast.message("No offers found");
-      }
+      if (rows.length === 0) toast.message("No offers found");
     } catch (error: unknown) {
-      setSearchingOffers(false);
       toast.error(apiErrorMessage(error, "Failed to search offers"));
+    } finally {
+      setSearchingOffers(false);
     }
   };
 
@@ -189,44 +257,50 @@ export function HomeVideoLinkTargetPicker({
   if (linkType === "offer") {
     return (
       <div className="space-y-3 rounded-lg border border-white/10 bg-black/20 p-3">
-        <div className="space-y-2">
-          <Label>Customer offer</Label>
-          <div className="flex gap-2">
-            <Input
-              ref={offerSearchRef}
-              placeholder="Search offers"
-              defaultValue=""
+        <Label>Customer offer</Label>
+        {hydrating ? (
+          <p className="text-xs text-white/40">Loading saved offer…</p>
+        ) : local.offerId ? (
+          <p className="text-xs text-[#98E32F]">
+            Selected: {selectedOffer?.title || local.offerId}
+          </p>
+        ) : (
+          <p className="text-xs text-amber-300/90">No offer selected yet</p>
+        )}
+        <div className="flex gap-2">
+          <Input
+            ref={offerSearchRef}
+            placeholder="Search offers"
+            defaultValue=""
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                void loadOffers();
+              }
+            }}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            disabled={searchingOffers}
+            onClick={() => void loadOffers()}
+          >
+            {searchingOffers ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              "Search"
+            )}
+          </Button>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {offerOptions.map((o) => (
+            <OptionChip
+              key={o.id}
+              selected={local.offerId === o.id}
+              label={`${o.title}${o.badgeLabel ? ` · ${o.badgeLabel}` : ""}`}
+              onSelect={() => commit({ ...localRef.current, offerId: o.id })}
             />
-            <Button
-              type="button"
-              variant="outline"
-              disabled={searchingOffers}
-              onClick={() => void loadOffers()}
-            >
-              {searchingOffers ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                "Search"
-              )}
-            </Button>
-          </div>
-          {local.offerId ? (
-            <p className="text-xs text-white/60">
-              Selected: <span className="text-white/90">{local.offerId}</span>
-            </p>
-          ) : null}
-          <div className="flex flex-wrap gap-2">
-            {offerOptions.map((o) => (
-              <OptionChip
-                key={o.id}
-                selected={local.offerId === o.id}
-                label={`${o.title}${o.badgeLabel ? ` · ${o.badgeLabel}` : ""}`}
-                onSelect={() =>
-                  commit({ ...localRef.current, offerId: o.id })
-                }
-              />
-            ))}
-          </div>
+          ))}
         </div>
       </div>
     );
@@ -235,51 +309,57 @@ export function HomeVideoLinkTargetPicker({
   if (linkType === "category") {
     return (
       <div className="space-y-3 rounded-lg border border-white/10 bg-black/20 p-3">
-        <div className="space-y-2">
-          <Label>Category</Label>
-          <div className="flex gap-2">
-            <Input
-              ref={categorySearchRef}
-              placeholder="Search categories"
-              defaultValue=""
+        <Label>Category</Label>
+        {hydrating ? (
+          <p className="text-xs text-white/40">Loading saved category…</p>
+        ) : local.categoryId ? (
+          <p className="text-xs text-[#98E32F]">
+            Selected:{" "}
+            {selectedCategory?.name || local.categoryName || local.categoryId}
+          </p>
+        ) : (
+          <p className="text-xs text-amber-300/90">No category selected yet</p>
+        )}
+        <div className="flex gap-2">
+          <Input
+            ref={categorySearchRef}
+            placeholder="Search categories"
+            defaultValue=""
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                void loadCategories();
+              }
+            }}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            disabled={searchingCategories}
+            onClick={() => void loadCategories()}
+          >
+            {searchingCategories ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              "Search"
+            )}
+          </Button>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {categoryOptions.map((c) => (
+            <OptionChip
+              key={c.id}
+              selected={local.categoryId === c.id}
+              label={c.name}
+              onSelect={() =>
+                commit({
+                  ...localRef.current,
+                  categoryId: c.id,
+                  categoryName: c.name,
+                })
+              }
             />
-            <Button
-              type="button"
-              variant="outline"
-              disabled={searchingCategories}
-              onClick={() => void loadCategories()}
-            >
-              {searchingCategories ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                "Search"
-              )}
-            </Button>
-          </div>
-          {local.categoryId ? (
-            <p className="text-xs text-white/60">
-              Selected:{" "}
-              <span className="text-white/90">
-                {local.categoryName || local.categoryId}
-              </span>
-            </p>
-          ) : null}
-          <div className="flex flex-wrap gap-2">
-            {categoryOptions.map((c) => (
-              <OptionChip
-                key={c.id}
-                selected={local.categoryId === c.id}
-                label={c.name}
-                onSelect={() =>
-                  commit({
-                    ...localRef.current,
-                    categoryId: c.id,
-                    categoryName: c.name,
-                  })
-                }
-              />
-            ))}
-          </div>
+          ))}
         </div>
       </div>
     );
@@ -293,14 +373,33 @@ export function HomeVideoLinkTargetPicker({
         <div className="space-y-2">
           <Label>
             {linkType === "restaurant"
-              ? "Restaurant"
-              : "Restaurant (optional filter)"}
+              ? "Select restaurant"
+              : "Restaurant (optional filter for dishes)"}
           </Label>
+          {hydrating ? (
+            <p className="text-xs text-white/40">Loading saved restaurant…</p>
+          ) : local.restaurantId ? (
+            <p className="text-xs text-[#98E32F]">
+              Selected: {selectedRestaurant?.name || local.restaurantId}
+            </p>
+          ) : (
+            <p className="text-xs text-amber-300/90">
+              {linkType === "restaurant"
+                ? "Select a restaurant to save"
+                : "No restaurant selected"}
+            </p>
+          )}
           <div className="flex gap-2">
             <Input
               ref={restaurantSearchRef}
               placeholder="Search restaurants"
               defaultValue=""
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  void loadRestaurants();
+                }
+              }}
             />
             <Button
               type="button"
@@ -315,12 +414,6 @@ export function HomeVideoLinkTargetPicker({
               )}
             </Button>
           </div>
-          {local.restaurantId ? (
-            <p className="text-xs text-white/60">
-              Selected restaurant id:{" "}
-              <span className="text-white/90">{local.restaurantId}</span>
-            </p>
-          ) : null}
           <div className="flex flex-wrap gap-2">
             {restaurantOptions.map((r) => (
               <OptionChip
@@ -331,8 +424,6 @@ export function HomeVideoLinkTargetPicker({
                   commit({
                     ...localRef.current,
                     restaurantId: r.id,
-                    menuItemId: "",
-                    menuItemIds: [],
                   })
                 }
               />
@@ -343,12 +434,41 @@ export function HomeVideoLinkTargetPicker({
 
       {(linkType === "dish" || linkType === "dishes") && (
         <div className="space-y-2">
-          <Label>{linkType === "dish" ? "Dish" : "Dishes"}</Label>
+          <Label>
+            {linkType === "dish" ? "Select one dish" : "Select dishes (multi)"}
+          </Label>
+          {hydrating ? (
+            <p className="text-xs text-white/40">Loading saved dishes…</p>
+          ) : linkType === "dish" ? (
+            local.menuItemId ? (
+              <p className="text-xs text-[#98E32F]">
+                Selected: {selectedSingleDish?.name || local.menuItemId}
+              </p>
+            ) : (
+              <p className="text-xs text-amber-300/90">No dish selected yet</p>
+            )
+          ) : (
+            <p className="text-xs text-[#98E32F]">
+              Selected: {local.menuItemIds.length} dish(es)
+              {dishOptions.filter((d) => selectedDishSet.has(d.id)).length
+                ? ` · ${dishOptions
+                    .filter((d) => selectedDishSet.has(d.id))
+                    .map((d) => d.name)
+                    .join(", ")}`
+                : ""}
+            </p>
+          )}
           <div className="flex gap-2">
             <Input
               ref={dishSearchRef}
               placeholder="Search dishes"
               defaultValue=""
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  void loadDishes();
+                }
+              }}
             />
             <Button
               type="button"
@@ -384,10 +504,14 @@ export function HomeVideoLinkTargetPicker({
                       return;
                     }
                     const cur = localRef.current;
-                    const nextIds = selectedDishSet.has(d.id)
-                      ? cur.menuItemIds.filter((id) => id !== d.id)
-                      : [...cur.menuItemIds, d.id];
-                    commit({ ...cur, menuItemIds: nextIds, menuItemId: "" });
+                    const set = new Set(cur.menuItemIds);
+                    if (set.has(d.id)) set.delete(d.id);
+                    else set.add(d.id);
+                    commit({
+                      ...cur,
+                      menuItemIds: Array.from(set),
+                      menuItemId: "",
+                    });
                   }}
                 />
               );

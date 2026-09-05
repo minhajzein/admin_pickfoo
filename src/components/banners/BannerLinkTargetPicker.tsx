@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, startTransition, useCallback, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
@@ -36,6 +36,13 @@ function apiErrorMessage(error: unknown, fallback: string) {
   return fallback;
 }
 
+function mergeById<T extends { id: string }>(primary: T[], extra: T[]): T[] {
+  const map = new Map<string, T>();
+  for (const row of extra) map.set(row.id, row);
+  for (const row of primary) map.set(row.id, row);
+  return [...map.values()];
+}
+
 const OptionChip = memo(function OptionChip({
   selected,
   label,
@@ -63,7 +70,7 @@ const OptionChip = memo(function OptionChip({
 
 /**
  * Search inputs are uncontrolled so keystrokes never re-render option chips.
- * Selection state is local; parent is notified via startTransition.
+ * Selection is committed synchronously so Save reads the latest ids.
  */
 export function BannerLinkTargetPicker({
   linkType,
@@ -85,8 +92,8 @@ export function BannerLinkTargetPicker({
   const [searchingRestaurants, setSearchingRestaurants] = useState(false);
   const [searchingDishes, setSearchingDishes] = useState(false);
   const [searchingOffers, setSearchingOffers] = useState(false);
+  const [hydrating, setHydrating] = useState(true);
 
-  // Local mirror so chip clicks paint immediately; parent notified in transition.
   const [local, setLocal] = useState<LinkTargetValue>(value);
   const localRef = useRef(local);
   localRef.current = local;
@@ -96,24 +103,72 @@ export function BannerLinkTargetPicker({
     [local.menuItemIds],
   );
 
+  const selectedRestaurant = restaurantOptions.find(
+    (r) => r.id === local.restaurantId,
+  );
+  const selectedSingleDish = dishOptions.find((d) => d.id === local.menuItemId);
+
   const commit = useCallback(
     (next: LinkTargetValue) => {
       setLocal(next);
       localRef.current = next;
-      startTransition(() => onChange(next));
+      onChange(next);
     },
     [onChange],
   );
+
+  useEffect(() => {
+    let cancelled = false;
+    const hydrate = async () => {
+      try {
+        const restaurantId = value.restaurantId.trim();
+        const dishIds = [
+          ...value.menuItemIds,
+          value.menuItemId,
+        ].filter((id, i, arr) => id && arr.indexOf(id) === i);
+        const offerId = value.offerId.trim();
+
+        const [restaurants, dishes, offers] = await Promise.all([
+          restaurantId
+            ? searchBannerRestaurants("", { ids: [restaurantId] })
+            : Promise.resolve([]),
+          dishIds.length
+            ? searchBannerMenuItems({ ids: dishIds })
+            : Promise.resolve([]),
+          offerId ? searchBannerOffers("") : Promise.resolve([]),
+        ]);
+        if (cancelled) return;
+        setRestaurantOptions(restaurants);
+        setDishOptions(dishes);
+        if (offerId) {
+          setOfferOptions(offers.filter((o) => o.id === offerId));
+        }
+      } catch (error: unknown) {
+        if (!cancelled) {
+          toast.error(apiErrorMessage(error, "Failed to load saved link targets"));
+        }
+      } finally {
+        if (!cancelled) setHydrating(false);
+      }
+    };
+    void hydrate();
+    return () => {
+      cancelled = true;
+    };
+    // Only hydrate from the initial editor value (picker remounts on link type change).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const loadRestaurants = async () => {
     const q = restaurantSearchRef.current?.value?.trim() ?? "";
     setSearchingRestaurants(true);
     try {
       const rows = await searchBannerRestaurants(q);
-      // Defer painting a large chip list so the Search button feedback stays snappy.
-      startTransition(() => {
-        setRestaurantOptions(rows);
-        setSearchingRestaurants(false);
+      setRestaurantOptions((prev) => {
+        const selected = prev.filter(
+          (r) => r.id === localRef.current.restaurantId,
+        );
+        return mergeById(rows, selected);
       });
       if (rows.length === 0) {
         toast.message("No restaurants found", {
@@ -122,8 +177,9 @@ export function BannerLinkTargetPicker({
         });
       }
     } catch (error: unknown) {
-      setSearchingRestaurants(false);
       toast.error(apiErrorMessage(error, "Failed to search restaurants"));
+    } finally {
+      setSearchingRestaurants(false);
     }
   };
 
@@ -135,9 +191,13 @@ export function BannerLinkTargetPicker({
         search: q,
         restaurantId: localRef.current.restaurantId || undefined,
       });
-      startTransition(() => {
-        setDishOptions(rows);
-        setSearchingDishes(false);
+      const keepIds = new Set([
+        ...localRef.current.menuItemIds,
+        localRef.current.menuItemId,
+      ]);
+      setDishOptions((prev) => {
+        const kept = prev.filter((d) => keepIds.has(d.id));
+        return mergeById(rows, kept);
       });
       if (rows.length === 0) {
         toast.message("No dishes found", {
@@ -145,8 +205,9 @@ export function BannerLinkTargetPicker({
         });
       }
     } catch (error: unknown) {
-      setSearchingDishes(false);
       toast.error(apiErrorMessage(error, "Failed to search dishes"));
+    } finally {
+      setSearchingDishes(false);
     }
   };
 
@@ -155,16 +216,17 @@ export function BannerLinkTargetPicker({
     setSearchingOffers(true);
     try {
       const rows = await searchBannerOffers(q);
-      startTransition(() => {
-        setOfferOptions(rows);
-        setSearchingOffers(false);
+      setOfferOptions((prev) => {
+        const selected = prev.filter((o) => o.id === localRef.current.offerId);
+        return mergeById(rows, selected);
       });
       if (rows.length === 0) {
         toast.message("No offers found");
       }
     } catch (error: unknown) {
-      setSearchingOffers(false);
       toast.error(apiErrorMessage(error, "Failed to search offers"));
+    } finally {
+      setSearchingOffers(false);
     }
   };
 
@@ -198,6 +260,17 @@ export function BannerLinkTargetPicker({
     return (
       <div className="space-y-2 rounded-lg border border-white/10 p-4 contain-layout">
         <Label>Select customer offer</Label>
+        {hydrating ? (
+          <p className="text-xs text-white/40">Loading saved offer…</p>
+        ) : local.offerId ? (
+          <p className="text-xs text-[#98E32F]">
+            Selected:{" "}
+            {offerOptions.find((o) => o.id === local.offerId)?.title ||
+              local.offerId}
+          </p>
+        ) : (
+          <p className="text-xs text-amber-300/90">No offer selected yet</p>
+        )}
         <div className="flex gap-2">
           <Input
             ref={offerSearchRef}
@@ -233,9 +306,6 @@ export function BannerLinkTargetPicker({
             />
           ))}
         </div>
-        {local.offerId ? (
-          <p className="text-xs text-white/50">Selected: {local.offerId}</p>
-        ) : null}
       </div>
     );
   }
@@ -247,7 +317,24 @@ export function BannerLinkTargetPicker({
     <>
       {showRestaurant && (
         <div className="space-y-2 rounded-lg border border-white/10 p-4 contain-layout">
-          <Label>Restaurant (optional for dishes filter)</Label>
+          <Label>
+            {linkType === "restaurant"
+              ? "Select restaurant"
+              : "Restaurant (optional filter for dishes)"}
+          </Label>
+          {hydrating ? (
+            <p className="text-xs text-white/40">Loading saved restaurant…</p>
+          ) : local.restaurantId ? (
+            <p className="text-xs text-[#98E32F]">
+              Selected: {selectedRestaurant?.name || local.restaurantId}
+            </p>
+          ) : (
+            <p className="text-xs text-amber-300/90">
+              {linkType === "restaurant"
+                ? "Select a restaurant to save"
+                : "No restaurant selected"}
+            </p>
+          )}
           <div className="flex gap-2">
             <Input
               ref={restaurantSearchRef}
@@ -285,15 +372,21 @@ export function BannerLinkTargetPicker({
               ))}
             </div>
           )}
-          {local.restaurantId ? (
-            <p className="text-xs text-white/50">Selected: {local.restaurantId}</p>
-          ) : null}
         </div>
       )}
 
       {linkType === "dish" && (
         <div className="space-y-2 rounded-lg border border-white/10 p-4 contain-layout">
           <Label>Select one dish</Label>
+          {hydrating ? (
+            <p className="text-xs text-white/40">Loading saved dish…</p>
+          ) : local.menuItemId ? (
+            <p className="text-xs text-[#98E32F]">
+              Selected: {selectedSingleDish?.name || local.menuItemId}
+            </p>
+          ) : (
+            <p className="text-xs text-amber-300/90">No dish selected yet</p>
+          )}
           <div className="flex gap-2">
             <Input
               ref={dishSearchRef}
@@ -335,6 +428,19 @@ export function BannerLinkTargetPicker({
       {linkType === "dishes" && (
         <div className="space-y-2 rounded-lg border border-white/10 p-4 contain-layout">
           <Label>Select dishes (multi)</Label>
+          {hydrating ? (
+            <p className="text-xs text-white/40">Loading saved dishes…</p>
+          ) : (
+            <p className="text-xs text-[#98E32F]">
+              Selected: {local.menuItemIds.length} dish(es)
+              {dishOptions.filter((d) => selectedDishSet.has(d.id)).length
+                ? ` · ${dishOptions
+                    .filter((d) => selectedDishSet.has(d.id))
+                    .map((d) => d.name)
+                    .join(", ")}`
+                : ""}
+            </p>
+          )}
           <div className="flex gap-2">
             <Input
               ref={dishSearchRef}
@@ -370,9 +476,6 @@ export function BannerLinkTargetPicker({
               />
             ))}
           </div>
-          <p className="text-xs text-white/50">
-            Selected: {local.menuItemIds.length} dish(es)
-          </p>
         </div>
       )}
     </>

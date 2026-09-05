@@ -274,41 +274,91 @@ export async function uploadHomeVideo(file: File): Promise<HomeVideoUploadResult
 
 export async function searchHomeVideoRestaurants(
   search: string,
+  opts?: { ids?: string[] },
 ): Promise<HomeVideoRestaurantOption[]> {
   const sp = new URLSearchParams();
   if (search.trim()) sp.set("search", search.trim());
+  if (opts?.ids?.length) sp.set("ids", opts.ids.filter(Boolean).join(","));
   sp.set("limit", "25");
   const { data } = await api.get(`/home-videos/link-options/restaurants?${sp}`);
-  return data.data as HomeVideoRestaurantOption[];
+  const rows = (data.data ?? []) as Array<{
+    id?: string;
+    _id?: string;
+    name: string;
+    city?: string;
+    image?: string;
+  }>;
+  return rows
+    .map((r) => ({
+      id: String(r.id ?? r._id ?? "").trim(),
+      name: r.name,
+      city: r.city ?? "",
+      image: r.image ?? "",
+    }))
+    .filter((r) => r.id.length > 0);
 }
 
 export async function searchHomeVideoMenuItems(params: {
-  search: string;
+  search?: string;
   restaurantId?: string;
+  ids?: string[];
 }): Promise<HomeVideoMenuItemOption[]> {
   const sp = new URLSearchParams();
-  if (params.search.trim()) sp.set("search", params.search.trim());
+  if (params.search?.trim()) sp.set("search", params.search.trim());
   if (params.restaurantId) sp.set("restaurantId", params.restaurantId);
+  if (params.ids?.length) sp.set("ids", params.ids.filter(Boolean).join(","));
   sp.set("limit", "30");
   const { data } = await api.get(`/home-videos/link-options/menu-items?${sp}`);
-  return data.data as HomeVideoMenuItemOption[];
+  const rows = (data.data ?? []) as Array<{
+    id?: string;
+    _id?: string;
+    name: string;
+    image?: string;
+    price?: number;
+    restaurantIds?: string[];
+  }>;
+  return rows
+    .map((item) => ({
+      id: String(item.id ?? item._id ?? "").trim(),
+      name: item.name,
+      image: item.image ?? "",
+      price: item.price ?? 0,
+      restaurantIds: item.restaurantIds ?? [],
+    }))
+    .filter((item) => item.id.length > 0);
 }
 
 export async function searchHomeVideoCategories(
   search: string,
+  opts?: { ids?: string[] },
 ): Promise<HomeVideoCategoryOption[]> {
   const sp = new URLSearchParams();
   if (search.trim()) sp.set("search", search.trim());
+  if (opts?.ids?.length) sp.set("ids", opts.ids.filter(Boolean).join(","));
   sp.set("limit", "30");
   const { data } = await api.get(`/home-videos/link-options/categories?${sp}`);
-  return data.data as HomeVideoCategoryOption[];
+  const rows = (data.data ?? []) as Array<{
+    id?: string;
+    _id?: string;
+    name: string;
+    image?: string;
+  }>;
+  return rows
+    .map((c) => ({
+      id: String(c.id ?? c._id ?? "").trim(),
+      name: c.name,
+      image: c.image ?? "",
+    }))
+    .filter((c) => c.id.length > 0);
 }
 
 export async function searchHomeVideoOffers(
   search: string,
+  opts?: { ids?: string[] },
 ): Promise<HomeVideoOfferOption[]> {
   const sp = new URLSearchParams();
   if (search.trim()) sp.set("search", search.trim());
+  if (opts?.ids?.length) sp.set("ids", opts.ids.filter(Boolean).join(","));
   sp.set("limit", "25");
   const { data } = await api.get(`/home-videos/link-options/offers?${sp}`);
   return data.data as HomeVideoOfferOption[];
