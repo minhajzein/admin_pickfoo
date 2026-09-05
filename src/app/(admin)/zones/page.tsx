@@ -419,17 +419,13 @@ export default function ZonesPage() {
       toast.error("Name is required");
       return;
     }
-    if (!lsgiCode.trim()) {
-      toast.error("Select a local body (e.g. Mananthavady, Edavaka)");
-      return;
-    }
     if (pincode.trim() && !PINCODE_RE.test(pincode.trim())) {
       toast.error("Pincode must be a valid 6-digit PIN if provided");
       return;
     }
     if (!geom) {
       toast.error(
-        "Select a local body to load its map area, or draw / paste GeoJSON.",
+        "Draw a zone on the map, select a local body, or paste GeoJSON.",
       );
       return;
     }
@@ -437,7 +433,7 @@ export default function ZonesPage() {
     const payload = {
       name: name.trim(),
       code: (code.trim() || codeFromLsgName(name)).toUpperCase(),
-      lsgiCode: lsgiCode.trim().toUpperCase(),
+      lsgiCode: lsgiCode.trim() ? lsgiCode.trim().toUpperCase() : "",
       pincode: pincode.trim() || undefined,
       district: district.trim() || "Wayanad",
       geometry: geom,
@@ -472,8 +468,8 @@ export default function ZonesPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-xs text-white/40">
-            Zones are Wayanad local bodies — gram panchayats and municipalities
-            (e.g. Mananthavady, Edavaka, Thavinhal, Panamaram).
+            Draw a custom area on the map, or start from a Wayanad local body
+            (gram panchayat or municipality).
           </p>
           {isLoading ? (
             <div className="flex justify-center py-8 text-white/40">
@@ -509,7 +505,7 @@ export default function ZonesPage() {
                 <p className="py-6 text-center text-sm text-white/40">
                   No zones yet. Click{" "}
                   <span className="font-medium text-white/60">New zone</span> and
-                  pick a local body.
+                  draw on the map, or pick a local body.
                 </p>
               )}
             </ul>
@@ -528,8 +524,8 @@ export default function ZonesPage() {
                 {isEditMode ? "Edit zone" : "New zone"}
               </DialogTitle>
               <DialogDescription className="text-white/50">
-                Choose a Wayanad gram panchayat or municipality — the map area
-                loads automatically.
+                Draw a polygon on the map, or optionally load a local body
+                boundary and adjust it.
               </DialogDescription>
             </DialogHeader>
           </div>
@@ -537,7 +533,10 @@ export default function ZonesPage() {
           <div className="space-y-4 px-6 py-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2 sm:col-span-2">
-                <Label className="text-white/60">Local body</Label>
+                <Label className="text-white/60">
+                  Local body{" "}
+                  <span className="font-normal text-white/35">(optional)</span>
+                </Label>
                 <select
                   value={lsgiCode}
                   onChange={(e) => void handleLsgSelectChange(e.target.value)}
@@ -548,7 +547,7 @@ export default function ZonesPage() {
                   }`}
                 >
                   <option value="" className="bg-[#001820] text-white/60">
-                    Select panchayat / municipality…
+                    None — draw on the map…
                   </option>
                   {LSG_CATALOG.map((e) => (
                     <option
@@ -656,8 +655,9 @@ export default function ZonesPage() {
                   Zone boundary
                 </h3>
                 <p className="text-xs text-white/45">
-                  Selecting a local body loads its map. You can also pick on the
-                  map or paste GeoJSON (Advanced).
+                  Draw a polygon, then drag vertices or edge midpoints to reshape
+                  it. Optionally load a local body, pick it on the map, or paste
+                  GeoJSON (Advanced).
                 </p>
               </div>
               <div className="relative h-[min(58vh,560px)] min-h-[320px] w-full overflow-hidden rounded-xl border border-white/10 bg-black/30">

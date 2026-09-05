@@ -9,7 +9,7 @@ import Map, {
 } from "react-map-gl/mapbox";
 import {
   type Map as MapboxMap,
-  type MapLayerMouseEvent,
+  type MapMouseEvent,
 } from "mapbox-gl";
 import { mapboxMapLib } from "@/lib/mapbox";
 import MapboxDraw from "@mapbox/mapbox-gl-draw";
@@ -43,6 +43,25 @@ const THEME = {
   teal: "#002833",
   tealMid: "#0d5c6b",
 } as const;
+
+const LSG_OVERLAY_LAYER_IDS = [
+  "admin-lsg-fill",
+  "admin-lsg-casing",
+  "admin-lsg-line",
+  "admin-lsg-symbol",
+] as const;
+
+function layerIdsWithPrefix(map: MapboxMap, prefix: string): string[] {
+  const layers = map.getStyle()?.layers;
+  if (!layers) return [];
+  return layers.filter((layer) => layer.id.startsWith(prefix)).map((layer) => layer.id);
+}
+
+function moveLayersToTop(map: MapboxMap, ids: readonly string[]) {
+  for (const id of ids) {
+    if (map.getLayer(id)) map.moveLayer(id);
+  }
+}
 
 export type LsgPickMeta = {
   key: string;
@@ -172,6 +191,12 @@ export default function ZoneMapEditor({
     const fc = draw.getAll();
     const feat = fc.features.find((f) => f.geometry?.type === "Polygon");
     const g = feat?.geometry;
+    // Keep Draw in sync with parent without deleteAll/re-add (that exits vertex edit).
+    if (g && g.type === "Polygon") {
+      drawSerializedRef.current = JSON.stringify(g);
+    } else {
+      drawSerializedRef.current = "__empty__";
+    }
     // Defer parent state updates so Mapbox draw drag stays responsive (INP).
     startTransition(() => {
       if (g && g.type === "Polygon") {
@@ -205,11 +230,25 @@ export default function ZoneMapEditor({
           polygon: true,
           trash: true,
         },
+        defaultMode: "simple_select",
       });
       map.addControl(draw, "top-left");
       drawRef.current = draw;
 
-      map.on("draw.create", emitDraw);
+      const enterVertexEdit = () => {
+        const ids = draw
+          .getAll()
+          .features.map((f) => f.id)
+          .filter((id): id is string | number => id != null);
+        const id = ids[0];
+        if (id == null) return;
+        draw.changeMode("direct_select", { featureId: String(id) });
+      };
+
+      map.on("draw.create", () => {
+        enterVertexEdit();
+        emitDraw();
+      });
       // Throttle continuous vertex-drag updates.
       map.on("draw.update", scheduleEmitDraw);
       map.on("draw.delete", emitDraw);
@@ -228,12 +267,17 @@ export default function ZoneMapEditor({
     drawSerializedRef.current = serialized;
     draw.deleteAll();
     if (drawPolygon) {
-      draw.add({
+      const ids = draw.add({
         type: "Feature",
         properties: {},
         geometry: drawPolygon,
       });
-      draw.changeMode("simple_select");
+      const id = ids[0];
+      if (id != null && !lsgPickMode) {
+        draw.changeMode("direct_select", { featureId: id });
+      } else {
+        draw.changeMode("simple_select");
+      }
     } else {
       draw.changeMode("draw_polygon");
     }
@@ -260,26 +304,30 @@ export default function ZoneMapEditor({
     const map = mapRef.current?.getMap();
     if (!map) return;
 
-    const bringToFront = () => {
+    const restack = () => {
       try {
-        if (map.getLayer("admin-lsg-fill")) map.moveLayer("admin-lsg-fill");
-        if (map.getLayer("admin-lsg-casing")) map.moveLayer("admin-lsg-casing");
-        if (map.getLayer("admin-lsg-line")) map.moveLayer("admin-lsg-line");
-        if (map.getLayer("admin-lsg-symbol")) map.moveLayer("admin-lsg-symbol");
+        const drawIds = layerIdsWithPrefix(map, "gl-draw-");
+        if (lsgPickMode) {
+          moveLayersToTop(map, drawIds);
+          moveLayersToTop(map, LSG_OVERLAY_LAYER_IDS);
+        } else {
+          moveLayersToTop(map, LSG_OVERLAY_LAYER_IDS);
+          moveLayersToTop(map, drawIds);
+        }
       } catch {
         /* style not ready */
       }
     };
 
-    bringToFront();
-    const t = window.setTimeout(bringToFront, 50);
-    const t2 = window.setTimeout(bringToFront, 300);
-    map.once("idle", bringToFront);
+    restack();
+    const t = window.setTimeout(restack, 50);
+    const t2 = window.setTimeout(restack, 300);
+    map.once("idle", restack);
     return () => {
       window.clearTimeout(t);
       window.clearTimeout(t2);
     };
-  }, [mapReady, adminLsgFc, adminLsgLabelsFc]);
+  }, [mapReady, adminLsgFc, adminLsgLabelsFc, lsgPickMode]);
 
   useEffect(() => {
     if (!mapReady) return;
@@ -287,6 +335,14 @@ export default function ZoneMapEditor({
     if (!draw) return;
     if (lsgPickMode) {
       draw.changeMode("simple_select");
+      return;
+    }
+    const id = draw
+      .getAll()
+      .features.map((f) => f.id)
+      .find((featureId) => featureId != null);
+    if (id != null) {
+      draw.changeMode("direct_select", { featureId: String(id) });
     }
   }, [mapReady, lsgPickMode]);
 
@@ -297,7 +353,7 @@ export default function ZoneMapEditor({
     const map = mapRef.current?.getMap();
     if (!map) return;
 
-    const handler = (e: MapLayerMouseEvent) => {
+    const handler = (e: MapMouseEvent) => {
       const f = e.features?.[0];
       if (!f?.geometry) return;
       if (f.geometry.type !== "Polygon" && f.geometry.type !== "MultiPolygon") {
@@ -792,7 +848,7 @@ export default function ZoneMapEditor({
           >
             <div className="mb-2 flex items-start justify-between gap-2">
               <p className="font-bold text-[#98E32F]">
-                Create a local-body zone
+                Draw a delivery zone
               </p>
               <button
                 type="button"
@@ -805,17 +861,22 @@ export default function ZoneMapEditor({
             </div>
             <ol className="list-decimal space-y-1 pl-4 text-white/75">
               <li>
-                Prefer the form{" "}
+                Click on the map to drop vertices, then click the first point
+                (or double-click) to close the polygon.
+              </li>
+              <li>
+                Drag vertices or the midpoints on edges to reshape the zone.
+              </li>
+              <li>
+                Optional: load a boundary from{" "}
                 <span className="font-semibold text-white/90">Local body</span>{" "}
-                dropdown, or{" "}
+                or{" "}
                 <span className="font-semibold text-white/90">
                   Pick local body on map
                 </span>
-                .
+                , then edit its edges the same way.
               </li>
-              <li>
-                Adjust corners with the draw tools if needed, then save.
-              </li>
+              <li>Name the zone and save.</li>
             </ol>
           </div>
         </div>
