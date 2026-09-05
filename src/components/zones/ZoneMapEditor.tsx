@@ -63,6 +63,43 @@ function moveLayersToTop(map: MapboxMap, ids: readonly string[]) {
   }
 }
 
+function isClosedPolygon(geometry: Geometry | null | undefined): boolean {
+  if (geometry?.type !== "Polygon") return false;
+  const ring = geometry.coordinates[0];
+  return Array.isArray(ring) && ring.length >= 4;
+}
+
+function resolveDrawFeatureId(
+  draw: MapboxDraw,
+  rawId: string | number | undefined | null,
+): string | null {
+  if (rawId == null || rawId === "") return null;
+  const id = String(rawId);
+  return draw.get(id) ? id : null;
+}
+
+/** Enter vertex edit only for a complete polygon that still exists in Draw. */
+function enterVertexEdit(
+  draw: MapboxDraw,
+  preferredId?: string | number | null,
+) {
+  const fromPreferred = resolveDrawFeatureId(draw, preferredId ?? null);
+  const fromAll =
+    fromPreferred ??
+    draw
+      .getAll()
+      .features.filter((f) => isClosedPolygon(f.geometry))
+      .map((f) => resolveDrawFeatureId(draw, f.id ?? null))
+      .find((id): id is string => id != null) ??
+    null;
+  if (!fromAll) return;
+  try {
+    draw.changeMode("direct_select", { featureId: fromAll });
+  } catch {
+    draw.changeMode("simple_select", { featureIds: [fromAll] });
+  }
+}
+
 export type LsgPickMeta = {
   key: string;
   label: string;
@@ -140,6 +177,7 @@ export default function ZoneMapEditor({
   const [adminBoundariesPanelOpen, setAdminBoundariesPanelOpen] =
     useState(true);
   const [lsgPickMode, setLsgPickMode] = useState(false);
+  const lsgPickModeRef = useRef(false);
   const onDrawPolygonChangeRef = useRef(onDrawPolygonChange);
   const onLsgGeometryPickRef = useRef(onLsgGeometryPick);
   useEffect(() => {
@@ -235,19 +273,12 @@ export default function ZoneMapEditor({
       map.addControl(draw, "top-left");
       drawRef.current = draw;
 
-      const enterVertexEdit = () => {
-        const ids = draw
-          .getAll()
-          .features.map((f) => f.id)
-          .filter((id): id is string | number => id != null);
-        const id = ids[0];
-        if (id == null) return;
-        draw.changeMode("direct_select", { featureId: String(id) });
-      };
-
-      map.on("draw.create", () => {
-        enterVertexEdit();
-        emitDraw();
+      map.on("draw.create", (e: { features?: Feature[] }) => {
+        const createdId = e.features?.[0]?.id;
+        requestAnimationFrame(() => {
+          enterVertexEdit(draw, createdId ?? null);
+          emitDraw();
+        });
       });
       // Throttle continuous vertex-drag updates.
       map.on("draw.update", scheduleEmitDraw);
@@ -272,9 +303,8 @@ export default function ZoneMapEditor({
         properties: {},
         geometry: drawPolygon,
       });
-      const id = ids[0];
-      if (id != null && !lsgPickMode) {
-        draw.changeMode("direct_select", { featureId: id });
+      if (!lsgPickMode) {
+        enterVertexEdit(draw, ids[0] ?? null);
       } else {
         draw.changeMode("simple_select");
       }
@@ -333,16 +363,16 @@ export default function ZoneMapEditor({
     if (!mapReady) return;
     const draw = drawRef.current;
     if (!draw) return;
+    const wasPickMode = lsgPickModeRef.current;
+    lsgPickModeRef.current = lsgPickMode;
     if (lsgPickMode) {
       draw.changeMode("simple_select");
       return;
     }
-    const id = draw
-      .getAll()
-      .features.map((f) => f.id)
-      .find((featureId) => featureId != null);
-    if (id != null) {
-      draw.changeMode("direct_select", { featureId: String(id) });
+    // Only restore vertex handles after leaving pick-on-map — not on first mount
+    // (that would hijack draw_polygon's unfinished feature and crash Draw).
+    if (wasPickMode) {
+      enterVertexEdit(draw);
     }
   }, [mapReady, lsgPickMode]);
 
