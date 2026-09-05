@@ -430,10 +430,28 @@ export default function ZonesPage() {
       return;
     }
 
+    if (lsgiCode.trim()) {
+      const taken = zones.some(
+        (z) =>
+          z.lsgiCode?.toUpperCase() === lsgiCode.trim().toUpperCase() &&
+          z._id !== selectedId,
+      );
+      if (taken) {
+        toast.error(
+          "A zone for this local body already exists. Leave Local body empty to save a custom zone, or edit the existing one.",
+        );
+        return;
+      }
+    }
+
     const payload = {
       name: name.trim(),
       code: (code.trim() || codeFromLsgName(name)).toUpperCase(),
-      lsgiCode: lsgiCode.trim() ? lsgiCode.trim().toUpperCase() : "",
+      ...(lsgiCode.trim()
+        ? { lsgiCode: lsgiCode.trim().toUpperCase() }
+        : selectedId !== "new" && selectedId !== null
+          ? { lsgiCode: "" }
+          : {}),
       pincode: pincode.trim() || undefined,
       district: district.trim() || "Wayanad",
       geometry: geom,
