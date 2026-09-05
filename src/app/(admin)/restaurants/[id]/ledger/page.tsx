@@ -579,9 +579,9 @@ export default function RestaurantLedgerPage() {
       </div>
 
       {pendingBatches.length > 0 ? (
-        <Card className="border-amber-500/20 bg-white/5 text-white">
-          <CardContent className="p-4 sm:p-5">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <Card className="gap-0 border-amber-500/20 bg-white/5 py-0 text-white">
+          <CardContent className="px-4 py-2.5">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2 text-white/50">
                 <Clock size={16} className="text-amber-300" />
                 <p className="text-[10px] font-bold uppercase tracking-widest">

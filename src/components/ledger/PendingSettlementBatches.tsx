@@ -61,7 +61,7 @@ export function PendingSettlementBatches({
       {batches.map((batch, index) => (
         <div
           key={`${batch.settleAt}-${index}`}
-          className="flex min-w-0 items-center gap-2 rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2"
+          className="flex min-w-0 items-center gap-2 rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-1.5"
         >
           <Clock size={14} className="shrink-0 text-amber-300" />
           <p className="min-w-0 flex-1 truncate text-xs text-white/70">
