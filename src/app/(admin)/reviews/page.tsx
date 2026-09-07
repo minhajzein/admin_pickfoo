@@ -13,6 +13,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { fetchMonitorEvents } from "@/lib/api/monitor";
+import { visibleRefetchInterval } from "@/lib/query-live";
 import type { AdminMonitorEvent } from "@/types/models";
 import { Loader2, MessageSquareText } from "lucide-react";
 
@@ -28,8 +29,8 @@ type ReviewEventRow = {
 export default function ReviewsPage() {
   const { data: events = [], isLoading } = useQuery({
     queryKey: ["reviews", "monitor-events"],
-    queryFn: () => fetchMonitorEvents({ limit: 300 }),
-    refetchInterval: 30000,
+    queryFn: () => fetchMonitorEvents({ limit: 100 }),
+    refetchInterval: visibleRefetchInterval(60_000),
   });
 
   const rows = useMemo(() => toReviewRows(events), [events]);

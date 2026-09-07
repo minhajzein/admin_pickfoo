@@ -47,6 +47,7 @@ import {
   type PlatformLedgerKind,
 } from "@/lib/api/platform-ledger";
 import { cn } from "@/lib/utils";
+import { visibleRefetchInterval } from "@/lib/query-live";
 
 const money = new Intl.NumberFormat("en-IN", {
   style: "currency",
@@ -296,7 +297,7 @@ export default function RevenuePage() {
     queryKey: ["platform-ledger-wallet"],
     queryFn: fetchPlatformWallet,
     staleTime: 60_000,
-    refetchInterval: 60_000,
+    refetchInterval: visibleRefetchInterval(60_000),
   });
 
   const {
@@ -306,7 +307,7 @@ export default function RevenuePage() {
     queryKey: ["platform-ledger-settlement"],
     queryFn: fetchPlatformSettlement,
     staleTime: 60_000,
-    refetchInterval: 60_000,
+    refetchInterval: visibleRefetchInterval(60_000),
   });
 
   // All-time commission — changes rarely; keep off the filter click path.
@@ -341,7 +342,7 @@ export default function RevenuePage() {
         includeAllTime: false,
         includeFilteredCommission: needsPeriodCommission,
       }),
-    refetchInterval: 30_000,
+    refetchInterval: visibleRefetchInterval(60_000),
     placeholderData: keepPreviousData,
   });
 

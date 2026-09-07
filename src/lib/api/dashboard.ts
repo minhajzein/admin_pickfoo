@@ -1,7 +1,6 @@
 import api from "@/lib/axios";
-import type { AdminMonitorEvent, Partner, Restaurant, User } from "@/types/models";
+import type { AdminMonitorEvent, Restaurant, User } from "@/types/models";
 import { fetchDispatchOrders } from "@/lib/api/orders";
-import { fetchPartners } from "@/lib/api/partners";
 import { parsePaginatedResponse } from "@/lib/pagination";
 
 export interface DashboardActivity {
@@ -34,7 +33,7 @@ export interface DashboardOverview {
 }
 
 export async function fetchDashboardOverview(): Promise<DashboardOverview> {
-  const [restaurantsRes, pendingRes, usersRes, partnersResult, monitorRes, ordersRes] =
+  const [restaurantsRes, pendingRes, usersRes, partnersRes, monitorRes, ordersRes] =
     await Promise.all([
       api.get("/restaurants", { params: { page: 1, limit: 1 } }),
       api.get("/restaurants", {
@@ -43,27 +42,25 @@ export async function fetchDashboardOverview(): Promise<DashboardOverview> {
       api.get("/users", {
         params: { role: "user", customersOnly: true, page: 1, limit: 1 },
       }),
-      fetchPartners({ page: 1, limit: 100 }),
-      api.get<{ data?: AdminMonitorEvent[] }>("/monitor/events?limit=120"),
-      fetchDispatchOrders({ page: 1, limit: 300 }),
+      api.get("/partners", { params: { page: 1, limit: 1 } }),
+      api.get<{ data?: AdminMonitorEvent[] }>("/monitor/events?limit=20"),
+      fetchDispatchOrders({ page: 1, limit: 1 }),
     ]);
 
   const restaurantsMeta = parsePaginatedResponse<Restaurant>(restaurantsRes.data);
   const pendingMeta = parsePaginatedResponse<Restaurant>(pendingRes.data);
   const usersMeta = parsePaginatedResponse<User>(usersRes.data);
-  const partners = partnersResult.data ?? [];
   const events = monitorRes.data?.data ?? [];
-  const orders = ordersRes.data ?? [];
   const orderSummary = ordersRes.summary;
-
-  const onlinePartners = partners.filter((partner: Partner) => partner.isOnline)
-    .length;
+  const onlinePartners = Number(
+    (partnersRes.data as { onlineCount?: number } | undefined)?.onlineCount,
+  ) || 0;
 
   return {
     totalRestaurants: restaurantsMeta.total,
     pendingRestaurantVerifications: pendingMeta.total,
     activeUsers: usersMeta.total,
-    totalOrders: orderSummary?.total ?? orders.length,
+    totalOrders: orderSummary?.total ?? 0,
     completedOrders: orderSummary?.delivered ?? 0,
     platformCommission: orderSummary?.platformCommission ?? 0,
     onlinePartners,

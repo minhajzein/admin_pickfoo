@@ -31,6 +31,7 @@ import {
   type PartnerOpsOrderScope,
 } from "@/lib/api/partner-ops";
 import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
+import { visibleRefetchInterval } from "@/lib/query-live";
 import {
   ArrowLeft,
   Bike,
@@ -79,7 +80,7 @@ export default function PartnerOpsPage() {
     queryKey: ["partner-ops", partnerId, "hours"],
     queryFn: () => fetchPartnerPresenceHours(String(partnerId), 14),
     enabled: Boolean(partnerId),
-    refetchInterval: 60_000,
+    refetchInterval: visibleRefetchInterval(60_000),
   });
 
   const { data: ordersData, isLoading: ordersLoading } = useQuery({

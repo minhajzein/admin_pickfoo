@@ -43,6 +43,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { ListPagination } from "@/components/ui/list-pagination";
 import { DEFAULT_PAGE_SIZE, parsePaginatedResponse } from "@/lib/pagination";
+import { visibleRefetchInterval } from "@/lib/query-live";
 
 const money = new Intl.NumberFormat("en-IN", {
   style: "currency",
@@ -306,11 +307,11 @@ export default function OrdersPage() {
     queryKey: ["orders", "filter-restaurants"],
     queryFn: async () => {
       const { data } = await api.get("/restaurants", {
-        params: { page: 1, limit: 500 },
+        params: { page: 1, limit: 100 },
       });
       return parsePaginatedResponse<Restaurant>(data).data;
     },
-    staleTime: 60_000,
+    staleTime: 5 * 60_000,
   });
 
   const { data: partners = [] } = useQuery({
@@ -318,19 +319,19 @@ export default function OrdersPage() {
     queryFn: async () => {
       const result = await fetchPartners({
         page: 1,
-        limit: 500,
+        limit: 100,
         status: "VERIFIED",
       });
       return result.data;
     },
-    staleTime: 60_000,
+    staleTime: 5 * 60_000,
   });
 
   const { data, isLoading } = useQuery({
     queryKey: ["orders", "dispatch-orders", page, filters],
     queryFn: () =>
       fetchDispatchOrders({ page, limit: DEFAULT_PAGE_SIZE, ...filters }),
-    refetchInterval: 15000,
+    refetchInterval: visibleRefetchInterval(30_000),
     placeholderData: keepPreviousData,
   });
 

@@ -3,12 +3,9 @@
 import {
   memo,
   startTransition,
-  useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
-  useState,
-  useTransition,
   type ComponentType,
   type ReactNode,
 } from "react";
@@ -39,7 +36,6 @@ import {
   Gift,
   Ticket,
   IndianRupee,
-  Loader2,
 } from "lucide-react";
 import { io } from "socket.io-client";
 import { toast } from "sonner";
@@ -91,33 +87,31 @@ const AdminPageSlot = memo(function AdminPageSlot({
   );
 });
 
+function pathMatches(pathname: string, href: string): boolean {
+  if (href === "/") return pathname === "/";
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
 const NavItemButton = memo(function NavItemButton({
   name,
   href,
   icon: Icon,
   isActive,
-  isPending,
   expanded,
-  onNavigate,
 }: {
   name: string;
   href: string;
   icon: ComponentType<{ size?: number; className?: string }>;
   isActive: boolean;
-  isPending: boolean;
   expanded: boolean;
-  onNavigate: (href: string) => void;
 }) {
   return (
     <Link
       href={href}
-      prefetch
-      onClick={(e) => {
-        e.preventDefault();
-        onNavigate(href);
-      }}
+      prefetch={false}
+      onClick={() => adminShellUi.closeMobile()}
       className={`group relative flex w-full items-center rounded-xl p-3 text-left transition-colors duration-100 ${
-        isActive || isPending
+        isActive
           ? "bg-[#98E32F] text-[#013644] shadow-[0_0_20px_rgba(152,227,47,0.2)]"
           : "text-white/60 hover:bg-[#98E32F]/10 hover:text-[#98E32F]"
       }`}
@@ -125,11 +119,7 @@ const NavItemButton = memo(function NavItemButton({
       <div
         className={`flex items-center justify-center ${expanded ? "w-auto" : "w-full"}`}
       >
-        {isPending && !isActive ? (
-          <Loader2 size={22} className="min-w-[22px] animate-spin" />
-        ) : (
-          <Icon size={22} className="min-w-[22px]" />
-        )}
+        <Icon size={22} className="min-w-[22px]" />
       </div>
       <span
         className={`overflow-hidden whitespace-nowrap text-sm font-bold tracking-tight ${
@@ -143,49 +133,8 @@ const NavItemButton = memo(function NavItemButton({
 });
 
 function AdminSidebar({ onLogout }: { onLogout: () => void }) {
-  const router = useRouter();
   const pathname = usePathname();
   const { sidebarOpen, mobileOpen } = useAdminShellUi();
-  const [pendingHref, setPendingHref] = useState<string | null>(null);
-  const navLockRef = useRef(false);
-  const [, startNavTransition] = useTransition();
-
-  useEffect(() => {
-    setPendingHref(null);
-    navLockRef.current = false;
-  }, [pathname]);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      for (const item of NAV_ITEMS) {
-        try {
-          router.prefetch(item.href);
-        } catch {
-          // ignore prefetch failures
-        }
-      }
-    }, 600);
-    return () => window.clearTimeout(timer);
-  }, [router]);
-
-  const navigate = useCallback(
-    (href: string) => {
-      adminShellUi.closeMobile();
-      if (href === pathname || navLockRef.current) return;
-
-      navLockRef.current = true;
-      // Paint pending state in this task; push the route after the click ends.
-      setPendingHref(href);
-
-      window.setTimeout(() => {
-        startNavTransition(() => {
-          router.push(href);
-        });
-      }, 32);
-    },
-    [pathname, router, startNavTransition],
-  );
-
   const expanded = sidebarOpen || mobileOpen;
 
   return (
@@ -260,10 +209,8 @@ function AdminSidebar({ onLogout }: { onLogout: () => void }) {
               name={item.name}
               href={item.href}
               icon={item.icon}
-              isActive={pathname === item.href}
-              isPending={pendingHref === item.href}
+              isActive={pathMatches(pathname, item.href)}
               expanded={expanded}
-              onNavigate={navigate}
             />
           ))}
         </nav>
@@ -342,6 +289,8 @@ function AdminHeader({
 
 function useAdminRealtime(enabled: boolean) {
   const router = useRouter();
+  const routerRef = useRef(router);
+  routerRef.current = router;
 
   useEffect(() => {
     if (!enabled) return;
@@ -369,7 +318,7 @@ function useAdminRealtime(enabled: boolean) {
         icon: <CheckCircle2 className="h-5 w-5 text-green-500" />,
         action: {
           label: "View",
-          onClick: () => router.push("/restaurants"),
+          onClick: () => routerRef.current.push("/restaurants"),
         },
         duration: 8000,
       });
@@ -391,7 +340,7 @@ function useAdminRealtime(enabled: boolean) {
           duration: 6000,
           action: {
             label: "Partners",
-            onClick: () => router.push("/partners"),
+            onClick: () => routerRef.current.push("/partners"),
           },
         });
         window.dispatchEvent(
@@ -452,7 +401,7 @@ function useAdminRealtime(enabled: boolean) {
           duration: 6000,
           action: {
             label: "Orders",
-            onClick: () => router.push("/orders"),
+            onClick: () => routerRef.current.push("/orders"),
           },
         });
       },
@@ -461,14 +410,9 @@ function useAdminRealtime(enabled: boolean) {
     socket.on(
       "order:live:status-updated",
       (data: { orderId?: string; status?: string }) => {
-        toast.message("Order status live update", {
-          description: `${data.orderId || "Order"} -> ${data.status || "updated"}`,
-          duration: 5000,
-          action: {
-            label: "Orders",
-            onClick: () => router.push("/orders"),
-          },
-        });
+        window.dispatchEvent(
+          new CustomEvent("admin:order-status-updated", { detail: data }),
+        );
       },
     );
 
@@ -480,7 +424,7 @@ function useAdminRealtime(enabled: boolean) {
           duration: 7000,
           action: {
             label: "Orders",
-            onClick: () => router.push("/orders"),
+            onClick: () => routerRef.current.push("/orders"),
           },
         });
       },
@@ -521,7 +465,7 @@ function useAdminRealtime(enabled: boolean) {
     return () => {
       socket.disconnect();
     };
-  }, [enabled, router]);
+  }, [enabled]);
 }
 
 export default function AdminLayout({
@@ -583,7 +527,9 @@ export default function AdminLayout({
   }
 
   const pageTitle =
-    NAV_ITEMS.find((item) => item.href === pathname)?.name || "Admin Panel";
+    NAV_ITEMS.find((item) => pathMatches(pathname, item.href) && item.href !== "/")
+      ?.name ||
+    (pathname === "/" ? "Dashboard" : "Admin Panel");
 
   return (
     <div className="flex h-dvh overflow-hidden bg-[#013644] text-white dark">

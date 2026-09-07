@@ -7,6 +7,7 @@ import { Bike, Loader2, MapPinned, RefreshCw, Store } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { fetchLiveMapFeed, type LiveMapPartnerWithoutLocation } from "@/lib/api/map";
+import { visibleRefetchInterval } from "@/lib/query-live";
 
 const LiveOperationsMap = dynamic(
   () => import("@/components/map/LiveOperationsMap"),
@@ -35,7 +36,7 @@ export default function LiveMapPage() {
         onlineOnly,
         activeRestaurantsOnly,
       }),
-    refetchInterval: 15_000,
+    refetchInterval: visibleRefetchInterval(30_000),
   });
 
   useEffect(() => {

@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { fetchDashboardOverview } from "@/lib/api/dashboard";
+import { visibleRefetchInterval } from "@/lib/query-live";
 import {
   Store,
   Users,
@@ -25,7 +26,7 @@ export default function AdminDashboard() {
   const { data, isLoading, isError } = useQuery({
     queryKey: ["dashboard-overview"],
     queryFn: fetchDashboardOverview,
-    refetchInterval: 30000,
+    refetchInterval: visibleRefetchInterval(60_000),
   });
 
   const stats = [

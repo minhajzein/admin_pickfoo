@@ -59,6 +59,7 @@ import {
 } from "@/lib/api/restaurants";
 import { ListPagination } from "@/components/ui/list-pagination";
 import { DEFAULT_PAGE_SIZE, parsePaginatedResponse } from "@/lib/pagination";
+import { visibleRefetchInterval } from "@/lib/query-live";
 import { cn } from "@/lib/utils";
 
 interface Restaurant {
@@ -123,7 +124,7 @@ export default function RestaurantsPage() {
       return parsePaginatedResponse<Restaurant>(response.data);
     },
     placeholderData: keepPreviousData,
-    refetchInterval: 15_000,
+    refetchInterval: visibleRefetchInterval(30_000),
   });
 
   useEffect(() => {
@@ -349,12 +350,7 @@ export default function RestaurantsPage() {
     : null;
 
   const go = (href: string) => {
-    // Close the menu and paint first; navigation is a long task otherwise (INP).
-    requestAnimationFrame(() => {
-      startTransition(() => {
-        router.push(href);
-      });
-    });
+    router.push(href);
   };
 
   return (
