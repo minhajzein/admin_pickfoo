@@ -7,11 +7,13 @@ import { useSyncExternalStore } from "react";
 type AdminShellUiState = {
   sidebarOpen: boolean;
   mobileOpen: boolean;
+  pendingHref: string | null;
 };
 
 let state: AdminShellUiState = {
   sidebarOpen: true,
   mobileOpen: false,
+  pendingHref: null,
 };
 
 const listeners = new Set<() => void>();
@@ -43,6 +45,11 @@ export const adminShellUi = {
   closeMobile() {
     if (!state.mobileOpen) return;
     state = { ...state, mobileOpen: false };
+    emit();
+  },
+  setPendingHref(href: string | null) {
+    if (state.pendingHref === href) return;
+    state = { ...state, pendingHref: href };
     emit();
   },
 };

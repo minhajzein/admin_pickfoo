@@ -17,6 +17,11 @@ export interface AdminOrderRow {
   /** Full km/tier fee credited to partner (even when customer delivery is free). */
   partnerDeliveryFee?: number | null;
   customerDeliveryFee?: number | null;
+  gstAmount?: number | null;
+  sgstAmount?: number | null;
+  cgstAmount?: number | null;
+  restaurantGstRegistered?: boolean;
+  gstDestination?: "platform" | "restaurant" | null;
   /** Company commission only (not restaurant item totals). */
   platformCommission?: number | null;
   commissionPercent?: number | null;
@@ -133,6 +138,7 @@ export interface AdminOrderDetail {
   cgstAmount: number;
   gstAmount: number;
   restaurantGstRegistered: boolean;
+  gstDestination?: "platform" | "restaurant" | null;
   totalAmount?: number | null;
   platformCommission: number;
   commissionPercent: number;

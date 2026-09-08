@@ -1,9 +1,8 @@
 import axios, { AxiosError } from 'axios';
 
-const defaultBase =
-  process.env.NODE_ENV === 'production'
-    ? 'https://api.pickfoo.in/admin/api/v1'
-    : 'http://localhost:5001/api/v1';
+// Local admin UI talks to the live admin API so login/orders match production.
+// Override with NEXT_PUBLIC_API_URL (e.g. http://localhost:5001/api/v1) when needed.
+const defaultBase = 'https://api.pickfoo.in/admin/api/v1';
 
 const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL || defaultBase,

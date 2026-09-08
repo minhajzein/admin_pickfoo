@@ -61,6 +61,7 @@ import { ListPagination } from "@/components/ui/list-pagination";
 import { DEFAULT_PAGE_SIZE, parsePaginatedResponse } from "@/lib/pagination";
 import { visibleRefetchInterval } from "@/lib/query-live";
 import { cn } from "@/lib/utils";
+import { adminShellUi } from "@/components/admin/admin-shell-ui";
 
 interface Restaurant {
   _id: string;
@@ -350,6 +351,7 @@ export default function RestaurantsPage() {
     : null;
 
   const go = (href: string) => {
+    adminShellUi.setPendingHref(href);
     router.push(href);
   };
 

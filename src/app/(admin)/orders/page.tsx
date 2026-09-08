@@ -44,6 +44,8 @@ import { toast } from "sonner";
 import { ListPagination } from "@/components/ui/list-pagination";
 import { DEFAULT_PAGE_SIZE, parsePaginatedResponse } from "@/lib/pagination";
 import { visibleRefetchInterval } from "@/lib/query-live";
+import { adminShellUi } from "@/components/admin/admin-shell-ui";
+import { useRouter } from "next/navigation";
 
 const money = new Intl.NumberFormat("en-IN", {
   style: "currency",
@@ -183,6 +185,15 @@ function redispatchReasonLabel(reason?: string): string {
 }
 
 function AmountBreakdown({ row }: { row: AdminOrderRow }) {
+  const partnerFee = row.partnerDeliveryFee ?? 0;
+  const customerFee = row.customerDeliveryFee ?? row.deliveryFee ?? 0;
+  const deliveryShown = partnerFee > 0 ? partnerFee : customerFee;
+  const customerFree = partnerFee > 0 && customerFee === 0;
+  const gstOwner =
+    row.gstDestination === "restaurant" || row.restaurantGstRegistered
+      ? "restaurant"
+      : "platform";
+
   return (
     <div className="min-w-44 space-y-0.5 text-xs leading-snug">
       <div className="flex justify-between gap-3 font-medium text-white">
@@ -200,18 +211,20 @@ function AmountBreakdown({ row }: { row: AdminOrderRow }) {
       <div className="flex justify-between gap-3 text-white/70">
         <span className="text-white/40">Delivery</span>
         <span>
-          {(row.partnerDeliveryFee ?? 0) > 0 &&
-          (row.partnerDeliveryFee ?? 0) !== (row.deliveryFee ?? 0) ? (
-            <>
-              {formatMoney(0)}{" "}
-              <span className="text-[10px] text-white/35">
-                (partner {formatMoney(row.partnerDeliveryFee ?? 0)})
-              </span>
-            </>
-          ) : (
-            formatMoney(row.deliveryFee)
-          )}
+          {formatMoney(deliveryShown)}
+          {customerFree ? (
+            <span className="ml-1 text-[10px] text-white/35">(customer free)</span>
+          ) : null}
         </span>
+      </div>
+      <div className="flex justify-between gap-3 text-white/70">
+        <span className="text-white/40">
+          GST
+          <span className="ml-1 text-[10px] font-normal text-white/35">
+            ({gstOwner})
+          </span>
+        </span>
+        <span>{formatMoney(row.gstAmount)}</span>
       </div>
       <div className="flex justify-between gap-3 border-t border-white/10 pt-0.5 font-medium text-[#98E32F]">
         <span className="text-white/50">
@@ -230,6 +243,7 @@ function AmountBreakdown({ row }: { row: AdminOrderRow }) {
 
 export default function OrdersPage() {
   const queryClient = useQueryClient();
+  const router = useRouter();
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState("");
   const [restaurantId, setRestaurantId] = useState("");
@@ -686,6 +700,17 @@ export default function OrdersPage() {
                         <div className="flex flex-col gap-1">
                           <Link
                             href={`/orders/${encodeURIComponent(orderRef)}`}
+                            prefetch
+                            onPointerEnter={() =>
+                              router.prefetch(
+                                `/orders/${encodeURIComponent(orderRef)}`,
+                              )
+                            }
+                            onClick={() =>
+                              adminShellUi.setPendingHref(
+                                `/orders/${encodeURIComponent(orderRef)}`,
+                              )
+                            }
                             className="text-white hover:text-[#98E32F] hover:underline"
                           >
                             {row.pickfooId || row.id}
@@ -780,6 +805,17 @@ export default function OrdersPage() {
                           >
                             <Link
                               href={`/orders/${encodeURIComponent(orderRef)}`}
+                              prefetch
+                              onPointerEnter={() =>
+                                router.prefetch(
+                                  `/orders/${encodeURIComponent(orderRef)}`,
+                                )
+                              }
+                              onClick={() =>
+                                adminShellUi.setPendingHref(
+                                  `/orders/${encodeURIComponent(orderRef)}`,
+                                )
+                              }
                             >
                               <Eye className="mr-1.5 h-3.5 w-3.5" />
                               Details

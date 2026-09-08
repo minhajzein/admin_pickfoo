@@ -3,6 +3,7 @@
 import {
   memo,
   startTransition,
+  useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -10,7 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import Image from "next/image";
-import Link from "next/link";
+import Link, { useLinkStatus } from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuthStore } from "@/store/useAuthStore";
 import {
@@ -36,6 +37,7 @@ import {
   Gift,
   Ticket,
   IndianRupee,
+  Loader2,
 } from "lucide-react";
 import { io } from "socket.io-client";
 import { toast } from "sonner";
@@ -92,24 +94,51 @@ function pathMatches(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
+const HOT_ROUTES = [
+  "/",
+  "/orders",
+  "/restaurants",
+  "/partners",
+  "/users",
+  "/map",
+] as const;
+
+function NavPendingIcon({
+  icon: Icon,
+}: {
+  icon: ComponentType<{ size?: number; className?: string }>;
+}) {
+  const { pending } = useLinkStatus();
+  if (pending) {
+    return <Loader2 size={22} className="min-w-[22px] animate-spin" />;
+  }
+  return <Icon size={22} className="min-w-[22px]" />;
+}
+
 const NavItemButton = memo(function NavItemButton({
   name,
   href,
   icon: Icon,
   isActive,
   expanded,
+  onPrefetch,
 }: {
   name: string;
   href: string;
   icon: ComponentType<{ size?: number; className?: string }>;
   isActive: boolean;
   expanded: boolean;
+  onPrefetch: (href: string) => void;
 }) {
   return (
     <Link
       href={href}
-      prefetch={false}
-      onClick={() => adminShellUi.closeMobile()}
+      prefetch
+      onPointerEnter={() => onPrefetch(href)}
+      onClick={() => {
+        adminShellUi.closeMobile();
+        if (!isActive) adminShellUi.setPendingHref(href);
+      }}
       className={`group relative flex w-full items-center rounded-xl p-3 text-left transition-colors duration-100 ${
         isActive
           ? "bg-[#98E32F] text-[#013644] shadow-[0_0_20px_rgba(152,227,47,0.2)]"
@@ -119,7 +148,7 @@ const NavItemButton = memo(function NavItemButton({
       <div
         className={`flex items-center justify-center ${expanded ? "w-auto" : "w-full"}`}
       >
-        <Icon size={22} className="min-w-[22px]" />
+        <NavPendingIcon icon={Icon} />
       </div>
       <span
         className={`overflow-hidden whitespace-nowrap text-sm font-bold tracking-tight ${
@@ -133,12 +162,47 @@ const NavItemButton = memo(function NavItemButton({
 });
 
 function AdminSidebar({ onLogout }: { onLogout: () => void }) {
+  const router = useRouter();
   const pathname = usePathname();
-  const { sidebarOpen, mobileOpen } = useAdminShellUi();
+  const { sidebarOpen, mobileOpen, pendingHref } = useAdminShellUi();
   const expanded = sidebarOpen || mobileOpen;
+
+  useEffect(() => {
+    adminShellUi.setPendingHref(null);
+  }, [pathname]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      for (const href of HOT_ROUTES) {
+        try {
+          router.prefetch(href);
+        } catch {
+          // ignore
+        }
+      }
+    }, 800);
+    return () => window.clearTimeout(timer);
+  }, [router]);
+
+  const prefetchRoute = useCallback(
+    (href: string) => {
+      try {
+        router.prefetch(href);
+      } catch {
+        // ignore
+      }
+    },
+    [router],
+  );
 
   return (
     <>
+      {pendingHref ? (
+        <div className="pointer-events-none fixed top-0 left-0 right-0 z-[70] h-0.5 bg-white/10">
+          <div className="h-full w-2/5 animate-pulse bg-[#98E32F]" />
+        </div>
+      ) : null}
+
       {mobileOpen ? (
         <div
           className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden"
@@ -211,6 +275,7 @@ function AdminSidebar({ onLogout }: { onLogout: () => void }) {
               icon={item.icon}
               isActive={pathMatches(pathname, item.href)}
               expanded={expanded}
+              onPrefetch={prefetchRoute}
             />
           ))}
         </nav>
