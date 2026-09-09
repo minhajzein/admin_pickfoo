@@ -705,7 +705,7 @@ export default function RestaurantLedgerPage() {
         ).map(([label, row]) => (
           <div
             key={label}
-            className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3"
+            className="rounded-xl border border-white/10 bg-white/3 px-4 py-3"
           >
             <p className="text-[10px] uppercase tracking-wider text-white/35 font-bold">
               {label} withdrawals
@@ -753,7 +753,7 @@ export default function RestaurantLedgerPage() {
                   const value = e.target.value;
                   startTransition(() => setCustomFrom(value));
                 }}
-                className="h-9 w-[11rem] border-white/15 bg-black/20 text-white"
+                className="h-9 w-44 border-white/15 bg-black/20 text-white"
               />
             </div>
             <div className="space-y-1">
@@ -765,7 +765,7 @@ export default function RestaurantLedgerPage() {
                   const value = e.target.value;
                   startTransition(() => setCustomTo(value));
                 }}
-                className="h-9 w-[11rem] border-white/15 bg-black/20 text-white"
+                className="h-9 w-44 border-white/15 bg-black/20 text-white"
               />
             </div>
           </div>
@@ -935,7 +935,7 @@ export default function RestaurantLedgerPage() {
                             tx.status) as string,
                         )}
                       </TableCell>
-                      <TableCell className="max-w-[220px] truncate text-xs text-white/40">
+                      <TableCell className="max-w-55 truncate text-xs text-white/40">
                         {tx.notes || "—"}
                       </TableCell>
                     </TableRow>
@@ -1006,7 +1006,7 @@ export default function RestaurantLedgerPage() {
                         <WithdrawalAccountDetails bank={w.bankAccount} />
                       </TableCell>
                       <TableCell>{statusBadge(w.status)}</TableCell>
-                      <TableCell className="max-w-[180px] truncate text-xs text-white/40">
+                      <TableCell className="max-w-45 truncate text-xs text-white/40">
                         {w.notes || "—"}
                       </TableCell>
                       <TableCell className="text-right">
