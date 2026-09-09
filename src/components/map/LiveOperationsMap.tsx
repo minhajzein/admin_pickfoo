@@ -105,7 +105,7 @@ function LiveOperationsMap({
   }, []);
 
   return (
-    <div className="relative h-[min(72vh,760px)] min-h-[420px] overflow-hidden rounded-xl border border-white/10">
+    <div className="relative h-[min(72vh,760px)] min-h-105 overflow-hidden rounded-xl border border-white/10">
       {mapError ? (
         <div className="absolute inset-0 z-10 flex items-center justify-center p-6 text-center text-sm text-amber-200">
           Map failed to load. {mapError}
@@ -292,7 +292,7 @@ function PopupCard({
   children: ReactNode;
 }) {
   return (
-    <div className="min-w-[220px] max-w-[280px] space-y-1 text-sm text-[#013644]">
+    <div className="min-w-55 max-w-70 space-y-1 text-sm text-[#013644]">
       <p className="font-semibold">{title}</p>
       <p className="text-xs text-[#013644]/70">{subtitle}</p>
       <div className="space-y-1 text-xs text-[#013644]/85">{children}</div>

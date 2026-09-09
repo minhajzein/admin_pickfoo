@@ -254,7 +254,7 @@ export default function RestaurantsPage() {
     const isOpen = Boolean(restaurant.isOpen);
 
     return (
-      <div className="flex flex-col gap-1.5 min-w-[7.5rem]">
+      <div className="flex min-w-30 flex-col gap-1.5">
         <div className="flex items-center gap-1 rounded-md border border-white/10 bg-black/20 p-0.5">
           <button
             type="button"
@@ -449,7 +449,7 @@ export default function RestaurantsPage() {
                     <TableCell>{restaurant.owner?.name || "Unknown"}</TableCell>
                     <TableCell>{restaurant.address.city}</TableCell>
                     <TableCell
-                      className="max-w-[160px]"
+                      className="max-w-40"
                       onClick={(e) => e.stopPropagation()}
                     >
                       <div className="flex flex-col gap-1">
