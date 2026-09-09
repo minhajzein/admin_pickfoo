@@ -62,6 +62,7 @@ import { DEFAULT_PAGE_SIZE, parsePaginatedResponse } from "@/lib/pagination";
 import { visibleRefetchInterval } from "@/lib/query-live";
 import { cn } from "@/lib/utils";
 import { adminShellUi } from "@/components/admin/admin-shell-ui";
+import { RestaurantLocationMap } from "@/components/map/RestaurantLocationMap";
 
 interface Restaurant {
   _id: string;
@@ -601,7 +602,7 @@ export default function RestaurantsPage() {
 
       {/* Details Dialog */}
       <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
-        <DialogContent className="bg-[#002833] border-white/5 text-white max-w-2xl">
+        <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto border-white/5 bg-[#002833] text-white">
           <DialogHeader>
             <DialogTitle className="text-2xl font-bold">
               {selectedRestaurant?.name}
@@ -665,6 +666,21 @@ export default function RestaurantsPage() {
                 </div>
               )}
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-white/40">Map location</Label>
+            {selectedRestaurant?.address.coordinates ? (
+              <RestaurantLocationMap
+                lat={selectedRestaurant.address.coordinates.lat}
+                lng={selectedRestaurant.address.coordinates.lng}
+                name={selectedRestaurant.name}
+              />
+            ) : (
+              <div className="flex h-32 items-center justify-center rounded-lg border border-dashed border-white/15 bg-black/15 text-sm text-white/40">
+                Restaurant map pin is not available
+              </div>
+            )}
           </div>
 
           <DialogFooter className="gap-2">

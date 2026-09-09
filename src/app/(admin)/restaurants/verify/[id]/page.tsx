@@ -42,6 +42,7 @@ import {
 } from "@/lib/api/restaurants";
 import { RestaurantProfileEditor } from "@/components/restaurants/RestaurantProfileEditor";
 import { RestaurantScheduleEditor } from "@/components/restaurants/RestaurantScheduleEditor";
+import { RestaurantLocationMap } from "@/components/map/RestaurantLocationMap";
 import { cn } from "@/lib/utils";
 
 function zoneIdFromRestaurant(restaurant: { zone?: unknown } | null | undefined) {
@@ -521,6 +522,18 @@ export default function VerifyRestaurantPage() {
                 <p className="text-xs text-amber-400/90">
                   Coordinates are set — assign a zone for delivery routing.
                 </p>
+              )}
+              {restaurant.address?.coordinates ? (
+                <RestaurantLocationMap
+                  lat={restaurant.address.coordinates.lat}
+                  lng={restaurant.address.coordinates.lng}
+                  name={restaurant.name}
+                  className="h-55"
+                />
+              ) : (
+                <div className="flex h-28 items-center justify-center rounded-lg border border-dashed border-white/15 bg-black/15 text-xs text-white/40">
+                  Restaurant map pin is not available
+                </div>
               )}
               {restaurant.address?.coordinates && (
                 <Button
