@@ -65,6 +65,7 @@ export async function fetchDispatchOrders(params?: {
   status?: string;
   restaurantId?: string;
   partnerId?: string;
+  zoneId?: string;
   /** YYYY-MM-DD or ISO */
   from?: string;
   /** YYYY-MM-DD or ISO */
@@ -77,6 +78,7 @@ export async function fetchDispatchOrders(params?: {
       status: params?.status || undefined,
       restaurantId: params?.restaurantId || undefined,
       partnerId: params?.partnerId || undefined,
+      zoneId: params?.zoneId || undefined,
       from: params?.from || undefined,
       to: params?.to || undefined,
     },

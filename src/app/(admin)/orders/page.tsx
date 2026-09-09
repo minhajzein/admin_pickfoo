@@ -36,8 +36,9 @@ import {
   type AdminOrderRow,
 } from "@/lib/api/orders";
 import { fetchPartners } from "@/lib/api/partners";
+import { fetchZones } from "@/lib/api/zones";
 import api from "@/lib/axios";
-import type { Partner, Restaurant } from "@/types/models";
+import type { DeliveryZone, Partner, Restaurant } from "@/types/models";
 import { Eye, Loader2, RefreshCw, X } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -248,6 +249,7 @@ export default function OrdersPage() {
   const [status, setStatus] = useState("");
   const [restaurantId, setRestaurantId] = useState("");
   const [partnerId, setPartnerId] = useState("");
+  const [zoneId, setZoneId] = useState("");
   const [datePreset, setDatePreset] = useState<DatePreset>("today");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
@@ -280,14 +282,15 @@ export default function OrdersPage() {
       status: status || undefined,
       restaurantId: restaurantId || undefined,
       partnerId: partnerId || undefined,
+      zoneId: zoneId || undefined,
       from: dateRange.from,
       to: dateRange.to,
     }),
-    [status, restaurantId, partnerId, dateRange.from, dateRange.to],
+    [status, restaurantId, partnerId, zoneId, dateRange.from, dateRange.to],
   );
 
   const hasNonDefaultFilters = Boolean(
-    status || restaurantId || partnerId || datePreset !== "today",
+    status || restaurantId || partnerId || zoneId || datePreset !== "today",
   );
 
   const clearFilters = () => {
@@ -295,6 +298,7 @@ export default function OrdersPage() {
       setStatus("");
       setRestaurantId("");
       setPartnerId("");
+      setZoneId("");
       setDatePreset("today");
       setCustomFrom("");
       setCustomTo("");
@@ -338,6 +342,12 @@ export default function OrdersPage() {
       });
       return result.data;
     },
+    staleTime: 5 * 60_000,
+  });
+
+  const { data: zones = [] } = useQuery({
+    queryKey: ["orders", "filter-zones"],
+    queryFn: () => fetchZones(),
     staleTime: 5 * 60_000,
   });
 
@@ -489,7 +499,7 @@ export default function OrdersPage() {
 
       <Card className="gap-0 border-white/5 bg-[#002833] py-0 text-white">
         <CardContent className="space-y-2 px-4 py-2">
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
             <div className="space-y-1">
               <label className="text-[10px] font-bold uppercase tracking-widest text-white/40">
                 Period
@@ -573,6 +583,29 @@ export default function OrdersPage() {
                   <option key={String(p._id)} value={String(p._id)}>
                     {p.fullName}
                     {p.phone ? ` · ${p.phone}` : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold uppercase tracking-widest text-white/40">
+                Zone
+              </label>
+              <select
+                className={selectClassName}
+                value={zoneId}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  startTransition(() => {
+                    setZoneId(value);
+                    setPage(1);
+                  });
+                }}
+              >
+                <option value="">All zones</option>
+                {zones.map((zone: DeliveryZone) => (
+                  <option key={zone._id} value={zone._id}>
+                    {zone.name}
                   </option>
                 ))}
               </select>
