@@ -4,6 +4,7 @@ export interface LiveMapPartnerMarker {
   id: string;
   fullName: string;
   phone: string;
+  profilePhotoUrl: string;
   isOnline: boolean;
   onDuty: boolean;
   priorityLevel: number;
@@ -15,6 +16,7 @@ export interface LiveMapPartnerMarker {
 export interface LiveMapRestaurantMarker {
   id: string;
   name: string;
+  logoUrl: string;
   status: string;
   isOpen: boolean;
   lng: number;
