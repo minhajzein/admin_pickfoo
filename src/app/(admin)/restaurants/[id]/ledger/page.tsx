@@ -195,12 +195,40 @@ function ledgerSettlementBatches(
   >["summary"],
   txs: RestaurantLedgerTransaction[],
 ) {
+  const capBatches = (
+    rows: Array<{ amount: number; settleAt: string }>,
+  ): Array<{ amount: number; settleAt: string }> => {
+    const limit = Math.max(
+      0,
+      Math.min(
+        summary.pendingSettlement ?? Number.POSITIVE_INFINITY,
+        summary.walletBalance ?? Number.POSITIVE_INFINITY,
+      ),
+    );
+    if (!Number.isFinite(limit)) return rows;
+    const result = rows.map((row) => ({ ...row }));
+    let excess = Math.max(
+      0,
+      result.reduce((sum, row) => sum + row.amount, 0) - limit,
+    );
+    for (const row of result) {
+      if (excess <= 0) break;
+      const removed = Math.min(row.amount, excess);
+      row.amount = Math.round((row.amount - removed) * 100) / 100;
+      excess = Math.round((excess - removed) * 100) / 100;
+    }
+    return result.filter((row) => row.amount > 0);
+  };
+
   if (summary.pendingByDate && summary.pendingByDate.length > 0) {
-    return summary.pendingByDate;
+    return capBatches(summary.pendingByDate);
   }
   const fromTx = batchesFromTransactions(txs);
-  if (fromTx.length > 0) return fromTx;
-  const amount = summary.pendingSettlement ?? 0;
+  if (fromTx.length > 0) return capBatches(fromTx);
+  const amount = Math.min(
+    summary.pendingSettlement ?? 0,
+    summary.walletBalance ?? Number.POSITIVE_INFINITY,
+  );
   if (amount > 0 && summary.nextSettlementAt) {
     return [{ amount, settleAt: summary.nextSettlementAt }];
   }
@@ -367,9 +395,15 @@ export default function RestaurantLedgerPage() {
   const pendingBatches = summary
     ? ledgerSettlementBatches(summary, transactions)
     : [];
-  const pendingSettlement =
+  const walletBalance =
+    summary?.walletBalance ?? summary?.settledBalance ?? 0;
+  const reportedPendingSettlement =
     summary?.pendingSettlement ??
     pendingBatches.reduce((sum, batch) => sum + batch.amount, 0);
+  const pendingSettlement = Math.max(
+    0,
+    Math.min(reportedPendingSettlement, walletBalance),
+  );
   const withdrawable =
     typeof summary?.withdrawable === "number"
       ? summary.withdrawable
@@ -499,7 +533,7 @@ export default function RestaurantLedgerPage() {
               {inr(withdrawable)}
             </p>
             <p className="mt-auto pt-2 text-[11px] opacity-70">
-              Wallet {inr(summary.walletBalance ?? summary.settledBalance)} ·
+              Wallet {inr(walletBalance)} ·
               pending settlement {inr(pendingSettlement)}
             </p>
           </CardContent>
