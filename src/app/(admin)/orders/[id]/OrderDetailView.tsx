@@ -501,7 +501,12 @@ export default function OrderDetailPage() {
 
   const title = order.pickfooId || order.id;
   const isPartial = isPartialRefundOrder(order);
-  const cancelSource = isPartial ? null : cancelSourceLabel(order);
+  const cancelSource =
+    isPartial ||
+    order.paymentStatus === "refunded" ||
+    order.refundKind === "full"
+      ? null
+      : cancelSourceLabel(order);
   const awaitingPrep = isPaidAwaitingPrep({
     id: order.id,
     status: order.status,

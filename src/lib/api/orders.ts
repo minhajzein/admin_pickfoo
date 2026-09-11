@@ -437,17 +437,28 @@ export function paymentStatusLabel(row: {
 }
 
 /**
- * Display status for admin list/detail. Partial refunds are successful orders;
- * legacy rows may still be stored as cancelled until heal runs.
+ * Display status for admin list/detail.
+ * - Full refund → "refunded" (kitchen may still be stored as cancelled)
+ * - Partial refund wrongly cancelled → "delivered" until heal runs
  */
 export function orderStatusLabel(row: {
   status?: string | null;
+  paymentStatus?: string | null;
   refundKind?: string | null;
   refundAmount?: number | null;
   totalAmount?: number | null;
 }): string {
   const status = String(row.status || "").trim();
-  if (status === "cancelled" && isPartialRefundOrder(row)) return "delivered";
+  if (isPartialRefundOrder(row)) {
+    if (status === "cancelled") return "delivered";
+    return status || "—";
+  }
+  if (
+    row.paymentStatus === "refunded" ||
+    row.refundKind === "full"
+  ) {
+    return "refunded";
+  }
   return status || "—";
 }
 

@@ -716,9 +716,12 @@ export default function OrdersPage() {
                   const showRedispatch = canRedispatchPickupOrder(row);
                   const isRedispatching = redispatchingRef === orderRef;
                   const awaitingPrep = isPaidAwaitingPrep(row);
-                  const cancelSource = isPartialRefundOrder(row)
-                    ? null
-                    : cancelSourceLabel(row);
+                  const cancelSource =
+                    isPartialRefundOrder(row) ||
+                    row.paymentStatus === "refunded" ||
+                    row.refundKind === "full"
+                      ? null
+                      : cancelSourceLabel(row);
                   const partnerName =
                     row.deliveryPartnerName || row.assignedPartner || null;
                   const progressLabel = partnerProgressLabel(
