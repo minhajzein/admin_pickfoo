@@ -33,6 +33,7 @@ import {
   fetchDispatchOrders,
   isPaidAwaitingPrep,
   isPartialRefundOrder,
+  orderStatusLabel,
   paymentStatusLabel,
   redispatchOrder,
   type AdminOrderRow,
@@ -715,7 +716,9 @@ export default function OrdersPage() {
                   const showRedispatch = canRedispatchPickupOrder(row);
                   const isRedispatching = redispatchingRef === orderRef;
                   const awaitingPrep = isPaidAwaitingPrep(row);
-                  const cancelSource = cancelSourceLabel(row);
+                  const cancelSource = isPartialRefundOrder(row)
+                    ? null
+                    : cancelSourceLabel(row);
                   const partnerName =
                     row.deliveryPartnerName || row.assignedPartner || null;
                   const progressLabel = partnerProgressLabel(
@@ -778,7 +781,7 @@ export default function OrdersPage() {
                       </TableCell>
                       <TableCell className="text-white/80">
                         <div className="flex flex-col gap-0.5">
-                          <span>{row.status}</span>
+                          <span>{orderStatusLabel(row)}</span>
                           {cancelSource ? (
                             <span className="text-[11px] font-medium text-red-300/90">
                               {cancelSource}

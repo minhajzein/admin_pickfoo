@@ -436,6 +436,21 @@ export function paymentStatusLabel(row: {
   return String(row.paymentStatus || "").trim() || "—";
 }
 
+/**
+ * Display status for admin list/detail. Partial refunds are successful orders;
+ * legacy rows may still be stored as cancelled until heal runs.
+ */
+export function orderStatusLabel(row: {
+  status?: string | null;
+  refundKind?: string | null;
+  refundAmount?: number | null;
+  totalAmount?: number | null;
+}): string {
+  const status = String(row.status || "").trim();
+  if (status === "cancelled" && isPartialRefundOrder(row)) return "delivered";
+  return status || "—";
+}
+
 function canRedispatchPickupOrder(row: AdminOrderRow): boolean {
   if (row.orderType !== "pickup") return false;
   if (row.paymentStatus === "refunded") return false;

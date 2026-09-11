@@ -44,6 +44,7 @@ import {
   markOrderDelivered,
   markOrderPickedUp,
   markOrderRefunded,
+  orderStatusLabel,
   paymentStatusLabel,
   resumeOrderDispatch,
   stopOrderDispatch,
@@ -249,7 +250,7 @@ export default function OrderDetailPage() {
       toast.success(
         res.alreadyRaised
           ? "Order was already raised"
-          : "Order raised — restaurant alerted and marked confirmed",
+          : "Order raised — payment confirmed (restaurant already accepted)",
       );
       queryClient.invalidateQueries({
         queryKey: ["orders", "dispatch-order", orderRef],
@@ -499,7 +500,8 @@ export default function OrderDetailPage() {
   }
 
   const title = order.pickfooId || order.id;
-  const cancelSource = cancelSourceLabel(order);
+  const isPartial = isPartialRefundOrder(order);
+  const cancelSource = isPartial ? null : cancelSourceLabel(order);
   const awaitingPrep = isPaidAwaitingPrep({
     id: order.id,
     status: order.status,
@@ -508,7 +510,6 @@ export default function OrderDetailPage() {
     createdAt: order.createdAt || new Date().toISOString(),
   });
   const canMarkRefunded = order.paymentStatus === "paid";
-  const isPartial = isPartialRefundOrder(order);
   const paymentLabel = paymentStatusLabel(order);
   const canCleanupRefundedDispatch =
     order.paymentStatus === "refunded" &&
@@ -519,7 +520,7 @@ export default function OrderDetailPage() {
   const canMarkPickedUp =
     order.paymentStatus !== "refunded" &&
     (
-      ["confirmed", "preparing", "ready"].includes(order.status) ||
+      ["preparing", "ready"].includes(order.status) ||
       (order.status === "out-for-delivery" &&
         !["picked_up", "arrived", "delivered"].includes(
           String(order.deliveryPartner?.progress || ""),
@@ -528,18 +529,23 @@ export default function OrderDetailPage() {
   const canMarkDelivered =
     order.paymentStatus !== "refunded" &&
     order.status !== "delivered" &&
-    ["confirmed", "preparing", "ready", "out-for-delivery"].includes(
-      order.status,
-    );
+    ["preparing", "ready", "out-for-delivery"].includes(order.status);
   const dispatchHeld = Boolean(order.dispatchHold?.active);
-  const canStopOrAssign =
+  const canStopDispatch =
     order.orderType === "pickup" &&
     order.paymentStatus !== "refunded" &&
-    ["confirmed", "preparing", "ready"].includes(order.status);
-  const canStopDispatch = canStopOrAssign && !dispatchHeld;
-  const canResumeDispatch = canStopOrAssign && dispatchHeld;
+    ["confirmed", "preparing", "ready"].includes(order.status) &&
+    !dispatchHeld;
+  const canResumeDispatch =
+    order.orderType === "pickup" &&
+    order.paymentStatus !== "refunded" &&
+    ["confirmed", "preparing", "ready"].includes(order.status) &&
+    dispatchHeld;
+  // Assign only after restaurant starts preparing — never invent accept/prep.
   const canAssignPartner =
-    canStopOrAssign &&
+    order.orderType === "pickup" &&
+    order.paymentStatus !== "refunded" &&
+    ["preparing", "ready"].includes(order.status) &&
     (!order.deliveryPartner?.progress ||
       order.deliveryPartner.progress === "pending_accept");
 
@@ -570,7 +576,7 @@ export default function OrderDetailPage() {
             </Badge>
             <div className="flex flex-col gap-0.5">
               <Badge variant="outline" className="border-white/10 text-white/80">
-                {order.status}
+                {orderStatusLabel(order)}
               </Badge>
               {cancelSource ? (
                 <span className="pl-0.5 text-[11px] font-medium text-red-300/90">
@@ -702,7 +708,10 @@ export default function OrderDetailPage() {
             ) : null}
             {["payment-expired", "cancelled", "accepted-awaiting-payment"].includes(
               order.status,
-            ) && order.customer?.id ? (
+            ) &&
+            order.customer?.id &&
+            (order.status === "accepted-awaiting-payment" ||
+              Boolean(order.timeline?.acceptedForPaymentAt)) ? (
               <Button
                 size="sm"
                 variant="outline"
@@ -1219,7 +1228,7 @@ export default function OrderDetailPage() {
             <DialogTitle className="text-white">Mark picked up</DialogTitle>
             <DialogDescription className="text-white/50">
               Choose the partner who picked up this order. Status becomes
-              out-for-delivery (no start-preparing step).
+              out-for-delivery. Restaurant must already be preparing or ready.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
@@ -1372,8 +1381,9 @@ export default function OrderDetailPage() {
           <DialogHeader>
             <DialogTitle className="text-white">Assign delivery partner</DialogTitle>
             <DialogDescription className="text-white/50">
-              Sends a live offer to the partner app (pending accept). Auto-dispatch
-              stays stopped so the offer is not reassigned.
+              Sends a live offer to the partner app (pending accept). Does not
+              accept or start preparing for the restaurant — kitchen status stays
+              as-is. Auto-dispatch stays stopped so the offer is not reassigned.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
