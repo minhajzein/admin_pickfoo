@@ -71,7 +71,24 @@ function formatDate(iso?: string) {
   }
 }
 
-function statusBadge(status: string) {
+function statusBadge(
+  status: string,
+  meta?: {
+    refundKind?: string;
+    refundAmount?: number;
+    refundReason?: string;
+  } | null,
+) {
+  const isPartial =
+    meta?.refundKind === "partial" ||
+    (typeof meta?.refundAmount === "number" &&
+      meta.refundAmount > 0 &&
+      status !== "refunded");
+  const label = isPartial
+    ? `partially refunded${
+        meta?.refundAmount != null ? ` ₹${meta.refundAmount.toFixed(2)}` : ""
+      }`
+    : status;
   const map: Record<string, string> = {
     captured: "bg-[#98E32F]/15 text-[#98E32F] border-[#98E32F]/30",
     success: "bg-[#98E32F]/15 text-[#98E32F] border-[#98E32F]/30",
@@ -79,9 +96,12 @@ function statusBadge(status: string) {
     failed: "bg-red-500/15 text-red-300 border-red-500/30",
     refunded: "bg-sky-500/15 text-sky-300 border-sky-500/30",
   };
+  const className = isPartial
+    ? "bg-amber-500/15 text-amber-200 border-amber-500/30"
+    : map[status] ?? "bg-white/10 text-white/60";
   return (
-    <Badge variant="outline" className={map[status] ?? "bg-white/10 text-white/60"}>
-      {status}
+    <Badge variant="outline" className={className}>
+      {label}
     </Badge>
   );
 }
@@ -506,8 +526,11 @@ export default function CustomerPaymentsPage() {
                     </TableCell>
                     <TableCell>
                       <div className="space-y-1">
-                        {statusBadge(tx.status)}
-                        {tx.status === "refunded" &&
+                        {statusBadge(tx.status, tx.metadata)}
+                        {(tx.status === "refunded" ||
+                          tx.metadata?.refundKind === "partial" ||
+                          (typeof tx.metadata?.refundAmount === "number" &&
+                            tx.metadata.refundAmount > 0)) &&
                           tx.metadata?.refundReason && (
                             <p className="text-[10px] text-white/35 max-w-[160px] truncate">
                               {tx.metadata.refundReason}

@@ -36,12 +36,20 @@ import {
 } from "@/components/ui/table";
 import { raiseCustomerOrderFromRefs } from "@/lib/api/customer-payments";
 import {
+  assignOrderPartner,
   cancelSourceLabel,
   fetchDispatchOrder,
   isPaidAwaitingPrep,
+  isPartialRefundOrder,
+  markOrderDelivered,
+  markOrderPickedUp,
   markOrderRefunded,
+  paymentStatusLabel,
+  resumeOrderDispatch,
+  stopOrderDispatch,
   type AdminOrderDetail,
 } from "@/lib/api/orders";
+import { fetchPartners } from "@/lib/api/partners";
 import {
   buildRefundSettlementPayload,
   emptyRefundSettlementState,
@@ -53,11 +61,16 @@ import { RefundSettlementFields } from "@/components/refund/RefundSettlementFiel
 import {
   ArrowLeft,
   Bike,
+  CheckCircle2,
+  Hand,
   Loader2,
   Mail,
   MapPin,
   Megaphone,
+  PackageCheck,
+  PauseCircle,
   Phone,
+  PlayCircle,
   Store,
   Undo2,
   User,
@@ -185,6 +198,12 @@ export default function OrderDetailPage() {
   const [refundSettlement, setRefundSettlement] = useState<RefundSettlementState>(
     emptyRefundSettlementState(),
   );
+  const [pickupOpen, setPickupOpen] = useState(false);
+  const [deliverOpen, setDeliverOpen] = useState(false);
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [pickupPartnerId, setPickupPartnerId] = useState("");
+  const [deliverPartnerId, setDeliverPartnerId] = useState("");
+  const [assignPartnerId, setAssignPartnerId] = useState("");
 
   const { data: order, isLoading, isError, error } = useQuery({
     queryKey: ["orders", "dispatch-order", orderRef],
@@ -198,6 +217,21 @@ export default function OrderDetailPage() {
     queryFn: () => fetchRefundPreview(orderRef),
     enabled: refundOpen && !!orderRef && !!canMarkRefundedEarly,
   });
+
+  const needsPartnerPicker = pickupOpen || deliverOpen || assignOpen;
+  const { data: partnersPage, isLoading: partnersLoading } = useQuery({
+    queryKey: ["partners", "status-actions", "VERIFIED"],
+    queryFn: () => fetchPartners({ status: "VERIFIED", limit: 200 }),
+    enabled: needsPartnerPicker,
+  });
+  const partnerOptions = partnersPage?.data ?? [];
+
+  const invalidateOrder = () => {
+    queryClient.invalidateQueries({
+      queryKey: ["orders", "dispatch-order", orderRef],
+    });
+    queryClient.invalidateQueries({ queryKey: ["orders"] });
+  };
 
   const raiseMutation = useMutation({
     mutationFn: () => {
@@ -263,8 +297,12 @@ export default function OrderDetailPage() {
     onSuccess: (res) => {
       const n = res.data?.transactionsUpdated ?? 0;
       const wd = res.data?.walletDeductions;
-      let msg =
-        n > 0
+      const isPartial = res.data?.refundKind === "partial";
+      let msg = isPartial
+        ? n > 0
+          ? `Partial refund recorded · ${n} payment record${n === 1 ? "" : "s"} updated`
+          : "Partial refund recorded — order stays successful"
+        : n > 0
           ? `Marked refunded · ${n} payment record${n === 1 ? "" : "s"} updated`
           : "Order marked as refunded";
       if (wd && (wd.restaurantApplied > 0 || wd.partnerApplied > 0)) {
@@ -276,6 +314,9 @@ export default function OrderDetailPage() {
           parts.push(`partner −₹${wd.partnerApplied}`);
         }
         msg += ` · ${parts.join(", ")}`;
+      }
+      if (isPartial) {
+        msg += " · partners not cleared";
       }
       toast.success(msg);
       setRefundOpen(false);
@@ -295,6 +336,123 @@ export default function OrderDetailPage() {
             ? err.message
             : undefined;
       toast.error(msg || "Could not mark refunded");
+    },
+  });
+
+  const pickupMutation = useMutation({
+    mutationFn: () => {
+      if (!pickupPartnerId) throw new Error("Select the partner who picked up");
+      return markOrderPickedUp(orderRef, pickupPartnerId);
+    },
+    onSuccess: (res) => {
+      toast.success(
+        `Marked picked up · ${res.data.partner?.fullName || "partner"}`,
+      );
+      setPickupOpen(false);
+      invalidateOrder();
+    },
+    onError: (err: unknown) => {
+      const msg =
+        err && typeof err === "object" && "response" in err
+          ? (err as { response?: { data?: { message?: string } } }).response
+              ?.data?.message
+          : err instanceof Error
+            ? err.message
+            : undefined;
+      toast.error(msg || "Could not mark picked up");
+    },
+  });
+
+  const deliverMutation = useMutation({
+    mutationFn: () => {
+      const id =
+        deliverPartnerId.trim() || order?.deliveryPartner?.id || undefined;
+      return markOrderDelivered(orderRef, id);
+    },
+    onSuccess: (res) => {
+      toast.success(
+        res.data.credited
+          ? "Marked delivered · partner credited"
+          : `Marked delivered · ${res.data.partner?.fullName || "partner"}`,
+      );
+      setDeliverOpen(false);
+      invalidateOrder();
+    },
+    onError: (err: unknown) => {
+      const msg =
+        err && typeof err === "object" && "response" in err
+          ? (err as { response?: { data?: { message?: string } } }).response
+              ?.data?.message
+          : err instanceof Error
+            ? err.message
+            : undefined;
+      toast.error(msg || "Could not mark delivered");
+    },
+  });
+
+  const stopDispatchMutation = useMutation({
+    mutationFn: () => stopOrderDispatch(orderRef, "Stopped by admin"),
+    onSuccess: (res) => {
+      toast.success(
+        res.data.partnerCleared
+          ? "Dispatch stopped · pending offer cleared"
+          : "Dispatch stopped",
+      );
+      invalidateOrder();
+    },
+    onError: (err: unknown) => {
+      const msg =
+        err && typeof err === "object" && "response" in err
+          ? (err as { response?: { data?: { message?: string } } }).response
+              ?.data?.message
+          : err instanceof Error
+            ? err.message
+            : undefined;
+      toast.error(msg || "Could not stop dispatch");
+    },
+  });
+
+  const resumeDispatchMutation = useMutation({
+    mutationFn: () => resumeOrderDispatch(orderRef),
+    onSuccess: () => {
+      toast.success("Dispatch resumed");
+      invalidateOrder();
+    },
+    onError: (err: unknown) => {
+      const msg =
+        err && typeof err === "object" && "response" in err
+          ? (err as { response?: { data?: { message?: string } } }).response
+              ?.data?.message
+          : err instanceof Error
+            ? err.message
+            : undefined;
+      toast.error(msg || "Could not resume dispatch");
+    },
+  });
+
+  const assignMutation = useMutation({
+    mutationFn: () => {
+      if (!assignPartnerId) throw new Error("Select a delivery partner");
+      return assignOrderPartner(orderRef, assignPartnerId);
+    },
+    onSuccess: (res) => {
+      toast.success(
+        res.data.offerNotified
+          ? `Assigned · offer sent to ${res.data.partner?.fullName || "partner"}`
+          : `Assigned to ${res.data.partner?.fullName || "partner"} (offer notify may have failed)`,
+      );
+      setAssignOpen(false);
+      invalidateOrder();
+    },
+    onError: (err: unknown) => {
+      const msg =
+        err && typeof err === "object" && "response" in err
+          ? (err as { response?: { data?: { message?: string } } }).response
+              ?.data?.message
+          : err instanceof Error
+            ? err.message
+            : undefined;
+      toast.error(msg || "Could not assign partner");
     },
   });
 
@@ -340,6 +498,8 @@ export default function OrderDetailPage() {
     );
   }
 
+  const title = order.pickfooId || order.id;
+  const cancelSource = cancelSourceLabel(order);
   const awaitingPrep = isPaidAwaitingPrep({
     id: order.id,
     status: order.status,
@@ -347,14 +507,41 @@ export default function OrderDetailPage() {
     orderType: order.orderType,
     createdAt: order.createdAt || new Date().toISOString(),
   });
-  const title = order.pickfooId || order.id;
-  const cancelSource = cancelSourceLabel(order);
   const canMarkRefunded = order.paymentStatus === "paid";
+  const isPartial = isPartialRefundOrder(order);
+  const paymentLabel = paymentStatusLabel(order);
   const canCleanupRefundedDispatch =
     order.paymentStatus === "refunded" &&
+    !isPartial &&
     ["confirmed", "preparing", "ready", "out-for-delivery"].includes(
       order.status,
     );
+  const canMarkPickedUp =
+    order.paymentStatus !== "refunded" &&
+    (
+      ["confirmed", "preparing", "ready"].includes(order.status) ||
+      (order.status === "out-for-delivery" &&
+        !["picked_up", "arrived", "delivered"].includes(
+          String(order.deliveryPartner?.progress || ""),
+        ))
+    );
+  const canMarkDelivered =
+    order.paymentStatus !== "refunded" &&
+    order.status !== "delivered" &&
+    ["confirmed", "preparing", "ready", "out-for-delivery"].includes(
+      order.status,
+    );
+  const dispatchHeld = Boolean(order.dispatchHold?.active);
+  const canStopOrAssign =
+    order.orderType === "pickup" &&
+    order.paymentStatus !== "refunded" &&
+    ["confirmed", "preparing", "ready"].includes(order.status);
+  const canStopDispatch = canStopOrAssign && !dispatchHeld;
+  const canResumeDispatch = canStopOrAssign && dispatchHeld;
+  const canAssignPartner =
+    canStopOrAssign &&
+    (!order.deliveryPartner?.progress ||
+      order.deliveryPartner.progress === "pending_accept");
 
   return (
     <div className="space-y-6">
@@ -395,14 +582,16 @@ export default function OrderDetailPage() {
               <Badge
                 variant="outline"
                 className={
-                  order.paymentStatus === "paid"
-                    ? "border-[#98E32F]/40 bg-[#98E32F]/10 text-[#98E32F]"
-                    : order.paymentStatus === "refunded"
-                      ? "border-sky-400/40 bg-sky-500/15 text-sky-300"
-                      : "border-white/10 text-white/70"
+                  isPartial
+                    ? "border-amber-400/40 bg-amber-500/15 text-amber-200"
+                    : order.paymentStatus === "paid"
+                      ? "border-[#98E32F]/40 bg-[#98E32F]/10 text-[#98E32F]"
+                      : order.paymentStatus === "refunded"
+                        ? "border-sky-400/40 bg-sky-500/15 text-sky-300"
+                        : "border-white/10 text-white/70"
                 }
               >
-                payment: {order.paymentStatus}
+                payment: {paymentLabel}
               </Badge>
             ) : null}
             {awaitingPrep ? (
@@ -410,8 +599,93 @@ export default function OrderDetailPage() {
                 variant="outline"
                 className="border-amber-500/50 bg-amber-500/20 text-amber-200"
               >
-                Paid · start prep
+                Pending start preparing
               </Badge>
+            ) : null}
+            {dispatchHeld ? (
+              <Badge
+                variant="outline"
+                className="border-orange-400/50 bg-orange-500/15 text-orange-200"
+              >
+                Dispatch stopped
+                {order.dispatchHold?.reason
+                  ? ` · ${order.dispatchHold.reason}`
+                  : ""}
+              </Badge>
+            ) : null}
+            {canStopDispatch ? (
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-orange-400/40 text-orange-300 hover:bg-orange-500/10"
+                disabled={stopDispatchMutation.isPending}
+                onClick={() => stopDispatchMutation.mutate()}
+              >
+                {stopDispatchMutation.isPending ? (
+                  <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <PauseCircle className="mr-1 h-3.5 w-3.5" />
+                )}
+                Stop dispatch
+              </Button>
+            ) : null}
+            {canResumeDispatch ? (
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-[#98E32F]/40 text-[#98E32F] hover:bg-[#98E32F]/10"
+                disabled={resumeDispatchMutation.isPending}
+                onClick={() => resumeDispatchMutation.mutate()}
+              >
+                {resumeDispatchMutation.isPending ? (
+                  <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <PlayCircle className="mr-1 h-3.5 w-3.5" />
+                )}
+                Resume dispatch
+              </Button>
+            ) : null}
+            {canAssignPartner ? (
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-sky-400/40 text-sky-300 hover:bg-sky-500/10"
+                onClick={() => {
+                  setAssignPartnerId(order.deliveryPartner?.id || "");
+                  setAssignOpen(true);
+                }}
+              >
+                <Hand className="mr-1 h-3.5 w-3.5" />
+                Assign partner
+              </Button>
+            ) : null}
+            {canMarkPickedUp ? (
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-[#98E32F]/40 text-[#98E32F] hover:bg-[#98E32F]/10"
+                onClick={() => {
+                  setPickupPartnerId(order.deliveryPartner?.id || "");
+                  setPickupOpen(true);
+                }}
+              >
+                <PackageCheck className="mr-1 h-3.5 w-3.5" />
+                Mark picked up
+              </Button>
+            ) : null}
+            {canMarkDelivered ? (
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-emerald-400/40 text-emerald-300 hover:bg-emerald-500/10"
+                onClick={() => {
+                  setDeliverPartnerId(order.deliveryPartner?.id || "");
+                  setDeliverOpen(true);
+                }}
+              >
+                <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
+                Mark delivered
+              </Button>
             ) : null}
             {canMarkRefunded || canCleanupRefundedDispatch ? (
               <Button
@@ -794,7 +1068,7 @@ export default function OrderDetailPage() {
               <CardTitle className="text-base">Payment</CardTitle>
             </CardHeader>
             <CardContent>
-              <DetailRow label="Status" value={order.paymentStatus || "—"} />
+              <DetailRow label="Status" value={paymentLabel} />
               <DetailRow label="Method" value={order.paymentMethod || "—"} />
               <DetailRow
                 label="Provider"
@@ -812,9 +1086,15 @@ export default function OrderDetailPage() {
                 label="Transaction"
                 value={order.transactionId || "—"}
               />
+              {order.refundAmount != null && order.refundAmount > 0 ? (
+                <DetailRow
+                  label={isPartial ? "Partial refund" : "Refund amount"}
+                  value={formatMoney(order.refundAmount)}
+                />
+              ) : null}
               {order.refundedAt ? (
                 <DetailRow
-                  label="Refunded at"
+                  label={isPartial ? "Partial refund at" : "Refunded at"}
                   value={formatDate(order.refundedAt)}
                 />
               ) : null}
@@ -862,8 +1142,8 @@ export default function OrderDetailPage() {
             </DialogTitle>
             <DialogDescription className="text-white/50">
               {canCleanupRefundedDispatch
-                ? "This order is already refunded but still in the kitchen/dispatch pipeline. This cancels it and withdraws the partner offer so partners stop getting notified."
-                : "Records this order as refunded in admin. Does not call Razorpay — use this after you already refunded in the dashboard or offline. Linked customer payment records will also be marked refunded, and any partner offer will be cleared."}
+                ? "This order is already fully refunded but still in the kitchen/dispatch pipeline. This cancels it and withdraws the partner offer so partners stop getting notified."
+                : "Choose a full or partial amount. Partial refunds keep the order successful (paid), keep the refund reason/amount on record, and do not clear partners. Full refunds mark payment refunded and clear partner offers."}
             </DialogDescription>
           </DialogHeader>
           {!canCleanupRefundedDispatch ? (
@@ -922,6 +1202,227 @@ export default function OrderDetailPage() {
               {canCleanupRefundedDispatch
                 ? "Stop partner offers"
                 : "Mark refunded"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={pickupOpen}
+        onOpenChange={(open) => {
+          setPickupOpen(open);
+          if (!open) setPickupPartnerId("");
+        }}
+      >
+        <DialogContent className="border-white/10 bg-[#002833] text-white sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-white">Mark picked up</DialogTitle>
+            <DialogDescription className="text-white/50">
+              Choose the partner who picked up this order. Status becomes
+              out-for-delivery (no start-preparing step).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label className="text-white/50">Partner</Label>
+            {partnersLoading ? (
+              <div className="flex items-center gap-2 py-3 text-white/50">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading partners…
+              </div>
+            ) : (
+              <select
+                value={pickupPartnerId}
+                onChange={(e) => setPickupPartnerId(e.target.value)}
+                className="w-full rounded-md border border-white/10 bg-black/20 px-3 py-2 text-sm text-white"
+              >
+                <option value="">Select partner…</option>
+                {order.deliveryPartner?.id ? (
+                  <option value={order.deliveryPartner.id}>
+                    {order.deliveryPartner.name || "Assigned partner"} (current)
+                  </option>
+                ) : null}
+                {partnerOptions
+                  .filter((p) => p._id && p._id !== order.deliveryPartner?.id)
+                  .map((p) => (
+                    <option key={p._id} value={p._id}>
+                      {p.fullName}
+                      {p.phone ? ` · ${p.phone}` : ""}
+                      {p.isOnline ? " · online" : ""}
+                    </option>
+                  ))}
+              </select>
+            )}
+          </div>
+          <DialogFooter className="gap-2 sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              className="border-white/10"
+              onClick={() => setPickupOpen(false)}
+              disabled={pickupMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              className="bg-[#98E32F] text-[#013644] font-semibold hover:bg-[#86c926]"
+              disabled={!pickupPartnerId || pickupMutation.isPending}
+              onClick={() => pickupMutation.mutate()}
+            >
+              {pickupMutation.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <PackageCheck className="mr-2 h-4 w-4" />
+              )}
+              Confirm picked up
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={deliverOpen}
+        onOpenChange={(open) => {
+          setDeliverOpen(open);
+          if (!open) setDeliverPartnerId("");
+        }}
+      >
+        <DialogContent className="border-white/10 bg-[#002833] text-white sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-white">Mark delivered</DialogTitle>
+            <DialogDescription className="text-white/50">
+              Confirm delivery. Credits the partner trip earning when
+              applicable.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label className="text-white/50">Partner</Label>
+            {partnersLoading ? (
+              <div className="flex items-center gap-2 py-3 text-white/50">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading partners…
+              </div>
+            ) : (
+              <select
+                value={
+                  deliverPartnerId || order.deliveryPartner?.id || ""
+                }
+                onChange={(e) => setDeliverPartnerId(e.target.value)}
+                className="w-full rounded-md border border-white/10 bg-black/20 px-3 py-2 text-sm text-white"
+              >
+                <option value="">
+                  {order.deliveryPartner?.id
+                    ? "Use assigned partner"
+                    : "Select partner…"}
+                </option>
+                {order.deliveryPartner?.id ? (
+                  <option value={order.deliveryPartner.id}>
+                    {order.deliveryPartner.name || "Assigned partner"} (current)
+                  </option>
+                ) : null}
+                {partnerOptions
+                  .filter((p) => p._id && p._id !== order.deliveryPartner?.id)
+                  .map((p) => (
+                    <option key={p._id} value={p._id}>
+                      {p.fullName}
+                      {p.phone ? ` · ${p.phone}` : ""}
+                    </option>
+                  ))}
+              </select>
+            )}
+          </div>
+          <DialogFooter className="gap-2 sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              className="border-white/10"
+              onClick={() => setDeliverOpen(false)}
+              disabled={deliverMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              className="bg-emerald-400 text-[#013644] font-semibold hover:bg-emerald-300"
+              disabled={
+                deliverMutation.isPending ||
+                !(deliverPartnerId || order.deliveryPartner?.id)
+              }
+              onClick={() => deliverMutation.mutate()}
+            >
+              {deliverMutation.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <CheckCircle2 className="mr-2 h-4 w-4" />
+              )}
+              Confirm delivered
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={assignOpen}
+        onOpenChange={(open) => {
+          setAssignOpen(open);
+          if (!open) setAssignPartnerId("");
+        }}
+      >
+        <DialogContent className="border-white/10 bg-[#002833] text-white sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-white">Assign delivery partner</DialogTitle>
+            <DialogDescription className="text-white/50">
+              Sends a live offer to the partner app (pending accept). Auto-dispatch
+              stays stopped so the offer is not reassigned.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label className="text-white/50">Partner</Label>
+            {partnersLoading ? (
+              <div className="flex items-center gap-2 py-3 text-white/50">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading partners…
+              </div>
+            ) : (
+              <select
+                value={assignPartnerId}
+                onChange={(e) => setAssignPartnerId(e.target.value)}
+                className="w-full rounded-md border border-white/10 bg-black/20 px-3 py-2 text-sm text-white"
+              >
+                <option value="">Select partner…</option>
+                {partnerOptions.map((p) => (
+                  <option key={p._id} value={p._id}>
+                    {p.fullName}
+                    {p.phone ? ` · ${p.phone}` : ""}
+                    {p.isOnline ? " · online" : ""}
+                    {p.onDuty ? " · on duty" : ""}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+          <DialogFooter className="gap-2 sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              className="border-white/10"
+              onClick={() => setAssignOpen(false)}
+              disabled={assignMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              className="bg-sky-400 text-[#013644] font-semibold hover:bg-sky-300"
+              disabled={!assignPartnerId || assignMutation.isPending}
+              onClick={() => assignMutation.mutate()}
+            >
+              {assignMutation.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Hand className="mr-2 h-4 w-4" />
+              )}
+              Assign & send offer
             </Button>
           </DialogFooter>
         </DialogContent>

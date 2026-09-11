@@ -41,6 +41,7 @@ export interface CustomerPaymentTransaction {
   metadata?: {
     refundReason?: string;
     refundAmount?: number;
+    refundKind?: string;
     refundedAt?: string;
     recordOnly?: boolean;
     razorpayRefundId?: string;

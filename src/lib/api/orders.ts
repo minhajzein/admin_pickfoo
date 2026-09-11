@@ -37,7 +37,16 @@ export interface AdminOrderRow {
   assignmentVersion?: number | null;
   rejectionReason?: string | null;
   rejectionCode?: string | null;
+  refundAmount?: number | null;
+  refundReason?: string | null;
+  refundKind?: "partial" | "full" | string | null;
+  refundedAt?: string | null;
   createdAt: string;
+  dispatchHold?: {
+    active?: boolean;
+    reason?: string | null;
+    heldAt?: string | null;
+  } | null;
 }
 
 export interface AdminOrdersResponse {
@@ -127,6 +136,13 @@ export interface AdminOrderDetail {
   transactionId?: string | null;
   refundedAt?: string | null;
   refundReason?: string | null;
+  refundAmount?: number | null;
+  refundKind?: "partial" | "full" | string | null;
+  dispatchHold?: {
+    active?: boolean;
+    reason?: string | null;
+    heldAt?: string | null;
+  } | null;
   items: AdminOrderItem[];
   itemTotal: number;
   packingTotal: number;
@@ -276,6 +292,7 @@ export async function markOrderRefunded(
     id: string;
     pickfooId?: string | null;
     paymentStatus: string;
+    refundKind?: "partial" | "full" | string | null;
     refundedAt: string;
     refundReason?: string | null;
     refundAmount?: number | null;
@@ -284,6 +301,8 @@ export async function markOrderRefunded(
       partnerApplied: number;
     } | null;
     transactionsUpdated: number;
+    cancelled?: boolean;
+    partnerCleared?: boolean;
   };
 }> {
   const { data } = await api.post(
@@ -294,6 +313,127 @@ export async function markOrderRefunded(
     },
   );
   return data;
+}
+
+export async function markOrderPickedUp(
+  orderRef: string,
+  partnerId: string,
+): Promise<{
+  success: boolean;
+  data: {
+    id: string | null;
+    pickfooId?: string | null;
+    status: string;
+    partnerDeliveryProgress: string;
+    partner: { id: string; fullName: string; phone: string } | null;
+  };
+}> {
+  const { data } = await api.post(
+    `/dispatch/orders/${encodeURIComponent(orderRef)}/mark-picked-up`,
+    { partnerId },
+  );
+  return data;
+}
+
+export async function markOrderDelivered(
+  orderRef: string,
+  partnerId?: string,
+): Promise<{
+  success: boolean;
+  data: {
+    id: string | null;
+    pickfooId?: string | null;
+    status: string;
+    partnerDeliveryProgress: string;
+    partner: { id: string; fullName: string; phone: string } | null;
+    credited?: boolean;
+  };
+}> {
+  const { data } = await api.post(
+    `/dispatch/orders/${encodeURIComponent(orderRef)}/mark-delivered`,
+    partnerId ? { partnerId } : {},
+  );
+  return data;
+}
+
+export async function stopOrderDispatch(
+  orderRef: string,
+  reason?: string,
+): Promise<{
+  success: boolean;
+  data: {
+    id: string | null;
+    pickfooId?: string | null;
+    dispatchHold: { active?: boolean; reason?: string | null } | null;
+    partnerCleared?: boolean;
+  };
+}> {
+  const { data } = await api.post(
+    `/dispatch/orders/${encodeURIComponent(orderRef)}/stop-dispatch`,
+    { reason: reason?.trim() || undefined },
+  );
+  return data;
+}
+
+export async function resumeOrderDispatch(orderRef: string): Promise<{
+  success: boolean;
+  data: {
+    id: string | null;
+    pickfooId?: string | null;
+    dispatchHold: null;
+  };
+}> {
+  const { data } = await api.post(
+    `/dispatch/orders/${encodeURIComponent(orderRef)}/resume-dispatch`,
+  );
+  return data;
+}
+
+export async function assignOrderPartner(
+  orderRef: string,
+  partnerId: string,
+): Promise<{
+  success: boolean;
+  data: {
+    id: string | null;
+    pickfooId?: string | null;
+    status?: string | null;
+    partnerDeliveryProgress: string;
+    partner: { id: string; fullName: string; phone: string } | null;
+    offerNotified?: boolean;
+  };
+}> {
+  const { data } = await api.post(
+    `/dispatch/orders/${encodeURIComponent(orderRef)}/assign-partner`,
+    { partnerId },
+  );
+  return data;
+}
+
+/** Whether stored refund amount is less than order total. */
+export function isPartialRefundOrder(row: {
+  refundKind?: string | null;
+  refundAmount?: number | null;
+  totalAmount?: number | null;
+}): boolean {
+  if (row.refundKind === "partial") return true;
+  if (row.refundKind === "full") return false;
+  const refund = Number(row.refundAmount);
+  const total = Number(row.totalAmount);
+  if (!Number.isFinite(refund) || !Number.isFinite(total)) return false;
+  if (refund <= 0 || total <= 0) return false;
+  return refund < total - 0.001;
+}
+
+/** Label for payment badge: paid / partially refunded / refunded / other. */
+export function paymentStatusLabel(row: {
+  paymentStatus?: string | null;
+  refundKind?: string | null;
+  refundAmount?: number | null;
+  totalAmount?: number | null;
+}): string {
+  if (isPartialRefundOrder(row)) return "partially refunded";
+  return String(row.paymentStatus || "").trim() || "—";
 }
 
 function canRedispatchPickupOrder(row: AdminOrderRow): boolean {

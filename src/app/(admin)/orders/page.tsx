@@ -32,6 +32,8 @@ import {
   cancelSourceLabel,
   fetchDispatchOrders,
   isPaidAwaitingPrep,
+  isPartialRefundOrder,
+  paymentStatusLabel,
   redispatchOrder,
   type AdminOrderRow,
 } from "@/lib/api/orders";
@@ -674,7 +676,7 @@ export default function OrdersPage() {
               variant="outline"
               className="border-amber-500/40 bg-amber-500/15 text-amber-200"
             >
-              {awaitingPrepCount} paid · awaiting prep
+              {awaitingPrepCount} pending start preparing
             </Badge>
           ) : null}
         </CardHeader>
@@ -756,7 +758,7 @@ export default function OrdersPage() {
                               variant="outline"
                               className="w-fit border-amber-500/50 bg-amber-500/20 text-[10px] uppercase tracking-wide text-amber-200"
                             >
-                              Paid · start prep
+                              Pending start preparing
                             </Badge>
                           ) : null}
                         </div>
@@ -785,14 +787,23 @@ export default function OrdersPage() {
                           {row.paymentStatus ? (
                             <span
                               className={
-                                row.paymentStatus === "paid"
-                                  ? "text-[11px] text-[#98E32F]/80"
-                                  : row.paymentStatus === "refunded"
-                                    ? "text-[11px] text-sky-300/90"
-                                    : "text-[11px] text-white/40"
+                                isPartialRefundOrder(row)
+                                  ? "text-[11px] text-amber-200/90"
+                                  : row.paymentStatus === "paid"
+                                    ? "text-[11px] text-[#98E32F]/80"
+                                    : row.paymentStatus === "refunded"
+                                      ? "text-[11px] text-sky-300/90"
+                                      : "text-[11px] text-white/40"
                               }
                             >
-                              payment: {row.paymentStatus}
+                              payment: {paymentStatusLabel(row)}
+                              {isPartialRefundOrder(row) &&
+                              row.refundAmount != null
+                                ? ` (₹${Number(row.refundAmount).toFixed(2)})`
+                                : ""}
+                              {row.refundReason
+                                ? ` · ${row.refundReason}`
+                                : ""}
                             </span>
                           ) : null}
                         </div>
