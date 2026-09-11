@@ -20,6 +20,7 @@ import {
   fetchPartner,
   updatePartnerDetails,
   updatePartnerPriorityLevel,
+  updatePartnerAllowOrdersFromAnywhere,
   updatePartnerSecurityDeposit,
   updatePartnerZones,
   verifyPartner,
@@ -196,6 +197,25 @@ export default function PartnerDetailsPage() {
       toast.success("Priority level updated");
     },
     onError: () => toast.error("Failed to update priority level"),
+  });
+
+  const allowAnywhereMutation = useMutation({
+    mutationFn: (allowOrdersFromAnywhere: boolean) =>
+      updatePartnerAllowOrdersFromAnywhere(
+        String(partnerId),
+        allowOrdersFromAnywhere,
+      ),
+    onSuccess: (updated) => {
+      queryClient.invalidateQueries({ queryKey: ["partner", partnerId] });
+      queryClient.invalidateQueries({ queryKey: ["partners"] });
+      toast.success(
+        updated.allowOrdersFromAnywhere
+          ? "Partner can take orders from anywhere"
+          : "Partner limited to assigned zones",
+      );
+    },
+    onError: () =>
+      toast.error("Failed to update take-orders-from-anywhere setting"),
   });
 
   const verificationMutation = useMutation({
@@ -664,6 +684,44 @@ export default function PartnerDetailsPage() {
                 )}
                 Save priority
               </Button>
+            </CardContent>
+          </Card>
+
+          <Card className="border-white/5 bg-[#002833] text-white">
+            <CardHeader>
+              <CardTitle>Orders from anywhere</CardTitle>
+              <CardDescription className="text-white/50">
+                Allow this partner to receive offers for any restaurant zone
+                when no partner is available inside that zone (still within the
+                normal distance limit). Zone partners are always preferred
+                first.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-white/5 px-3 py-3 hover:bg-white/5">
+                <input
+                  type="checkbox"
+                  checked={Boolean(partner.allowOrdersFromAnywhere)}
+                  disabled={allowAnywhereMutation.isPending}
+                  onChange={(e) =>
+                    allowAnywhereMutation.mutate(e.target.checked)
+                  }
+                  className="mt-1 accent-[#98E32F]"
+                />
+                <span className="text-sm">
+                  <span className="block font-medium">
+                    Take orders from anywhere
+                  </span>
+                  <span className="block text-white/50 text-xs mt-1">
+                    {partner.allowOrdersFromAnywhere
+                      ? "Enabled — used only after no zone partner is available"
+                      : "Disabled — only offers from assigned zones"}
+                  </span>
+                </span>
+                {allowAnywhereMutation.isPending && (
+                  <Loader2 className="ml-auto h-4 w-4 shrink-0 animate-spin text-white/50" />
+                )}
+              </label>
             </CardContent>
           </Card>
         </div>

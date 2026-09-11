@@ -249,6 +249,8 @@ export interface Partner {
   status: PartnerStatusType;
   rejectionReason?: string;
   priorityLevel?: number;
+  /** When true, partner can receive offers outside their assigned zones. */
+  allowOrdersFromAnywhere?: boolean;
   isOnline: boolean;
   onDuty: boolean;
   currentAssignmentOrderId?: string | null;

@@ -46,6 +46,17 @@ export async function updatePartnerPriorityLevel(
   return data.data;
 }
 
+export async function updatePartnerAllowOrdersFromAnywhere(
+  partnerId: string,
+  allowOrdersFromAnywhere: boolean,
+): Promise<Partner> {
+  const { data } = await api.patch(
+    `/partners/${partnerId}/allow-orders-from-anywhere`,
+    { allowOrdersFromAnywhere },
+  );
+  return data.data;
+}
+
 export async function updatePartnerDetails(
   partnerId: string,
   payload: {
