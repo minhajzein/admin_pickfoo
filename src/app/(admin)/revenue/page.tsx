@@ -800,7 +800,7 @@ export default function RevenuePage() {
                   setPage(1);
                 });
               }}
-              className="h-9 w-[11rem] border-white/15 bg-black/20 text-white"
+              className="h-9 w-44 border-white/15 bg-black/20 text-white"
             />
           </div>
           <div className="space-y-1">
@@ -815,7 +815,7 @@ export default function RevenuePage() {
                   setPage(1);
                 });
               }}
-              className="h-9 w-[11rem] border-white/15 bg-black/20 text-white"
+              className="h-9 w-44 border-white/15 bg-black/20 text-white"
             />
           </div>
         </div>
@@ -903,7 +903,7 @@ export default function RevenuePage() {
                     return (
                       <TableRow
                         key={`${kindKey}-${row.id}`}
-                        className="border-white/5 hover:bg-white/[0.03]"
+                        className="border-white/5 hover:bg-white/3"
                       >
                         <TableCell className="whitespace-nowrap text-sm text-white/70">
                           {formatDate(row.createdAt)}
@@ -925,7 +925,7 @@ export default function RevenuePage() {
                           </div>
                         </TableCell>
                         <TableCell>{directionBadge(direction)}</TableCell>
-                        <TableCell className="max-w-[12rem] truncate text-sm">
+                        <TableCell className="max-w-48 truncate text-sm">
                           {row.partyId && href ? (
                             <Link
                               href={
@@ -1135,7 +1135,7 @@ function MiniStat({
   icon: ReactNode;
 }) {
   return (
-    <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-white">
+    <div className="rounded-xl border border-white/10 bg-white/3 px-4 py-3 text-white">
       <div className="flex items-center gap-2 text-white/40">
         {icon}
         <p className="text-[10px] font-bold uppercase tracking-widest">
