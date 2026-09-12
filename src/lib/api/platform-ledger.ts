@@ -4,9 +4,12 @@ export type PlatformLedgerKind =
   | "all"
   | "commission"
   | "restaurant_withdrawal"
-  | "partner_payout";
+  | "partner_payout"
+  | "expense";
 
 export type PlatformLedgerDirection = "credit" | "debit";
+
+export type PlatformExpenseTag = "bills" | "salary" | "office" | "other";
 
 export interface PlatformLedgerEntry {
   id: string;
@@ -14,12 +17,14 @@ export interface PlatformLedgerEntry {
   direction?: PlatformLedgerDirection;
   amount?: number;
   status?: string | null;
-  partyType?: "restaurant" | "partner" | "platform" | null;
+  partyType?: "restaurant" | "partner" | "platform" | "vendor" | null;
   partyId?: string | null;
   partyName?: string | null;
   reference?: string | null;
   href?: string | null;
   notes?: string | null;
+  tags?: string[];
+  invoiceRef?: string | null;
   /** Commission-shaped fields (legacy / commission kind) */
   pickfooId?: string | null;
   paymentStatus?: string | null;
@@ -324,4 +329,58 @@ export async function fetchPlatformLedger(params?: {
     totalPages:
       Number(data.totalPages) || Math.max(1, Math.ceil(total / limit) || 1),
   };
+}
+
+export async function createPlatformExpense(input: {
+  amount: number;
+  tag: PlatformExpenseTag;
+  occurredAt?: string;
+  notes?: string;
+  invoiceRef?: string;
+  partyName?: string;
+}): Promise<{ id: string }> {
+  const { data } = await api.post(`/platform-ledger/expenses`, input);
+  return { id: String(data.data?.id || "") };
+}
+
+export async function deletePlatformExpense(id: string): Promise<void> {
+  await api.delete(`/platform-ledger/expenses/${encodeURIComponent(id)}`);
+}
+
+export async function backfillPlatformBooks(input?: {
+  year?: number;
+  month?: number;
+}): Promise<{
+  payments: number;
+  restaurantPayouts: number;
+  partnerPayouts: number;
+}> {
+  const { data } = await api.post(`/platform-ledger/backfill`, input ?? {}, {
+    timeout: 120000,
+  });
+  return {
+    payments: Number(data.data?.payments) || 0,
+    restaurantPayouts: Number(data.data?.restaurantPayouts) || 0,
+    partnerPayouts: Number(data.data?.partnerPayouts) || 0,
+  };
+}
+
+export async function downloadPlatformMonthlyReportPdf(input: {
+  year: number;
+  month: number;
+}): Promise<void> {
+  const { data } = await api.get(`/platform-ledger/monthly-report.pdf`, {
+    params: { year: input.year, month: input.month },
+    responseType: "blob",
+    timeout: 60000,
+  });
+  const blob = data instanceof Blob ? data : new Blob([data], { type: "application/pdf" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `pickfoo-platform-ledger-${input.year}-${String(input.month).padStart(2, "0")}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }

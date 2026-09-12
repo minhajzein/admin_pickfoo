@@ -1,21 +1,39 @@
 "use client";
 
 import { startTransition, useMemo, useState, type ReactNode } from "react";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import Link from "next/link";
 import {
   ArrowUpRight,
   Banknote,
   Clock,
+  Download,
   Landmark,
   Loader2,
   Percent,
+  Plus,
+  RefreshCw,
   Wallet,
 } from "lucide-react";
+import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Table,
   TableBody,
@@ -39,10 +57,14 @@ import {
   type DatePreset,
 } from "@/lib/date-presets";
 import {
+  backfillPlatformBooks,
+  createPlatformExpense,
+  downloadPlatformMonthlyReportPdf,
   fetchPlatformLedger,
   fetchPlatformSettlement,
   fetchPlatformWallet,
   pickBank,
+  type PlatformExpenseTag,
   type PlatformLedgerEntry,
   type PlatformLedgerKind,
 } from "@/lib/api/platform-ledger";
@@ -60,7 +82,26 @@ const KIND_TABS: Array<{ id: PlatformLedgerKind; label: string }> = [
   { id: "commission", label: "Commission credits" },
   { id: "restaurant_withdrawal", label: "Restaurant withdrawals" },
   { id: "partner_payout", label: "Partner payouts" },
+  { id: "expense", label: "Expenses" },
 ];
+
+const EXPENSE_TAGS: Array<{ id: PlatformExpenseTag; label: string }> = [
+  { id: "bills", label: "Bills" },
+  { id: "salary", label: "Salary" },
+  { id: "office", label: "Office" },
+  { id: "other", label: "Other" },
+];
+
+function currentIstYearMonth(): { year: number; month: number } {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+  }).formatToParts(new Date());
+  const year = Number(parts.find((p) => p.type === "year")?.value);
+  const month = Number(parts.find((p) => p.type === "month")?.value);
+  return { year, month };
+}
 
 function formatDate(iso?: string | null) {
   if (!iso) return "—";
@@ -172,6 +213,7 @@ function entryGstDestination(
 
 function entryKind(row: PlatformLedgerEntry): Exclude<PlatformLedgerKind, "all"> {
   if (row.kind) return row.kind;
+  if (row.tags?.length) return "expense";
   if (row.platformCommission != null || row.commissionPercent != null) {
     return "commission";
   }
@@ -218,6 +260,8 @@ function kindLabel(kind: Exclude<PlatformLedgerKind, "all">) {
       return "Restaurant withdrawal";
     case "partner_payout":
       return "Partner payout";
+    case "expense":
+      return "Expense";
   }
 }
 
@@ -268,11 +312,24 @@ function statusBadge(status?: string | null) {
 }
 
 export default function RevenuePage() {
+  const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [preset, setPreset] = useState<DatePreset>("last_7_days");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
   const [kind, setKind] = useState<PlatformLedgerKind>("commission");
+  const istNow = useMemo(() => currentIstYearMonth(), []);
+  const [reportYear, setReportYear] = useState(String(istNow.year));
+  const [reportMonth, setReportMonth] = useState(String(istNow.month));
+  const [expenseOpen, setExpenseOpen] = useState(false);
+  const [expenseAmount, setExpenseAmount] = useState("");
+  const [expenseTag, setExpenseTag] = useState<PlatformExpenseTag>("bills");
+  const [expenseDate, setExpenseDate] = useState(() =>
+    toYmd(startOfLocalDay(new Date())),
+  );
+  const [expenseNotes, setExpenseNotes] = useState("");
+  const [expenseInvoice, setExpenseInvoice] = useState("");
+  const [expenseParty, setExpenseParty] = useState("");
 
   const dateRange = useMemo(() => {
     if (preset === "custom") {
@@ -346,6 +403,80 @@ export default function RevenuePage() {
     placeholderData: keepPreviousData,
   });
 
+  const invalidateLedger = () => {
+    queryClient.invalidateQueries({ queryKey: ["platform-ledger"] });
+  };
+
+  const expenseMutation = useMutation({
+    mutationFn: () =>
+      createPlatformExpense({
+        amount: Number(expenseAmount),
+        tag: expenseTag,
+        occurredAt: expenseDate
+          ? `${expenseDate}T12:00:00.000+05:30`
+          : undefined,
+        notes: expenseNotes.trim() || undefined,
+        invoiceRef: expenseInvoice.trim() || undefined,
+        partyName: expenseParty.trim() || undefined,
+      }),
+    onSuccess: () => {
+      toast.success("Expense recorded");
+      setExpenseOpen(false);
+      setExpenseAmount("");
+      setExpenseNotes("");
+      setExpenseInvoice("");
+      setExpenseParty("");
+      invalidateLedger();
+    },
+    onError: (err: unknown) => {
+      const msg =
+        err && typeof err === "object" && "response" in err
+          ? (err as { response?: { data?: { message?: string } } }).response
+              ?.data?.message
+          : undefined;
+      toast.error(msg || "Could not save expense");
+    },
+  });
+
+  const pdfMutation = useMutation({
+    mutationFn: () =>
+      downloadPlatformMonthlyReportPdf({
+        year: Number(reportYear),
+        month: Number(reportMonth),
+      }),
+    onSuccess: () => toast.success("PDF downloaded"),
+    onError: (err: unknown) => {
+      const msg =
+        err && typeof err === "object" && "response" in err
+          ? (err as { response?: { data?: { message?: string } } }).response
+              ?.data?.message
+          : undefined;
+      toast.error(msg || "Could not download PDF");
+    },
+  });
+
+  const backfillMutation = useMutation({
+    mutationFn: () =>
+      backfillPlatformBooks({
+        year: Number(reportYear),
+        month: Number(reportMonth),
+      }),
+    onSuccess: (res) => {
+      toast.success(
+        `Backfilled ${res.payments} payments, ${res.restaurantPayouts} restaurant payouts, ${res.partnerPayouts} partner payouts`,
+      );
+      invalidateLedger();
+    },
+    onError: (err: unknown) => {
+      const msg =
+        err && typeof err === "object" && "response" in err
+          ? (err as { response?: { data?: { message?: string } } }).response
+              ?.data?.message
+          : undefined;
+      toast.error(msg || "Backfill failed");
+    },
+  });
+
   const filtered = data?.summary.filtered;
   const allTime = allTimeData;
   const periodGst = splitGst(filtered);
@@ -389,13 +520,91 @@ export default function RevenuePage() {
           <h2 className="text-3xl font-bold tracking-tight">Platform ledger</h2>
           <p className="text-sm text-white/50">
             Expected Razorpay bank balance, pending T+2 settlements, GST to
-            platform vs GST-registered restaurants, and payout activity.
+            platform vs GST-registered restaurants, payouts, and tagged expenses
+            for ITR / GST filing.
           </p>
         </div>
-        {showListFetching || isWalletFetching ? (
-          <Loader2 className="h-4 w-4 animate-spin text-[#98E32F]" />
-        ) : null}
+        <div className="flex flex-wrap items-center gap-2">
+          {showListFetching || isWalletFetching ? (
+            <Loader2 className="h-4 w-4 animate-spin text-[#98E32F]" />
+          ) : null}
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="border-white/15 text-white"
+            onClick={() => setExpenseOpen(true)}
+          >
+            <Plus className="mr-1 h-3.5 w-3.5" />
+            Add expense
+          </Button>
+        </div>
       </div>
+
+      <Card className="border-white/10 bg-white/5 text-white">
+        <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:flex-wrap sm:items-end">
+          <div className="space-y-1">
+            <Label className="text-xs text-white/50">Report year</Label>
+            <Input
+              type="number"
+              min={2020}
+              max={2100}
+              value={reportYear}
+              onChange={(e) => setReportYear(e.target.value)}
+              className="h-9 w-28 border-white/15 bg-black/20 text-white"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs text-white/50">Month</Label>
+            <select
+              value={reportMonth}
+              onChange={(e) => setReportMonth(e.target.value)}
+              className="h-9 w-40 rounded-md border border-white/15 bg-black/20 px-3 text-sm text-white"
+            >
+              {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                <option key={m} value={m}>
+                  {new Date(2000, m - 1, 1).toLocaleString("en-IN", {
+                    month: "long",
+                  })}
+                </option>
+              ))}
+            </select>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            className="bg-[#98E32F] text-[#013644] hover:bg-[#98E32F]/90"
+            disabled={pdfMutation.isPending}
+            onClick={() => pdfMutation.mutate()}
+          >
+            {pdfMutation.isPending ? (
+              <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Download className="mr-1 h-3.5 w-3.5" />
+            )}
+            Download monthly PDF
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="border-white/15 text-white"
+            disabled={backfillMutation.isPending}
+            onClick={() => backfillMutation.mutate()}
+          >
+            {backfillMutation.isPending ? (
+              <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <RefreshCw className="mr-1 h-3.5 w-3.5" />
+            )}
+            Backfill month books
+          </Button>
+          <p className="text-[11px] text-white/40 sm:ml-auto">
+            PDF includes collections, payouts, expenses by tag, commission &amp;
+            platform GST.
+          </p>
+        </CardContent>
+      </Card>
 
       <div className="grid items-stretch gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Card className="h-full overflow-hidden border-0 bg-[#98E32F] text-[#013644]">
@@ -700,7 +909,20 @@ export default function RevenuePage() {
                           {formatDate(row.createdAt)}
                         </TableCell>
                         <TableCell className="text-sm text-white/80">
-                          {kindLabel(kindKey)}
+                          <div className="flex flex-col gap-1">
+                            <span>{kindLabel(kindKey)}</span>
+                            {kindKey === "expense" && row.tags?.length
+                              ? row.tags.map((tag) => (
+                                  <Badge
+                                    key={tag}
+                                    variant="outline"
+                                    className="w-fit border-amber-500/40 bg-amber-500/10 text-[10px] uppercase tracking-wide text-amber-200"
+                                  >
+                                    {tag}
+                                  </Badge>
+                                ))
+                              : null}
+                          </div>
                         </TableCell>
                         <TableCell>{directionBadge(direction)}</TableCell>
                         <TableCell className="max-w-[12rem] truncate text-sm">
@@ -793,8 +1015,108 @@ export default function RevenuePage() {
         balance (money not yet deposited). GST is split from each paid order:
         platform keeps GST when the restaurant has no valid GSTIN; otherwise GST
         is credited to the restaurant. Date filters use IST and apply to
-        commission, GST, and ledger entries. Bank figures are live.
+        commission, GST, and ledger entries. Bank figures are live. Monthly PDF
+        uses the platform cashbook (backfill historical months once if needed).
       </p>
+
+      <Dialog open={expenseOpen} onOpenChange={setExpenseOpen}>
+        <DialogContent className="border-white/10 bg-[#002833] text-white sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-white">Add platform expense</DialogTitle>
+            <DialogDescription className="text-white/50">
+              Bills, salary, office, or other costs — tagged for monthly ITR /
+              GST reports.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label className="text-white/50">Amount (₹)</Label>
+              <Input
+                type="number"
+                min={0}
+                step="0.01"
+                value={expenseAmount}
+                onChange={(e) => setExpenseAmount(e.target.value)}
+                className="border-white/15 bg-black/20 text-white"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-white/50">Tag</Label>
+              <select
+                value={expenseTag}
+                onChange={(e) =>
+                  setExpenseTag(e.target.value as PlatformExpenseTag)
+                }
+                className="h-9 w-full rounded-md border border-white/15 bg-black/20 px-3 text-sm text-white"
+              >
+                {EXPENSE_TAGS.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-white/50">Date</Label>
+              <Input
+                type="date"
+                value={expenseDate}
+                onChange={(e) => setExpenseDate(e.target.value)}
+                className="border-white/15 bg-black/20 text-white"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-white/50">Vendor / party (optional)</Label>
+              <Input
+                value={expenseParty}
+                onChange={(e) => setExpenseParty(e.target.value)}
+                className="border-white/15 bg-black/20 text-white"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-white/50">Invoice ref (optional)</Label>
+              <Input
+                value={expenseInvoice}
+                onChange={(e) => setExpenseInvoice(e.target.value)}
+                className="border-white/15 bg-black/20 text-white"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-white/50">Notes</Label>
+              <Input
+                value={expenseNotes}
+                onChange={(e) => setExpenseNotes(e.target.value)}
+                className="border-white/15 bg-black/20 text-white"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              className="border-white/15 text-white"
+              onClick={() => setExpenseOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              className="bg-[#98E32F] text-[#013644] hover:bg-[#98E32F]/90"
+              disabled={
+                expenseMutation.isPending ||
+                !expenseAmount ||
+                Number(expenseAmount) <= 0
+              }
+              onClick={() => expenseMutation.mutate()}
+            >
+              {expenseMutation.isPending ? (
+                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+              ) : null}
+              Save expense
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
