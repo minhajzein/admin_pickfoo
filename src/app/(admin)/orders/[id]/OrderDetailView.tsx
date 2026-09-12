@@ -80,7 +80,7 @@ import {
 const OrderRouteMap = dynamic(() => import("@/components/map/OrderRouteMap"), {
   ssr: false,
   loading: () => (
-    <div className="flex h-[320px] items-center justify-center text-white/50">
+    <div className="flex h-80 items-center justify-center text-white/50">
       <Loader2 className="h-7 w-7 animate-spin text-[#98E32F]" />
     </div>
   ),
