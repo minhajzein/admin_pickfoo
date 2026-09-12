@@ -532,13 +532,13 @@ export default function CustomerPaymentsPage() {
                           (typeof tx.metadata?.refundAmount === "number" &&
                             tx.metadata.refundAmount > 0)) &&
                           tx.metadata?.refundReason && (
-                            <p className="text-[10px] text-white/35 max-w-[160px] truncate">
+                            <p className="max-w-40 truncate text-[10px] text-white/35">
                               {tx.metadata.refundReason}
                             </p>
                           )}
                       </div>
                     </TableCell>
-                    <TableCell className="text-[10px] font-mono text-white/40 max-w-[140px]">
+                    <TableCell className="max-w-35 font-mono text-[10px] text-white/40">
                       <div className="truncate">
                         {tx.razorpayPaymentId || tx.razorpayOrderId || "—"}
                       </div>
