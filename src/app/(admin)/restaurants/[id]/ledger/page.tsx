@@ -275,10 +275,11 @@ export default function RestaurantLedgerPage() {
   const [reportMonth, setReportMonth] = useState(String(istNow.month));
 
   const pdfMutation = useMutation({
-    mutationFn: () =>
+    mutationFn: (restaurantName?: string) =>
       downloadRestaurantMonthlyReportPdf(restaurantId, {
         year: Number(reportYear),
         month: Number(reportMonth),
+        restaurantName: restaurantName || restaurantMeta?.name,
       }),
     onSuccess: () => toast.success("Restaurant report PDF downloaded"),
     onError: (err: unknown) => {
@@ -592,7 +593,7 @@ export default function RestaurantLedgerPage() {
             size="sm"
             className="bg-[#98E32F] text-[#013644] hover:bg-[#98E32F]/90"
             disabled={pdfMutation.isPending || !restaurantId}
-            onClick={() => pdfMutation.mutate()}
+            onClick={() => pdfMutation.mutate(restaurant.name)}
           >
             {pdfMutation.isPending ? (
               <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />

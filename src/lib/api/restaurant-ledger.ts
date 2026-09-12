@@ -173,9 +173,9 @@ export async function fetchRestaurantLedgerWithdrawals(
 
 export async function downloadRestaurantMonthlyReportPdf(
   restaurantId: string,
-  input: { year: number; month: number },
+  input: { year: number; month: number; restaurantName?: string },
 ): Promise<void> {
-  const { data } = await api.get(
+  const response = await api.get(
     `/restaurants/${encodeURIComponent(restaurantId)}/ledger/monthly-report.pdf`,
     {
       params: { year: input.year, month: input.month },
@@ -183,12 +183,33 @@ export async function downloadRestaurantMonthlyReportPdf(
       timeout: 60000,
     },
   );
+  const data = response.data;
   const blob =
     data instanceof Blob ? data : new Blob([data], { type: "application/pdf" });
+
+  const header = String(
+    response.headers?.["content-disposition"] ||
+      response.headers?.["Content-Disposition"] ||
+      "",
+  );
+  const fromHeader = header.match(/filename="([^"]+)"/i)?.[1];
+
+  const monthName = new Date(input.year, input.month - 1, 1).toLocaleString(
+    "en-IN",
+    { month: "long" },
+  );
+  const safeName = (input.restaurantName || "restaurant")
+    .trim()
+    .replace(/[^a-zA-Z0-9]+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_|_$/g, "")
+    .slice(0, 48) || "restaurant";
+  const fallback = `${safeName}-${monthName}-report.pdf`;
+
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `pickfoo-restaurant-ledger-${input.year}-${String(input.month).padStart(2, "0")}.pdf`;
+  a.download = fromHeader || fallback;
   document.body.appendChild(a);
   a.click();
   a.remove();
