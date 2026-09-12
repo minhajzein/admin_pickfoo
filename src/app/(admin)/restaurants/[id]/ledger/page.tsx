@@ -12,6 +12,7 @@ import {
   Banknote,
   CheckCircle2,
   Clock,
+  Download,
   Loader2,
   Percent,
   Search,
@@ -20,6 +21,7 @@ import {
 } from "lucide-react";
 import api from "@/lib/axios";
 import {
+  downloadRestaurantMonthlyReportPdf,
   fetchRestaurantLedger,
   fetchRestaurantLedgerTransactions,
   fetchRestaurantLedgerWithdrawals,
@@ -237,6 +239,18 @@ function ledgerSettlementBatches(
 
 type Tab = "transactions" | "withdrawals";
 
+function currentIstYearMonth(): { year: number; month: number } {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+  }).formatToParts(new Date());
+  return {
+    year: Number(parts.find((p) => p.type === "year")?.value),
+    month: Number(parts.find((p) => p.type === "month")?.value),
+  };
+}
+
 export default function RestaurantLedgerPage() {
   const { id } = useParams();
   const router = useRouter();
@@ -256,6 +270,28 @@ export default function RestaurantLedgerPage() {
     id: string;
     status: WithdrawalStatus;
   } | null>(null);
+  const istNow = useMemo(() => currentIstYearMonth(), []);
+  const [reportYear, setReportYear] = useState(String(istNow.year));
+  const [reportMonth, setReportMonth] = useState(String(istNow.month));
+
+  const pdfMutation = useMutation({
+    mutationFn: () =>
+      downloadRestaurantMonthlyReportPdf(restaurantId, {
+        year: Number(reportYear),
+        month: Number(reportMonth),
+      }),
+    onSuccess: () => toast.success("Restaurant report PDF downloaded"),
+    onError: (err: unknown) => {
+      const msg =
+        err && typeof err === "object" && "response" in err
+          ? (err as { response?: { data?: { message?: string } } }).response
+              ?.data?.message
+          : undefined;
+      toast.error(
+        typeof msg === "string" ? msg : "Could not download restaurant PDF",
+      );
+    },
+  });
 
   const dateRange = useMemo(() => {
     if (datePreset === "custom") {
@@ -521,6 +557,59 @@ export default function RestaurantLedgerPage() {
           </Link>
         </div>
       </div>
+
+      <Card className="border-white/10 bg-white/5 text-white">
+        <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:flex-wrap sm:items-end">
+          <div className="space-y-1">
+            <Label className="text-xs text-white/50">Report year</Label>
+            <Input
+              type="number"
+              min={2020}
+              max={2100}
+              value={reportYear}
+              onChange={(e) => setReportYear(e.target.value)}
+              className="h-9 w-28 border-white/15 bg-black/20 text-white"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs text-white/50">Month</Label>
+            <select
+              value={reportMonth}
+              onChange={(e) => setReportMonth(e.target.value)}
+              className="h-9 w-40 rounded-md border border-white/15 bg-black/20 px-3 text-sm text-white"
+            >
+              {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                <option key={m} value={m}>
+                  {new Date(2000, m - 1, 1).toLocaleString("en-IN", {
+                    month: "long",
+                  })}
+                </option>
+              ))}
+            </select>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            className="bg-[#98E32F] text-[#013644] hover:bg-[#98E32F]/90"
+            disabled={pdfMutation.isPending || !restaurantId}
+            onClick={() => pdfMutation.mutate()}
+          >
+            {pdfMutation.isPending ? (
+              <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Download className="mr-1 h-3.5 w-3.5" />
+            )}
+            Download monthly PDF
+          </Button>
+          <p className="text-[11px] text-white/40 sm:ml-auto">
+            Credits, payouts, commission &amp; GST
+            {restaurant.isGstRegistered
+              ? " (valid GSTIN → restaurant wallet)"
+              : " (no valid GSTIN → platform)"}
+            .
+          </p>
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 items-stretch gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Card className="h-full overflow-hidden border-0 bg-[#98E32F] text-[#013644]">

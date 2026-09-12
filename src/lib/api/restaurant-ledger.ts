@@ -170,3 +170,27 @@ export async function fetchRestaurantLedgerWithdrawals(
   );
   return data.data ?? [];
 }
+
+export async function downloadRestaurantMonthlyReportPdf(
+  restaurantId: string,
+  input: { year: number; month: number },
+): Promise<void> {
+  const { data } = await api.get(
+    `/restaurants/${encodeURIComponent(restaurantId)}/ledger/monthly-report.pdf`,
+    {
+      params: { year: input.year, month: input.month },
+      responseType: "blob",
+      timeout: 60000,
+    },
+  );
+  const blob =
+    data instanceof Blob ? data : new Blob([data], { type: "application/pdf" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `pickfoo-restaurant-ledger-${input.year}-${String(input.month).padStart(2, "0")}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
