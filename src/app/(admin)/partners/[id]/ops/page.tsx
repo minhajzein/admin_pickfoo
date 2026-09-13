@@ -3,7 +3,7 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useMemo, useState, Fragment } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,20 +23,30 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { fetchPartner } from "@/lib/api/partners";
-import { fetchPartnerLedger } from "@/lib/api/partner-ledger";
+import {
+  fetchPartnerLedger,
+  fetchPartnerLedgerTransactions,
+} from "@/lib/api/partner-ledger";
 import {
   fetchPartnerOpsOrders,
   fetchPartnerPresenceHours,
   formatDuration,
+  formatKm,
+  formatOfflineReason,
+  formatSessionClock,
   type PartnerOpsOrderScope,
+  type PartnerPresenceDay,
 } from "@/lib/api/partner-ops";
 import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { visibleRefetchInterval } from "@/lib/query-live";
 import {
   ArrowLeft,
   Bike,
+  ChevronDown,
+  ChevronRight,
   Clock3,
   Loader2,
+  Route,
   ShieldCheck,
   Wallet,
 } from "lucide-react";
@@ -61,6 +71,20 @@ function formatWhen(value?: string | null): string {
   return d.toLocaleString();
 }
 
+function formatDayLabel(dayKey: string): string {
+  try {
+    const d = new Date(`${dayKey}T12:00:00`);
+    return d.toLocaleDateString("en-IN", {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+  } catch {
+    return dayKey;
+  }
+}
+
 export default function PartnerOpsPage() {
   const params = useParams();
   const router = useRouter();
@@ -69,6 +93,8 @@ export default function PartnerOpsPage() {
 
   const [scope, setScope] = useState<PartnerOpsOrderScope>("completed");
   const [page, setPage] = useState(1);
+  const [selectedDayKey, setSelectedDayKey] = useState<string | null>(null);
+  const [expandedDayKey, setExpandedDayKey] = useState<string | null>(null);
 
   const { data: partner, isLoading: partnerLoading } = useQuery({
     queryKey: ["partner", partnerId],
@@ -78,9 +104,33 @@ export default function PartnerOpsPage() {
 
   const { data: hours, isLoading: hoursLoading } = useQuery({
     queryKey: ["partner-ops", partnerId, "hours"],
-    queryFn: () => fetchPartnerPresenceHours(String(partnerId), 14),
+    queryFn: () => fetchPartnerPresenceHours(String(partnerId), 30),
     enabled: Boolean(partnerId),
     refetchInterval: visibleRefetchInterval(60_000),
+  });
+
+  useEffect(() => {
+    if (!hours?.today?.dayKey) return;
+    setSelectedDayKey((prev) => prev ?? hours.today.dayKey);
+    setExpandedDayKey((prev) => prev ?? hours.today.dayKey);
+  }, [hours?.today?.dayKey]);
+
+  const selectedDay: PartnerPresenceDay | null = useMemo(() => {
+    if (!hours?.days?.length) return null;
+    const key = selectedDayKey ?? hours.today.dayKey;
+    return hours.days.find((d) => d.dayKey === key) ?? hours.today;
+  }, [hours, selectedDayKey]);
+
+  const { data: dayEarnings, isLoading: dayEarningsLoading } = useQuery({
+    queryKey: ["partner-ops", partnerId, "day-earnings", selectedDay?.dayKey],
+    queryFn: () =>
+      fetchPartnerLedgerTransactions(String(partnerId), {
+        type: "trip_earning",
+        from: selectedDay!.dayKey,
+        to: selectedDay!.dayKey,
+        limit: 200,
+      }),
+    enabled: Boolean(partnerId && selectedDay?.dayKey),
   });
 
   const { data: ordersData, isLoading: ordersLoading } = useQuery({
@@ -181,7 +231,7 @@ export default function PartnerOpsPage() {
               </Badge>
             </div>
             <p className="mt-1 text-sm text-white/50">
-              Hours, order outcomes, and wallet overview
+              Day-by-day online/offline sessions, km run, and earnings
             </p>
           </div>
         </div>
@@ -231,26 +281,30 @@ export default function PartnerOpsPage() {
         </Card>
         <Card className="border-white/5 bg-[#002833] text-white">
           <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-white/60">Today km</CardTitle>
+          </CardHeader>
+          <CardContent className="text-2xl font-bold">
+            {hoursLoading ? "…" : formatKm(hours?.today.kmRun ?? 0)}
+          </CardContent>
+        </Card>
+        <Card className="border-white/5 bg-[#002833] text-white">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-white/60">
+              Today earnings
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="text-2xl font-bold text-[#98E32F]">
+            {hoursLoading
+              ? "…"
+              : money.format(hours?.today.earningsInr ?? 0)}
+          </CardContent>
+        </Card>
+        <Card className="border-white/5 bg-[#002833] text-white">
+          <CardHeader className="pb-2">
             <CardTitle className="text-sm text-white/60">Completed</CardTitle>
           </CardHeader>
           <CardContent className="text-2xl font-bold">
             {summary.completed}
-          </CardContent>
-        </Card>
-        <Card className="border-white/5 bg-[#002833] text-white">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-white/60">Missed</CardTitle>
-          </CardHeader>
-          <CardContent className="text-2xl font-bold text-amber-300">
-            {summary.missed}
-          </CardContent>
-        </Card>
-        <Card className="border-white/5 bg-[#002833] text-white">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-white/60">Rejected</CardTitle>
-          </CardHeader>
-          <CardContent className="text-2xl font-bold text-red-300">
-            {summary.rejected}
           </CardContent>
         </Card>
         <Card className="border-white/5 bg-[#002833] text-white">
@@ -270,15 +324,17 @@ export default function PartnerOpsPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <Clock3 className="h-4 w-4 text-[#98E32F]" />
-              Hours (last 14 days)
+              Daily report (last 30 days)
             </CardTitle>
             <CardDescription className="text-white/45">
-              Online = available for offers · On duty = active delivery
+              Tap a day for online/offline timeline, earnings, and km. Online =
+              available · On duty = delivery
               {hours ? (
                 <>
                   {" "}
-                  · Lifetime {formatDuration(hours.totals.onlineSeconds)} online
-                  / {formatDuration(hours.totals.onDutySeconds)} on duty
+                  · Period {formatDuration(hours.totals.onlineSeconds)} online ·{" "}
+                  {formatKm(hours.totals.kmRun ?? 0)} ·{" "}
+                  {money.format(hours.totals.earningsInr ?? 0)} earned
                 </>
               ) : null}
             </CardDescription>
@@ -287,107 +343,194 @@ export default function PartnerOpsPage() {
             <Table>
               <TableHeader className="bg-white/5">
                 <TableRow className="border-white/5 hover:bg-transparent">
+                  <TableHead className="w-8 text-white/60" />
                   <TableHead className="text-white/60">Day</TableHead>
                   <TableHead className="text-white/60">Online</TableHead>
                   <TableHead className="text-white/60">On duty</TableHead>
+                  <TableHead className="text-white/60">Km</TableHead>
+                  <TableHead className="text-white/60">Earnings</TableHead>
+                  <TableHead className="text-white/60">Offline</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {hoursLoading ? (
                   <TableRow>
-                    <TableCell colSpan={3} className="py-8 text-center">
+                    <TableCell colSpan={7} className="py-8 text-center">
                       <Loader2 className="mx-auto h-5 w-5 animate-spin text-[#98E32F]" />
                     </TableCell>
                   </TableRow>
                 ) : (hours?.days.length ?? 0) === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={3}
+                      colSpan={7}
                       className="py-8 text-center text-white/40"
                     >
                       No presence data yet.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  hours!.days.map((day) => (
-                    <TableRow
-                      key={day.dayKey}
-                      className="border-white/5 hover:bg-white/5"
-                    >
-                      <TableCell className="font-medium">{day.dayKey}</TableCell>
-                      <TableCell className="text-white/80">
-                        {formatDuration(day.onlineSeconds)}
-                      </TableCell>
-                      <TableCell className="text-white/80">
-                        {formatDuration(day.onDutySeconds)}
-                      </TableCell>
-                    </TableRow>
-                  ))
+                  hours!.days.map((day) => {
+                    const expanded = expandedDayKey === day.dayKey;
+                    const selected = selectedDayKey === day.dayKey;
+                    return (
+                      <Fragment key={day.dayKey}>
+                        <TableRow
+                          className={`cursor-pointer border-white/5 hover:bg-white/5 ${
+                            selected ? "bg-white/[0.04]" : ""
+                          }`}
+                          onClick={() => {
+                            setSelectedDayKey(day.dayKey);
+                            setExpandedDayKey(
+                              expanded ? null : day.dayKey
+                            );
+                          }}
+                        >
+                          <TableCell className="pr-0 text-white/50">
+                            {expanded ? (
+                              <ChevronDown className="h-4 w-4" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4" />
+                            )}
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            {formatDayLabel(day.dayKey)}
+                          </TableCell>
+                          <TableCell className="text-white/80">
+                            {formatDuration(day.onlineSeconds)}
+                          </TableCell>
+                          <TableCell className="text-white/80">
+                            {formatDuration(day.onDutySeconds)}
+                          </TableCell>
+                          <TableCell className="text-white/80">
+                            {formatKm(day.kmRun ?? 0)}
+                          </TableCell>
+                          <TableCell className="text-[#98E32F]">
+                            {money.format(day.earningsInr ?? 0)}
+                          </TableCell>
+                          <TableCell className="text-white/60">
+                            {day.offlineCount ?? 0}
+                          </TableCell>
+                        </TableRow>
+                        {expanded ? (
+                          <TableRow className="border-white/5 bg-black/20 hover:bg-black/20">
+                            <TableCell colSpan={7} className="px-4 py-4">
+                              <DaySessionsPanel day={day} />
+                            </TableCell>
+                          </TableRow>
+                        ) : null}
+                      </Fragment>
+                    );
+                  })
                 )}
               </TableBody>
             </Table>
           </CardContent>
         </Card>
 
-        <Card className="border-white/5 bg-[#002833] text-white">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Wallet className="h-4 w-4 text-[#98E32F]" />
-              Wallet details
-            </CardTitle>
-            <CardDescription className="text-white/45">
-              Partner pocket = delivery fee + tip (not order total). Duplicate
-              trip credits are removed automatically.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            {ledgerLoading ? (
-              <div className="flex justify-center py-8">
-                <Loader2 className="h-5 w-5 animate-spin text-[#98E32F]" />
-              </div>
-            ) : (
-              <>
-                <div className="flex justify-between gap-3 border-b border-white/5 py-2">
-                  <span className="text-white/45">Available (spendable)</span>
-                  <span className="font-medium text-[#98E32F]">
-                    {money.format(wallet?.availableBalance ?? 0)}
-                  </span>
+        <div className="space-y-4">
+          <Card className="border-white/5 bg-[#002833] text-white">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Route className="h-4 w-4 text-[#98E32F]" />
+                Selected day
+              </CardTitle>
+              <CardDescription className="text-white/45">
+                {selectedDay
+                  ? formatDayLabel(selectedDay.dayKey)
+                  : "Pick a day from the table"}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              {hoursLoading || !selectedDay ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="h-5 w-5 animate-spin text-[#98E32F]" />
                 </div>
-                <div className="flex justify-between gap-3 border-b border-white/5 py-2">
-                  <span className="text-white/45">Pending withdrawal</span>
-                  <span>{money.format(wallet?.pendingWithdrawal ?? 0)}</span>
+              ) : (
+                <>
+                  <div className="flex justify-between gap-3 border-b border-white/5 py-2">
+                    <span className="text-white/45">Online</span>
+                    <span>
+                      {formatDuration(selectedDay.onlineSeconds)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between gap-3 border-b border-white/5 py-2">
+                    <span className="text-white/45">On duty</span>
+                    <span>
+                      {formatDuration(selectedDay.onDutySeconds)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between gap-3 border-b border-white/5 py-2">
+                    <span className="text-white/45">Km run (GPS)</span>
+                    <span>{formatKm(selectedDay.distanceKm ?? 0)}</span>
+                  </div>
+                  <div className="flex justify-between gap-3 border-b border-white/5 py-2">
+                    <span className="text-white/45">Trip legs</span>
+                    <span>{formatKm(selectedDay.tripDistanceKm ?? 0)}</span>
+                  </div>
+                  <div className="flex justify-between gap-3 border-b border-white/5 py-2">
+                    <span className="text-white/45">Earnings</span>
+                    <span className="text-[#98E32F]">
+                      {money.format(selectedDay.earningsInr ?? 0)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between gap-3 border-b border-white/5 py-2">
+                    <span className="text-white/45">Tips</span>
+                    <span>{money.format(selectedDay.tipsInr ?? 0)}</span>
+                  </div>
+                  <div className="flex justify-between gap-3 py-2">
+                    <span className="text-white/45">Paid trips</span>
+                    <span>{selectedDay.tripCount ?? 0}</span>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="border-white/5 bg-[#002833] text-white">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Wallet className="h-4 w-4 text-[#98E32F]" />
+                Earnings that day
+              </CardTitle>
+              <CardDescription className="text-white/45">
+                Trip credits filtered to the selected day
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="max-h-[320px] space-y-2 overflow-y-auto text-sm">
+              {dayEarningsLoading ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="h-5 w-5 animate-spin text-[#98E32F]" />
                 </div>
-                <div className="flex justify-between gap-3 border-b border-white/5 py-2">
-                  <span className="text-white/45">Trip earnings</span>
-                  <span>{money.format(wallet?.lifetimeEarnings ?? 0)}</span>
-                </div>
-                <div className="flex justify-between gap-3 border-b border-white/5 py-2">
-                  <span className="text-white/45">This week</span>
-                  <span>{money.format(wallet?.weekEarnings ?? 0)}</span>
-                </div>
-                <div className="flex justify-between gap-3 border-b border-white/5 py-2">
-                  <span className="text-white/45">Tips</span>
-                  <span>{money.format(wallet?.tipsTotal ?? 0)}</span>
-                </div>
-                <div className="flex justify-between gap-3 py-2">
-                  <span className="text-white/45">Paid trips</span>
-                  <span>
-                    {wallet?.completedOrderCount ?? wallet?.tripCount ?? 0}
-                  </span>
-                </div>
-                <Button
-                  asChild
-                  variant="outline"
-                  className="mt-2 w-full border-white/10 text-white hover:bg-white/5"
-                >
-                  <Link href={`/partners/${partnerId}/ledger`}>
-                    Open full ledger
-                  </Link>
-                </Button>
-              </>
-            )}
-          </CardContent>
-        </Card>
+              ) : (dayEarnings?.length ?? 0) === 0 ? (
+                <p className="py-6 text-center text-white/40">
+                  No trip earnings on this day.
+                </p>
+              ) : (
+                dayEarnings!.map((entry) => (
+                  <div
+                    key={entry._id}
+                    className="flex items-start justify-between gap-3 border-b border-white/5 py-2 last:border-0"
+                  >
+                    <div>
+                      <div className="font-medium text-white/90">
+                        {entry.pickfooId || entry.orderId || "Trip"}
+                      </div>
+                      <div className="text-xs text-white/40">
+                        {formatWhen(entry.createdAt)}
+                        {entry.meta?.tipAmount
+                          ? ` · tip ${money.format(entry.meta.tipAmount)}`
+                          : ""}
+                      </div>
+                    </div>
+                    <div className="font-semibold text-[#98E32F]">
+                      {money.format(entry.amount)}
+                    </div>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       <Card className="overflow-hidden border-white/5 bg-[#002833] text-white">
@@ -518,6 +661,67 @@ export default function PartnerOpsPage() {
           />
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+function DaySessionsPanel({ day }: { day: PartnerPresenceDay }) {
+  const sessions = day.sessions ?? [];
+  if (!sessions.length) {
+    return (
+      <p className="text-sm text-white/40">
+        No online / on-duty sessions recorded for this day yet.
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-white/45">
+        Online / offline timeline
+      </p>
+      {sessions.map((session, idx) => {
+        const isOnline = session.kind === "online";
+        const range = session.active
+          ? `${formatSessionClock(session.startedAt)} – now`
+          : `${formatSessionClock(session.startedAt)} – ${formatSessionClock(session.endedAt)}`;
+        return (
+          <div
+            key={`${session.kind}-${session.startedAt}-${idx}`}
+            className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Badge
+                  variant="outline"
+                  className={
+                    isOnline
+                      ? "border-[#98E32F]/35 text-[#98E32F]"
+                      : "border-cyan-400/35 text-cyan-300"
+                  }
+                >
+                  {isOnline
+                    ? session.active
+                      ? "Online now"
+                      : "Online"
+                    : session.active
+                      ? "On duty now"
+                      : "On duty"}
+                </Badge>
+                <span className="text-sm text-white/70">{range}</span>
+              </div>
+              <span className="text-xs text-white/45">
+                {formatDuration(session.durationSeconds)}
+              </span>
+            </div>
+            {isOnline && !session.active ? (
+              <p className="mt-1 text-xs text-amber-300/90">
+                {formatOfflineReason(session.endReason)}
+              </p>
+            ) : null}
+          </div>
+        );
+      })}
     </div>
   );
 }
