@@ -3,7 +3,7 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState, Fragment } from "react";
+import { useMemo, useState, Fragment } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -94,7 +94,10 @@ export default function PartnerOpsPage() {
   const [scope, setScope] = useState<PartnerOpsOrderScope>("completed");
   const [page, setPage] = useState(1);
   const [selectedDayKey, setSelectedDayKey] = useState<string | null>(null);
-  const [expandedDayKey, setExpandedDayKey] = useState<string | null>(null);
+  /** `undefined` = default to today; `null` = user collapsed all. */
+  const [expandedDayKey, setExpandedDayKey] = useState<
+    string | null | undefined
+  >(undefined);
 
   const { data: partner, isLoading: partnerLoading } = useQuery({
     queryKey: ["partner", partnerId],
@@ -109,17 +112,16 @@ export default function PartnerOpsPage() {
     refetchInterval: visibleRefetchInterval(60_000),
   });
 
-  useEffect(() => {
-    if (!hours?.today?.dayKey) return;
-    setSelectedDayKey((prev) => prev ?? hours.today.dayKey);
-    setExpandedDayKey((prev) => prev ?? hours.today.dayKey);
-  }, [hours?.today?.dayKey]);
+  const todayKey = hours?.today?.dayKey ?? null;
+  const resolvedSelectedDayKey = selectedDayKey ?? todayKey;
+  const resolvedExpandedDayKey =
+    expandedDayKey === undefined ? todayKey : expandedDayKey;
 
   const selectedDay: PartnerPresenceDay | null = useMemo(() => {
     if (!hours?.days?.length) return null;
-    const key = selectedDayKey ?? hours.today.dayKey;
+    const key = resolvedSelectedDayKey ?? hours.today.dayKey;
     return hours.days.find((d) => d.dayKey === key) ?? hours.today;
-  }, [hours, selectedDayKey]);
+  }, [hours, resolvedSelectedDayKey]);
 
   const { data: dayEarnings, isLoading: dayEarningsLoading } = useQuery({
     queryKey: ["partner-ops", partnerId, "day-earnings", selectedDay?.dayKey],
@@ -370,13 +372,13 @@ export default function PartnerOpsPage() {
                   </TableRow>
                 ) : (
                   hours!.days.map((day) => {
-                    const expanded = expandedDayKey === day.dayKey;
-                    const selected = selectedDayKey === day.dayKey;
+                    const expanded = resolvedExpandedDayKey === day.dayKey;
+                    const selected = resolvedSelectedDayKey === day.dayKey;
                     return (
                       <Fragment key={day.dayKey}>
                         <TableRow
                           className={`cursor-pointer border-white/5 hover:bg-white/5 ${
-                            selected ? "bg-white/[0.04]" : ""
+                            selected ? "bg-white/4" : ""
                           }`}
                           onClick={() => {
                             setSelectedDayKey(day.dayKey);
@@ -496,7 +498,7 @@ export default function PartnerOpsPage() {
                 Trip credits filtered to the selected day
               </CardDescription>
             </CardHeader>
-            <CardContent className="max-h-[320px] space-y-2 overflow-y-auto text-sm">
+            <CardContent className="max-h-80 space-y-2 overflow-y-auto text-sm">
               {dayEarningsLoading ? (
                 <div className="flex justify-center py-8">
                   <Loader2 className="h-5 w-5 animate-spin text-[#98E32F]" />
@@ -635,7 +637,7 @@ export default function PartnerOpsPage() {
                         {row.status || "—"}
                       </Badge>
                     </TableCell>
-                    <TableCell className="max-w-[220px] text-sm text-white/65">
+                    <TableCell className="max-w-55 text-sm text-white/65">
                       {row.partnerDecision?.reason ||
                         row.partnerDeliveryProgress ||
                         "—"}
@@ -688,7 +690,7 @@ function DaySessionsPanel({ day }: { day: PartnerPresenceDay }) {
         return (
           <div
             key={`${session.kind}-${session.startedAt}-${idx}`}
-            className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2"
+            className="rounded-lg border border-white/10 bg-white/3 px-3 py-2"
           >
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
