@@ -761,7 +761,7 @@ export default function RestaurantLedgerPage() {
             </p>
             <p className="text-[11px] text-white/35 mt-2">
               All time {inr(summary.commissionEarned)} ·{" "}
-              {restaurant.commissionPercent}% on food
+              {restaurant.commissionPercent}% on offer food
             </p>
           </CardContent>
         </Card>

@@ -34,6 +34,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { OfferPrice } from "@/components/ui/OfferPrice";
 import { raiseCustomerOrderFromRefs } from "@/lib/api/customer-payments";
 import {
   assignOrderPartner,
@@ -741,7 +742,9 @@ export default function OrderDetailPage() {
           </p>
           <p className="text-xs text-[#98E32F]">
             Commission {formatMoney(order.platformCommission)}
-            {order.commissionPercent > 0 ? ` (${order.commissionPercent}%)` : ""}
+            {order.commissionPercent > 0
+              ? ` (${order.commissionPercent}% on offer food)`
+              : ""}
           </p>
         </div>
       </div>
@@ -912,7 +915,27 @@ export default function OrderDetailPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  order.items.map((item, idx) => (
+                  order.items.map((item, idx) => {
+                    const foodDiscount = Math.min(
+                      Math.max(0, Number(order.discountAmount) || 0),
+                      Math.max(0, Number(order.itemTotal) || 0),
+                    );
+                    const foodTotal = Math.max(0, Number(order.itemTotal) || 0);
+                    const ratio =
+                      foodDiscount > 0 && foodTotal > 0
+                        ? Math.max(0, (foodTotal - foodDiscount) / foodTotal)
+                        : 1;
+                    const offerUnit =
+                      ratio < 0.999 ? Math.round(item.price * ratio * 100) / 100 : null;
+                    const offerLine =
+                      offerUnit != null
+                        ? Math.round(
+                            (offerUnit * item.quantity +
+                              item.packingCharge * item.quantity) *
+                              100,
+                          ) / 100
+                        : null;
+                    return (
                     <TableRow
                       key={`${item.menuItem || item.name}-${idx}`}
                       className="border-white/5 hover:bg-white/5"
@@ -920,16 +943,29 @@ export default function OrderDetailPage() {
                       <TableCell className="font-medium">{item.name}</TableCell>
                       <TableCell className="text-white/70">{item.quantity}</TableCell>
                       <TableCell className="text-white/70">
-                        {formatMoney(item.price)}
+                        <OfferPrice
+                          price={item.price}
+                          offerPrice={offerUnit}
+                          tone="dark"
+                          size="sm"
+                          primary="offer"
+                        />
                       </TableCell>
                       <TableCell className="text-white/70">
                         {formatMoney(item.packingCharge)}
                       </TableCell>
                       <TableCell className="text-right font-medium">
-                        {formatMoney(item.lineTotal)}
+                        <OfferPrice
+                          price={item.lineTotal}
+                          offerPrice={offerLine}
+                          tone="dark"
+                          size="sm"
+                          primary="offer"
+                        />
                       </TableCell>
                     </TableRow>
-                  ))
+                    );
+                  })
                 )}
               </TableBody>
             </Table>
@@ -941,7 +977,22 @@ export default function OrderDetailPage() {
             <CardTitle className="text-base">Amounts</CardTitle>
           </CardHeader>
           <CardContent>
-            <DetailRow label="Items" value={formatMoney(order.itemTotal)} />
+            <DetailRow
+              label="Items"
+              value={
+                <OfferPrice
+                  price={order.itemTotal}
+                  offerPrice={
+                    order.discountAmount > 0
+                      ? Math.max(0, order.itemTotal - order.discountAmount)
+                      : null
+                  }
+                  tone="dark"
+                  size="md"
+                  primary="offer"
+                />
+              }
+            />
             <DetailRow label="Packing" value={formatMoney(order.packingTotal)} />
             <DetailRow
               label="Delivery"
@@ -991,7 +1042,7 @@ export default function OrderDetailPage() {
                 <span className="text-[#98E32F]">
                   {formatMoney(order.platformCommission)}
                   {order.commissionPercent > 0
-                    ? ` (${order.commissionPercent}%)`
+                    ? ` (${order.commissionPercent}% on offer food)`
                     : ""}
                 </span>
               }

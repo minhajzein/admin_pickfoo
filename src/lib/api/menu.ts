@@ -29,6 +29,8 @@ export interface AdminMenuItem {
   completeMealItemIds?: string[];
   rating?: number;
   numReviews?: number;
+  /** Optional sale / offer unit price when lower than [price]. */
+  offerPrice?: number | null;
   createdAt?: string;
   updatedAt?: string;
 }

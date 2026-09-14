@@ -32,6 +32,9 @@ export interface PlatformLedgerEntry {
   restaurantId?: string | null;
   restaurantName?: string | null;
   itemTotal?: number;
+  /** Post-offer food total (catalog − discount). */
+  offerItemTotal?: number;
+  discountAmount?: number;
   packingTotal?: number;
   deliveryFee?: number;
   tipAmount?: number;

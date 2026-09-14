@@ -9,8 +9,11 @@ export interface AdminOrderRow {
   orderType: "pickup" | "delivery" | string;
   /** Grand total charged to the customer. */
   totalAmount?: number | null;
-  /** Food subtotal (price × qty), excludes packing. */
+  /** Food subtotal (price × qty), excludes packing — catalog / menu price. */
   itemTotal?: number | null;
+  /** Catalog food − offer discount (primary food amount when offers apply). */
+  offerItemTotal?: number | null;
+  discountAmount?: number | null;
   /** Packing subtotal (packingCharge × qty). */
   packingTotal?: number | null;
   deliveryFee?: number | null;

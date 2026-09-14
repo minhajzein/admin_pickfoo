@@ -18,8 +18,9 @@ export type OfferMenuItemOption = {
   name: string;
   image: string;
   price: number;
+  offerPrice?: number | null;
   restaurantIds: string[];
-  variants?: { name: string; price: number }[];
+  variants?: { name: string; price: number; offerPrice?: number | null }[];
 };
 
 export type OfferPreviewPerOrder = {

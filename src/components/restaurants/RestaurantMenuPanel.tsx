@@ -48,7 +48,10 @@ import {
   updateRestaurantMenuItem,
   uploadMenuImage,
 } from "@/lib/api/menu";
+import { fetchCustomerOffers } from "@/lib/api/customer-offers";
+import { unitOfferPrice } from "@/lib/menuOfferPrice";
 import { CustomerStyleMenuCard } from "@/components/restaurants/CustomerStyleMenuCard";
+import { OfferPrice } from "@/components/ui/OfferPrice";
 import { CategorySearchField, categoryParentId, categoryParentName } from "@/components/restaurants/CategorySearchField";
 import { RESTAURANT_TYPES, type RestaurantType } from "@/types/models";
 
@@ -292,6 +295,52 @@ export function RestaurantMenuPanel({
     queryKey: ["restaurant-menu", restaurantId],
     queryFn: () => fetchRestaurantMenu(restaurantId),
   });
+
+  const { data: restaurantOffers = [] } = useQuery({
+    queryKey: ["restaurant-menu-offers", restaurantId],
+    queryFn: async () => {
+      const page = await fetchCustomerOffers({
+        status: "active",
+        page: 1,
+        limit: 100,
+      });
+      return page.data.filter((o) => {
+        if (!o.isActive) return false;
+        if (o.scope === "restaurants") {
+          return (o.restaurantIds || []).includes(restaurantId);
+        }
+        if (o.type === "combo") {
+          return !o.comboRestaurantId || o.comboRestaurantId === restaurantId;
+        }
+        // Item / BOGO / percent offers — unitOfferPrice decides per dish.
+        return (
+          o.scope === "items" ||
+          o.type === "bogo" ||
+          o.type === "percent" ||
+          (o.menuItemIds || []).length > 0
+        );
+      });
+    },
+  });
+
+  const offerPriceByItemId = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const item of menuItems) {
+      const list =
+        item.variants && item.variants.length > 0
+          ? Math.min(...item.variants.map((v) => v.price))
+          : item.price;
+      const offer = unitOfferPrice({
+        listPrice: list,
+        menuItemId: item._id,
+        restaurantId,
+        offers: restaurantOffers,
+        explicitOfferPrice: item.offerPrice,
+      });
+      if (offer != null) map.set(item._id, offer);
+    }
+    return map;
+  }, [menuItems, restaurantId, restaurantOffers]);
 
   const { data: categories = [], isLoading: isCategoriesLoading } = useQuery({
     queryKey: ["menu-categories", debouncedCategoryListSearch],
@@ -956,6 +1005,7 @@ export function RestaurantMenuPanel({
               key={item._id}
               item={item}
               restaurantName={restaurantName}
+              offerPrice={offerPriceByItemId.get(item._id) ?? item.offerPrice}
               onEdit={() => openEdit(item)}
               onDelete={() =>
                 setDeleteTarget({
@@ -1550,9 +1600,14 @@ export function RestaurantMenuPanel({
                           <p className="text-[11px] font-semibold text-white truncate">
                             {item.name}
                           </p>
-                          <p className="text-[10px] text-white/40 truncate">
-                            ₹{Math.round(item.price)}
-                          </p>
+                          <OfferPrice
+                            price={item.price}
+                            offerPrice={
+                              offerPriceByItemId.get(item._id) ?? item.offerPrice
+                            }
+                            tone="dark"
+                            size="sm"
+                          />
                         </div>
                       </button>
                     );

@@ -27,6 +27,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { OfferPrice, offerFoodTotal } from "@/components/ui/OfferPrice";
 import {
   canRedispatchPickupOrder,
   cancelSourceLabel,
@@ -197,6 +198,11 @@ function AmountBreakdown({ row }: { row: AdminOrderRow }) {
     row.gstDestination === "restaurant" || row.restaurantGstRegistered
       ? "restaurant"
       : "platform";
+  const catalogItems = Math.max(0, Number(row.itemTotal) || 0);
+  const offerItems =
+    row.offerItemTotal != null
+      ? Math.max(0, Number(row.offerItemTotal) || 0)
+      : offerFoodTotal(catalogItems, row.discountAmount);
 
   return (
     <div className="min-w-44 space-y-0.5 text-xs leading-snug">
@@ -206,7 +212,13 @@ function AmountBreakdown({ row }: { row: AdminOrderRow }) {
       </div>
       <div className="flex justify-between gap-3 text-white/70">
         <span className="text-white/40">Items</span>
-        <span>{formatMoney(row.itemTotal)}</span>
+        <OfferPrice
+          price={catalogItems}
+          offerPrice={offerItems < catalogItems - 0.009 ? offerItems : null}
+          primary="offer"
+          tone="dark"
+          size="sm"
+        />
       </div>
       <div className="flex justify-between gap-3 text-white/70">
         <span className="text-white/40">Packing</span>
@@ -235,7 +247,7 @@ function AmountBreakdown({ row }: { row: AdminOrderRow }) {
           Commission
           {row.commissionPercent != null && row.commissionPercent > 0 ? (
             <span className="ml-1 text-[10px] font-normal text-white/35">
-              ({row.commissionPercent}%)
+              ({row.commissionPercent}% on offer)
             </span>
           ) : null}
         </span>

@@ -150,6 +150,17 @@ function entryAmount(row: PlatformLedgerEntry): number {
   const total = Number(row.totalAmount);
   if (Number.isFinite(total) && total > 0) return total;
   const amount = Number(row.amount);
+  const offerFood =
+    row.offerItemTotal != null
+      ? Math.max(0, Number(row.offerItemTotal) || 0)
+      : Math.max(
+          0,
+          (Number(row.itemTotal) || 0) -
+            Math.min(
+              Math.max(0, Number(row.discountAmount) || 0),
+              Math.max(0, Number(row.itemTotal) || 0),
+            ),
+        );
   if (Number.isFinite(amount) && amount > 0) {
     // Older API returned commission in `amount` — if platformCommission matches, rebuild.
     const commission = Number(row.platformCommission);
@@ -158,7 +169,7 @@ function entryAmount(row: PlatformLedgerEntry): number {
       Math.abs(amount - commission) < 0.005
     ) {
       const rebuilt =
-        (Number(row.itemTotal) || 0) +
+        offerFood +
         (Number(row.packingTotal) || 0) +
         (Number(row.deliveryFee) || 0) +
         (Number(row.tipAmount) || 0) +
@@ -168,7 +179,7 @@ function entryAmount(row: PlatformLedgerEntry): number {
     return amount;
   }
   return (
-    (Number(row.itemTotal) || 0) +
+    offerFood +
     (Number(row.packingTotal) || 0) +
     (Number(row.deliveryFee) || 0) +
     (Number(row.tipAmount) || 0) +

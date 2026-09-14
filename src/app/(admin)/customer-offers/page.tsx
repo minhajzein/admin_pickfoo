@@ -55,7 +55,9 @@ import type {
   RestaurantAffinity,
 } from "@/types/models";
 import { ListPagination } from "@/components/ui/list-pagination";
+import { OfferPrice } from "@/components/ui/OfferPrice";
 import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
+import { unitOfferPrice, type OfferPriceSource } from "@/lib/menuOfferPrice";
 
 function inr(n: number | undefined | null) {
   const v = Number(n) || 0;
@@ -403,6 +405,42 @@ function comboLinePrice(item: ComboFormItem, dishes: OfferMenuItemOption[]): num
     return dish.price;
   }
   return item.unitPrice || 0;
+}
+
+function offerSourceFromForm(form: FormState): OfferPriceSource {
+  return {
+    type: form.type,
+    scope: form.scope,
+    discountValue: form.discountValue,
+    maxDiscountAmount: form.maxDiscountAmount,
+    menuItemIds: form.menuItemIds,
+    restaurantIds: form.restaurantIds,
+    buyMenuItemId: form.buyMenuItemId || null,
+    getMenuItemId: form.getMenuItemId || null,
+    getDiscountType: form.getDiscountType,
+    getDiscountValue: form.getDiscountValue,
+    comboRestaurantId: form.comboRestaurantId || null,
+    comboItems: form.comboItems.map((c) => ({
+      menuItemId: c.menuItemId,
+      quantity: c.quantity,
+      name: c.name,
+      variantName: c.variantName || "",
+    })),
+  };
+}
+
+function dishOfferPreview(
+  form: FormState,
+  dish: OfferMenuItemOption,
+  listPrice = dish.price,
+): number | null {
+  return unitOfferPrice({
+    listPrice,
+    menuItemId: dish.id,
+    restaurantId: form.comboRestaurantId || form.restaurantIds[0],
+    offers: [offerSourceFromForm(form)],
+    explicitOfferPrice: dish.offerPrice,
+  });
 }
 
 function addOrIncrementComboItem(
@@ -1318,7 +1356,7 @@ export default function CustomerOffersPage() {
                     <button
                       key={d.id}
                       type="button"
-                      className="rounded border border-white/20 px-2 py-1 text-xs text-white"
+                      className="inline-flex items-center gap-1.5 rounded border border-white/20 px-2 py-1 text-xs text-white"
                       onClick={() =>
                         setForm((f) =>
                           f.buyMenuItemId
@@ -1327,7 +1365,13 @@ export default function CustomerOffersPage() {
                         )
                       }
                     >
-                      {d.name} ₹{d.price}
+                      <span>{d.name}</span>
+                      <OfferPrice
+                        price={d.price}
+                        offerPrice={dishOfferPreview(form, d)}
+                        tone="dark"
+                        size="sm"
+                      />
                     </button>
                   ))}
                 </div>
@@ -1406,7 +1450,7 @@ export default function CustomerOffersPage() {
                     <div key={d.id} className="flex flex-wrap items-center gap-1">
                       <button
                         type="button"
-                        className="rounded border border-white/20 px-2 py-1 text-xs text-white"
+                        className="inline-flex items-center gap-1.5 rounded border border-white/20 px-2 py-1 text-xs text-white"
                         onClick={() =>
                           setForm((f) => ({
                             ...f,
@@ -1414,13 +1458,19 @@ export default function CustomerOffersPage() {
                           }))
                         }
                       >
-                        + {d.name} ₹{d.price}
+                        <span>+ {d.name}</span>
+                        <OfferPrice
+                          price={d.price}
+                          offerPrice={d.offerPrice}
+                          tone="dark"
+                          size="sm"
+                        />
                       </button>
                       {(d.variants || []).map((v) => (
                         <button
                           key={`${d.id}-${v.name}`}
                           type="button"
-                          className="rounded border border-white/10 px-2 py-1 text-[11px] text-white/80"
+                          className="inline-flex items-center gap-1 rounded border border-white/10 px-2 py-1 text-[11px] text-white/80"
                           onClick={() =>
                             setForm((f) => ({
                               ...f,
@@ -1428,7 +1478,13 @@ export default function CustomerOffersPage() {
                             }))
                           }
                         >
-                          {v.name} ₹{v.price}
+                          <span>{v.name}</span>
+                          <OfferPrice
+                            price={v.price}
+                            offerPrice={v.offerPrice}
+                            tone="dark"
+                            size="sm"
+                          />
                         </button>
                       ))}
                     </div>
@@ -1827,7 +1883,7 @@ export default function CustomerOffersPage() {
                       <button
                         key={d.id}
                         type="button"
-                        className="rounded border border-white/20 px-2 py-1 text-xs text-white"
+                        className="inline-flex items-center gap-1.5 rounded border border-white/20 px-2 py-1 text-xs text-white"
                         onClick={() =>
                           setForm((f) => ({
                             ...f,
@@ -1835,7 +1891,13 @@ export default function CustomerOffersPage() {
                           }))
                         }
                       >
-                        {d.name}
+                        <span>{d.name}</span>
+                        <OfferPrice
+                          price={d.price}
+                          offerPrice={dishOfferPreview(form, d)}
+                          tone="dark"
+                          size="sm"
+                        />
                       </button>
                     ))}
                 </div>

@@ -4,12 +4,19 @@ import { memo } from "react";
 import { CdnImage } from "@/lib/cdn-image";
 import { Clock, Edit2, ImageIcon, Loader2, Star, Trash2 } from "lucide-react";
 import type { AdminMenuItem } from "@/lib/api/menu";
+import { OfferPrice } from "@/components/ui/OfferPrice";
 
 function displayPrice(item: AdminMenuItem) {
   if (item.variants && item.variants.length > 0) {
     return Math.min(...item.variants.map((v) => v.price));
   }
   return item.price;
+}
+
+function displayOfferPrice(item: AdminMenuItem, offerPrice?: number | null) {
+  if (offerPrice != null) return offerPrice;
+  if (item.offerPrice != null) return item.offerPrice;
+  return null;
 }
 
 function ratingLabel(item: AdminMenuItem) {
@@ -24,6 +31,7 @@ function ratingLabel(item: AdminMenuItem) {
 export const CustomerStyleMenuCard = memo(function CustomerStyleMenuCard({
   item,
   restaurantName,
+  offerPrice,
   onEdit,
   onDelete,
   onToggleActive,
@@ -31,6 +39,8 @@ export const CustomerStyleMenuCard = memo(function CustomerStyleMenuCard({
 }: {
   item: AdminMenuItem;
   restaurantName?: string;
+  /** Derived unit offer price for this dish (when lower than list price). */
+  offerPrice?: number | null;
   onEdit?: () => void;
   onDelete?: () => void;
   onToggleActive?: (next: boolean) => void;
@@ -43,6 +53,8 @@ export const CustomerStyleMenuCard = memo(function CustomerStyleMenuCard({
     from && to ? `${from}–${to}` : null;
   const rating = ratingLabel(item);
   const grayscale = !item.isActive;
+  const listPrice = displayPrice(item);
+  const dealPrice = displayOfferPrice(item, offerPrice);
 
   return (
     <div className="group flex flex-col rounded-[20px] bg-[#F5FFE5] overflow-hidden shadow-sm border border-black/5">
@@ -164,9 +176,12 @@ export const CustomerStyleMenuCard = memo(function CustomerStyleMenuCard({
           </p>
         )}
         <div className="flex items-end justify-between gap-2 mt-0.5">
-          <p className="text-[15px] font-black text-black">
-            ₹{Math.round(displayPrice(item))}
-          </p>
+          <OfferPrice
+            price={listPrice}
+            offerPrice={dealPrice}
+            tone="light"
+            size="lg"
+          />
           <div className="flex gap-1 sm:hidden">
             {onEdit && (
               <button
