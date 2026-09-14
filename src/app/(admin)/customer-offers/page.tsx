@@ -541,8 +541,8 @@ function formFromOffer(row: AdminCustomerOffer): FormState {
 function payloadFromForm(form: FormState, forecastSnapshot?: Record<string, unknown>) {
   return {
     ...form,
-    restaurantIds: form.restaurantIds,
-    menuItemIds: form.menuItemIds,
+    restaurantIds: form.scope === "restaurants" ? form.restaurantIds : [],
+    menuItemIds: form.scope === "items" ? form.menuItemIds : [],
     buyMenuItemId: form.buyMenuItemId || null,
     getMenuItemId: form.getMenuItemId || null,
     comboRestaurantId: form.comboRestaurantId || null,
@@ -572,6 +572,7 @@ export default function CustomerOffersPage() {
   const [open, setOpen] = useState(false);
   const [restoSearch, setRestoSearch] = useState("");
   const [dishSearch, setDishSearch] = useState("");
+  const [dishFilterRestaurantId, setDishFilterRestaurantId] = useState("");
   const [restoOptions, setRestoOptions] = useState<OfferRestaurantOption[]>([]);
   const [dishOptions, setDishOptions] = useState<OfferMenuItemOption[]>([]);
   const [previewAssumptions, setPreviewAssumptions] = useState({
@@ -627,8 +628,10 @@ export default function CustomerOffersPage() {
   const rows = listQuery.data?.data ?? [];
   const meta = listQuery.data;
 
+  const showScopeSelector = form.type !== "combo" && form.type !== "bogo";
   const needsRestaurants = form.scope === "restaurants" || form.type === "combo";
   const needsItems = form.scope === "items" || form.type === "bogo" || form.type === "combo";
+  const needsDishRestaurantFilter = form.scope === "items";
 
   async function runRestoSearch() {
     try {
@@ -643,7 +646,10 @@ export default function CustomerOffersPage() {
       setDishOptions(
         await searchOfferMenuItems({
           search: dishSearch,
-          restaurantId: form.comboRestaurantId || form.restaurantIds[0],
+          restaurantId:
+            form.comboRestaurantId ||
+            dishFilterRestaurantId ||
+            form.restaurantIds[0],
         }),
       );
     } catch {
@@ -709,6 +715,11 @@ export default function CustomerOffersPage() {
   function openCreate() {
     setEditingId(null);
     setForm(emptyForm());
+    setDishFilterRestaurantId("");
+    setRestoOptions([]);
+    setDishOptions([]);
+    setRestoSearch("");
+    setDishSearch("");
     setPreviewAssumptions({
       sampleCartAmount: 499,
       sampleDeliveryFee: 40,
@@ -720,6 +731,11 @@ export default function CustomerOffersPage() {
   function openEdit(row: AdminCustomerOffer) {
     setEditingId(row.id);
     setForm(formFromOffer(row));
+    setDishFilterRestaurantId("");
+    setRestoOptions([]);
+    setDishOptions([]);
+    setRestoSearch("");
+    setDishSearch("");
     setPreviewAssumptions({
       sampleCartAmount: Math.max(row.minOrderAmount || 0, 499),
       sampleDeliveryFee: 40,
@@ -729,11 +745,19 @@ export default function CustomerOffersPage() {
   }
 
   function save() {
-    const payload = payloadFromForm(form, previewQuery.data?.forecastSnapshot);
     if (!form.title.trim()) {
       toast.error("Title is required");
       return;
     }
+    if (form.scope === "restaurants" && form.restaurantIds.length === 0) {
+      toast.error("Select at least one restaurant for this offer");
+      return;
+    }
+    if (form.scope === "items" && form.menuItemIds.length === 0) {
+      toast.error("Select at least one dish for this offer");
+      return;
+    }
+    const payload = payloadFromForm(form, previewQuery.data?.forecastSnapshot);
     if (editingId) updateMut.mutate({ id: editingId, patch: payload });
     else createMut.mutate(payload);
   }
@@ -891,7 +915,14 @@ export default function CustomerOffersPage() {
                       ...form,
                       type,
                       fundingSource: type === "combo" ? "menu_item" : form.fundingSource,
+                      // Combo/BOGO use their own restaurant & dish pickers.
+                      ...(type === "combo" || type === "bogo"
+                        ? { scope: "all" as CustomerOfferScope, restaurantIds: [], menuItemIds: [] }
+                        : {}),
                     });
+                    if (type === "combo" || type === "bogo") {
+                      setDishFilterRestaurantId("");
+                    }
                   }}
                 >
                   {Object.entries(typeLabels).map(([k, v]) => (
@@ -909,6 +940,46 @@ export default function CustomerOffersPage() {
                 />
               </div>
             </div>
+
+            {showScopeSelector && (
+              <div className="space-y-2 rounded-md border border-white/10 p-3">
+                <Label>Applies to</Label>
+                <select
+                  className="h-10 w-full rounded-md border border-white/15 bg-transparent px-3 text-sm text-white"
+                  value={form.scope}
+                  onChange={(e) => {
+                    const scope = e.target.value as CustomerOfferScope;
+                    setForm({
+                      ...form,
+                      scope,
+                      restaurantIds: scope === "restaurants" ? form.restaurantIds : [],
+                      menuItemIds: scope === "items" ? form.menuItemIds : [],
+                    });
+                    if (scope !== "items") setDishFilterRestaurantId("");
+                    if (scope !== "restaurants") setRestoSearch("");
+                    if (scope !== "items") setDishSearch("");
+                  }}
+                >
+                  <option className="bg-[#013644]" value="all">
+                    All restaurants
+                  </option>
+                  <option className="bg-[#013644]" value="restaurants">
+                    Specific restaurants
+                  </option>
+                  <option className="bg-[#013644]" value="items">
+                    Specific dishes
+                  </option>
+                </select>
+                <p className="text-xs text-white/50">
+                  {form.scope === "all" &&
+                    "Offer applies everywhere it is eligible by type and audience."}
+                  {form.scope === "restaurants" &&
+                    "Offer only applies when ordering from the selected restaurants."}
+                  {form.scope === "items" &&
+                    "Discount only applies to the selected dishes in the cart."}
+                </p>
+              </div>
+            )}
 
             <div className="space-y-2 rounded-md border border-white/10 p-3">
               <Label>Who sees this offer</Label>
@@ -1625,28 +1696,48 @@ export default function CustomerOffersPage() {
                     Search
                   </Button>
                 </div>
+                {form.restaurantIds.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {form.restaurantIds.map((id) => {
+                      const name =
+                        restoOptions.find((r) => r.id === id)?.name || `Restaurant ${id.slice(-6)}`;
+                      return (
+                        <button
+                          key={id}
+                          type="button"
+                          className="rounded border border-[#98E32F] bg-[#98E32F] px-2 py-1 text-xs text-[#013644]"
+                          onClick={() =>
+                            setForm((f) => ({
+                              ...f,
+                              restaurantIds: f.restaurantIds.filter((x) => x !== id),
+                            }))
+                          }
+                          title="Remove"
+                        >
+                          {name} ×
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
                 <div className="flex flex-wrap gap-2">
-                  {restoOptions.map((r) => (
-                    <button
-                      key={r.id}
-                      type="button"
-                      className={`rounded border px-2 py-1 text-xs ${
-                        form.restaurantIds.includes(r.id)
-                          ? "border-[#98E32F] bg-[#98E32F] text-[#013644]"
-                          : "border-white/20 text-white"
-                      }`}
-                      onClick={() =>
-                        setForm((f) => ({
-                          ...f,
-                          restaurantIds: f.restaurantIds.includes(r.id)
-                            ? f.restaurantIds.filter((id) => id !== r.id)
-                            : [...f.restaurantIds, r.id],
-                        }))
-                      }
-                    >
-                      {r.name}
-                    </button>
-                  ))}
+                  {restoOptions
+                    .filter((r) => !form.restaurantIds.includes(r.id))
+                    .map((r) => (
+                      <button
+                        key={r.id}
+                        type="button"
+                        className="rounded border border-white/20 px-2 py-1 text-xs text-white"
+                        onClick={() =>
+                          setForm((f) => ({
+                            ...f,
+                            restaurantIds: [...f.restaurantIds, r.id],
+                          }))
+                        }
+                      >
+                        {r.name}
+                      </button>
+                    ))}
                 </div>
               </div>
             )}
@@ -1654,6 +1745,47 @@ export default function CustomerOffersPage() {
             {needsItems && form.type !== "combo" && form.type !== "bogo" && (
               <div className="space-y-2">
                 <Label>Limit to dishes</Label>
+                {needsDishRestaurantFilter && (
+                  <div className="flex gap-2">
+                    <Input
+                      value={restoSearch}
+                      onChange={(e) => setRestoSearch(e.target.value)}
+                      placeholder="Optional: search restaurant to filter dishes"
+                    />
+                    <Button type="button" variant="outline" onClick={runRestoSearch}>
+                      Search
+                    </Button>
+                  </div>
+                )}
+                {needsDishRestaurantFilter && restoOptions.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className={`rounded border px-2 py-1 text-xs ${
+                        !dishFilterRestaurantId
+                          ? "border-[#98E32F] bg-[#98E32F] text-[#013644]"
+                          : "border-white/20 text-white"
+                      }`}
+                      onClick={() => setDishFilterRestaurantId("")}
+                    >
+                      Any restaurant
+                    </button>
+                    {restoOptions.map((r) => (
+                      <button
+                        key={r.id}
+                        type="button"
+                        className={`rounded border px-2 py-1 text-xs ${
+                          dishFilterRestaurantId === r.id
+                            ? "border-[#98E32F] bg-[#98E32F] text-[#013644]"
+                            : "border-white/20 text-white"
+                        }`}
+                        onClick={() => setDishFilterRestaurantId(r.id)}
+                      >
+                        {r.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <div className="flex gap-2">
                   <Input
                     value={dishSearch}
@@ -1664,28 +1796,48 @@ export default function CustomerOffersPage() {
                     Search
                   </Button>
                 </div>
+                {form.menuItemIds.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {form.menuItemIds.map((id) => {
+                      const name =
+                        dishOptions.find((d) => d.id === id)?.name || `Dish ${id.slice(-6)}`;
+                      return (
+                        <button
+                          key={id}
+                          type="button"
+                          className="rounded border border-[#98E32F] bg-[#98E32F] px-2 py-1 text-xs text-[#013644]"
+                          onClick={() =>
+                            setForm((f) => ({
+                              ...f,
+                              menuItemIds: f.menuItemIds.filter((x) => x !== id),
+                            }))
+                          }
+                          title="Remove"
+                        >
+                          {name} ×
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
                 <div className="flex flex-wrap gap-2">
-                  {dishOptions.map((d) => (
-                    <button
-                      key={d.id}
-                      type="button"
-                      className={`rounded border px-2 py-1 text-xs ${
-                        form.menuItemIds.includes(d.id)
-                          ? "border-[#98E32F] bg-[#98E32F] text-[#013644]"
-                          : "border-white/20 text-white"
-                      }`}
-                      onClick={() =>
-                        setForm((f) => ({
-                          ...f,
-                          menuItemIds: f.menuItemIds.includes(d.id)
-                            ? f.menuItemIds.filter((id) => id !== d.id)
-                            : [...f.menuItemIds, d.id],
-                        }))
-                      }
-                    >
-                      {d.name}
-                    </button>
-                  ))}
+                  {dishOptions
+                    .filter((d) => !form.menuItemIds.includes(d.id))
+                    .map((d) => (
+                      <button
+                        key={d.id}
+                        type="button"
+                        className="rounded border border-white/20 px-2 py-1 text-xs text-white"
+                        onClick={() =>
+                          setForm((f) => ({
+                            ...f,
+                            menuItemIds: [...f.menuItemIds, d.id],
+                          }))
+                        }
+                      >
+                        {d.name}
+                      </button>
+                    ))}
                 </div>
               </div>
             )}

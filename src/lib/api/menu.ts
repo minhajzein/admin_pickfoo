@@ -16,6 +16,7 @@ export interface AdminMenuItem {
   packingCharge?: number;
   variants?: AdminMenuVariant[];
   category: string;
+  categories?: string[];
   isVeg: boolean;
   isActive: boolean;
   availableFrom?: string;
@@ -35,6 +36,8 @@ export interface AdminMenuItem {
 export interface AdminCategory {
   _id: string;
   name: string;
+  /** Globally unique URL-safe identifier. */
+  slug?: string;
   image?: string;
   owner?: string;
   parent?: string | null | { _id: string; name?: string };
@@ -45,6 +48,7 @@ export interface AdminMenuItemInput {
   description: string;
   price: number;
   category: string;
+  categories?: string[];
   type: "breakfast" | "lunch" | "dinner";
   mealTypes?: ("breakfast" | "lunch" | "dinner")[];
   preparationTime: number;

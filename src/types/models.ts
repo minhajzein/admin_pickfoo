@@ -112,8 +112,12 @@ export interface Restaurant {
   _id?: string;
   owner: string;
   name: string;
+  /** Globally unique URL-safe identifier. */
+  slug?: string;
   description: string;
   restaurantTypes?: RestaurantType[];
+  /** Pure Veg tag — restaurant serves only vegetarian food. */
+  isPureVegetarian?: boolean;
   address: RestaurantAddress;
   contactNumber: string;
   email: string;

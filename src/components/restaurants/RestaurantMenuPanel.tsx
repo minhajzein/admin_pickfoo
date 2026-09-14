@@ -90,11 +90,12 @@ function originalFromFinal(finalPrice: number, percent: number): number {
 
 const emptyForm = (
   restaurantTypes: string[] = ["restaurant"],
-): AdminMenuItemInput & { variants: AdminMenuVariant[] } => ({
+): AdminMenuItemInput & { variants: AdminMenuVariant[]; categories: string[] } => ({
   name: "",
   description: "",
   price: 0,
   category: "",
+  categories: [],
   type: "lunch",
   mealTypes: ["lunch"],
   preparationTime: 0,
@@ -110,6 +111,14 @@ const emptyForm = (
     restaurantTypes.length > 0 ? [...restaurantTypes] : ["restaurant"],
   completeMealItemIds: [],
 });
+
+function menuItemCategories(item: Pick<AdminMenuItem, "category" | "categories">): string[] {
+  if (item.categories && item.categories.length > 0) {
+    return item.categories.map((c) => c.trim()).filter(Boolean);
+  }
+  const single = item.category?.trim();
+  return single ? [single] : [];
+}
 
 function normalizeRelatedItemIds(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];
@@ -128,14 +137,21 @@ function normalizeRelatedItemIds(raw: unknown): string[] {
   ];
 }
 
-function validateForm(form: AdminMenuItemInput): string | null {
+function validateForm(
+  form: AdminMenuItemInput & { categories?: string[] },
+): string | null {
   if (!form.name.trim() || form.name.trim().length < 2) {
     return "Item name must be at least 2 characters";
   }
   if (!form.description.trim() || form.description.trim().length < 10) {
     return "Description must be at least 10 characters";
   }
-  if (!form.category.trim()) return "Category is required";
+  const cats = (form.categories ?? [])
+    .map((c) => c.trim())
+    .filter(Boolean);
+  if (cats.length === 0 && !form.category.trim()) {
+    return "Select at least one category";
+  }
   if (!Number.isFinite(form.price) || form.price <= 0) {
     return "Enter an original price so the final raised price is greater than 0";
   }
@@ -324,12 +340,14 @@ export function RestaurantMenuPanel({
   const filteredItems = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return menuItems;
-    return menuItems.filter(
-      (item) =>
+    return menuItems.filter((item) => {
+      const cats = menuItemCategories(item).join(" ").toLowerCase();
+      return (
         item.name.toLowerCase().includes(q) ||
-        item.category.toLowerCase().includes(q) ||
-        item.description.toLowerCase().includes(q),
-    );
+        cats.includes(q) ||
+        item.description.toLowerCase().includes(q)
+      );
+    });
   }, [menuItems, search]);
 
   const relatedItemCategoryOptions = useMemo(() => {
@@ -337,8 +355,9 @@ export function RestaurantMenuPanel({
     for (const item of menuItems) {
       if (editingItemId && item._id === editingItemId) continue;
       if (!item.isActive) continue;
-      const name = item.category?.trim();
-      if (name) names.add(name);
+      for (const name of menuItemCategories(item)) {
+        names.add(name);
+      }
     }
     return Array.from(names).sort((a, b) =>
       a.localeCompare(b, undefined, { sensitivity: "base" }),
@@ -353,16 +372,17 @@ export function RestaurantMenuPanel({
     return menuItems.filter((item) => {
       if (editingItemId && item._id === editingItemId) return false;
       if (!item.isActive) return false;
+      const itemCats = menuItemCategories(item).map((c) => c.toLowerCase());
       if (
         categoryFilter.size > 0 &&
-        !categoryFilter.has(item.category.trim().toLowerCase())
+        !itemCats.some((c) => categoryFilter.has(c))
       ) {
         return false;
       }
       if (!q) return true;
       return (
         item.name.toLowerCase().includes(q) ||
-        item.category.toLowerCase().includes(q)
+        itemCats.some((c) => c.includes(q))
       );
     });
   }, [menuItems, editingItemId, relatedItemSearch, relatedItemCategories]);
@@ -516,11 +536,13 @@ export function RestaurantMenuPanel({
                 : ["lunch"];
           const pct = DEFAULT_COMMISSION_PERCENT;
           const variants = item.variants?.map((v) => ({ ...v })) ?? [];
+          const cats = menuItemCategories(item);
           setForm({
             name: item.name,
             description: item.description,
             price: item.price,
-            category: item.category,
+            category: cats[0] ?? item.category ?? "",
+            categories: cats,
             type: item.type || "lunch",
             mealTypes: [...itemMealTypes],
             preparationTime: item.preparationTime ?? 0,
@@ -727,11 +749,15 @@ export function RestaurantMenuPanel({
       toast.error(error);
       return;
     }
+    const categories = (form.categories ?? [])
+      .map((c) => c.trim())
+      .filter(Boolean);
     const payload: AdminMenuItemInput = {
       ...form,
       name: form.name.trim(),
       description: form.description.trim(),
-      category: form.category.trim(),
+      category: categories[0] ?? form.category.trim(),
+      categories,
       type: (form.mealTypes?.[0] as MealType | undefined) ?? form.type ?? "lunch",
       mealTypes: form.mealTypes ?? [form.type ?? "lunch"],
       variants: (form.variants ?? []).filter((v) => v.name.trim()),
@@ -1052,7 +1078,7 @@ export function RestaurantMenuPanel({
               <div>
                 <div className="flex items-center justify-between">
                   <label className="text-[10px] font-bold text-white/40 uppercase tracking-wider">
-                    Category
+                    Categories
                   </label>
                   <button
                     type="button"
@@ -1062,13 +1088,52 @@ export function RestaurantMenuPanel({
                     Manage
                   </button>
                 </div>
-                <CategorySearchField
-                  value={form.category}
-                  onChange={(category) =>
-                    setForm((p) => ({ ...p, category }))
-                  }
-                  placeholder="Search categories..."
-                />
+                {(form.categories ?? []).length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {(form.categories ?? []).map((name) => (
+                      <button
+                        key={name}
+                        type="button"
+                        onClick={() =>
+                          setForm((p) => {
+                            const next = (p.categories ?? []).filter(
+                              (c) => c !== name,
+                            );
+                            return {
+                              ...p,
+                              categories: next,
+                              category: next[0] ?? "",
+                            };
+                          })
+                        }
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-[#98E32F]/15 text-[#98E32F] border border-[#98E32F]/30"
+                      >
+                        {name}
+                        <X size={12} />
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <div className="mt-2">
+                  <CategorySearchField
+                    value=""
+                    onChange={(category) => {
+                      const name = category.trim();
+                      if (!name) return;
+                      setForm((p) => {
+                        const current = p.categories ?? [];
+                        if (current.includes(name)) return p;
+                        const next = [...current, name];
+                        return {
+                          ...p,
+                          categories: next,
+                          category: next[0] ?? "",
+                        };
+                      });
+                    }}
+                    placeholder="Search to add categories..."
+                  />
+                </div>
               </div>
             </div>
 
@@ -1928,9 +1993,15 @@ export function RestaurantMenuPanel({
                           className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10"
                           onClick={() => {
                             const linkedMenuItemCount = menuItems.filter(
-                              (item) =>
-                                item.category === cat.name ||
-                                item.category === cat._id
+                              (item) => {
+                                const tags = menuItemCategories(item);
+                                return (
+                                  tags.includes(cat.name) ||
+                                  tags.includes(cat._id) ||
+                                  item.category === cat.name ||
+                                  item.category === cat._id
+                                );
+                              },
                             ).length;
                             setDeleteTarget({
                               type: "category",

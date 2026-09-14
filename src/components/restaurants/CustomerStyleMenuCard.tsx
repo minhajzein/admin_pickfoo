@@ -154,7 +154,12 @@ export const CustomerStyleMenuCard = memo(function CustomerStyleMenuCard({
           </p>
         ) : (
           <p className="text-[10px] font-semibold text-neutral-500 truncate">
-            {item.category}
+            {(item.categories && item.categories.length > 0
+              ? item.categories
+              : item.category
+                ? [item.category]
+                : []
+            ).join(" · ") || "Uncategorized"}
             {item.type ? ` · ${item.type}` : ""}
           </p>
         )}
