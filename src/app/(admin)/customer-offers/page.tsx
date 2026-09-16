@@ -289,7 +289,13 @@ const typeLabels: Record<CustomerOfferType, string> = {
   order_count_cashback: "Complete N orders cashback",
 };
 
-type AudiencePreset = "everyone" | "new" | "returning" | "lapsed" | "custom";
+type AudiencePreset =
+  | "everyone"
+  | "new"
+  | "returning"
+  | "lapsed"
+  | "first_at_restaurant"
+  | "custom";
 
 type ComboFormItem = {
   menuItemId: string;
@@ -362,13 +368,19 @@ function audiencePresetFromOffer(
   rules: AdminOfferAudienceRules,
 ): AudiencePreset {
   if (!audience || audience === "all") return "everyone";
-  const custom =
+  const hasExtra =
     rules.minOrderCount > 0 ||
     rules.maxOrderCount > 0 ||
     rules.minAov > 0 ||
-    rules.maxAov > 0 ||
-    rules.restaurantAffinity !== "any";
-  if (custom) return "custom";
+    rules.maxAov > 0;
+  if (
+    !hasExtra &&
+    rules.lifecycle === "all" &&
+    rules.restaurantAffinity === "never_ordered"
+  ) {
+    return "first_at_restaurant";
+  }
+  if (hasExtra || rules.restaurantAffinity !== "any") return "custom";
   if (rules.lifecycle === "new") return "new";
   if (rules.lifecycle === "returning") return "returning";
   if (rules.lifecycle === "lapsed") return "lapsed";
@@ -378,20 +390,49 @@ function audiencePresetFromOffer(
 function applyAudiencePreset(
   preset: AudiencePreset,
   rules: AdminOfferAudienceRules,
-): Pick<FormState, "audience" | "audiencePreset" | "audienceRules"> {
+): Partial<FormState> {
   if (preset === "everyone") {
     return {
       audience: "all",
       audiencePreset: preset,
-      audienceRules: { ...rules, lifecycle: "all" },
+      audienceRules: { ...rules, lifecycle: "all", restaurantAffinity: "any" },
+    };
+  }
+  if (preset === "first_at_restaurant") {
+    return {
+      audience: "segment",
+      audiencePreset: preset,
+      audienceRules: {
+        ...rules,
+        lifecycle: "all",
+        restaurantAffinity: "never_ordered",
+        minOrderCount: 0,
+        maxOrderCount: 0,
+        minAov: 0,
+        maxAov: 0,
+      },
+      // First-order-at-restaurant only makes sense for specific restaurants.
+      scope: "restaurants",
+      menuItemIds: [],
+      usagePerUser: 1,
     };
   }
   const lifecycle: AudienceLifecycle =
-    preset === "new" ? "new" : preset === "returning" ? "returning" : preset === "lapsed" ? "lapsed" : rules.lifecycle;
+    preset === "new"
+      ? "new"
+      : preset === "returning"
+        ? "returning"
+        : preset === "lapsed"
+          ? "lapsed"
+          : rules.lifecycle;
   return {
     audience: "segment",
     audiencePreset: preset,
-    audienceRules: { ...rules, lifecycle },
+    audienceRules: {
+      ...rules,
+      lifecycle,
+      restaurantAffinity: preset === "custom" ? rules.restaurantAffinity : "any",
+    },
   };
 }
 
@@ -791,6 +832,13 @@ export default function CustomerOffersPage() {
       toast.error("Select at least one restaurant for this offer");
       return;
     }
+    if (
+      form.audiencePreset === "first_at_restaurant" &&
+      form.restaurantIds.length === 0
+    ) {
+      toast.error("Pick the restaurant(s) this first-order offer applies to");
+      return;
+    }
     if (form.scope === "items" && form.menuItemIds.length === 0) {
       toast.error("Select at least one dish for this offer");
       return;
@@ -1027,14 +1075,28 @@ export default function CustomerOffersPage() {
                 onChange={(e) => {
                   const preset = e.target.value as AudiencePreset;
                   setForm({ ...form, ...applyAudiencePreset(preset, form.audienceRules) });
+                  if (preset === "first_at_restaurant") {
+                    setDishFilterRestaurantId("");
+                    setDishSearch("");
+                  }
                 }}
               >
                 <option className="bg-[#013644]" value="everyone">Everyone</option>
-                <option className="bg-[#013644]" value="new">New customers (0 orders)</option>
+                <option className="bg-[#013644]" value="new">New customers (0 orders on Pickfoo)</option>
+                <option className="bg-[#013644]" value="first_at_restaurant">
+                  First order at this restaurant
+                </option>
                 <option className="bg-[#013644]" value="returning">Returning customers</option>
                 <option className="bg-[#013644]" value="lapsed">Lapsed customers</option>
                 <option className="bg-[#013644]" value="custom">Custom segment</option>
               </select>
+              {form.audiencePreset === "first_at_restaurant" && (
+                <p className="text-xs text-white/50">
+                  50% off (or any discount) for a customer&apos;s first delivered order
+                  at the selected restaurant — even if they already ordered elsewhere.
+                  Applies to is set to Specific restaurants; usage per user defaults to 1.
+                </p>
+              )}
               {form.audiencePreset === "lapsed" && (
                 <div className="grid gap-2">
                   <Label>Lapsed after (days)</Label>
@@ -1164,6 +1226,36 @@ export default function CustomerOffersPage() {
                   </div>
                 </div>
               )}
+              <div className="grid grid-cols-2 gap-3 pt-1">
+                <div className="grid gap-2">
+                  <Label>Usage per user (0 = unlimited)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={form.usagePerUser}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        usagePerUser: Math.max(0, Number(e.target.value) || 0),
+                      })
+                    }
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label>Total usage limit (0 = unlimited)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={form.usageLimit}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        usageLimit: Math.max(0, Number(e.target.value) || 0),
+                      })
+                    }
+                  />
+                </div>
+              </div>
             </div>
 
             {(form.type === "flat" || form.type === "percent") && (
