@@ -15,6 +15,7 @@ import {
   Loader2,
   AlertCircle,
 } from "lucide-react";
+import { DashboardCharts } from "@/components/dashboard/DashboardCharts";
 
 const money = new Intl.NumberFormat("en-IN", {
   style: "currency",
@@ -111,6 +112,8 @@ export default function AdminDashboard() {
           </Card>
         ))}
       </div>
+
+      <DashboardCharts />
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7">
         <Card className="lg:col-span-4 border-white/5 bg-[#002833] text-white">
