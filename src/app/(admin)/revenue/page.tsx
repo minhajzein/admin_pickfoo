@@ -59,6 +59,7 @@ import {
 import {
   backfillPlatformBooks,
   createPlatformExpense,
+  downloadPlatformMonthlyGstCsv,
   downloadPlatformMonthlyReportPdf,
   fetchPlatformLedger,
   fetchPlatformSettlement,
@@ -466,6 +467,23 @@ export default function RevenuePage() {
     },
   });
 
+  const gstCsvMutation = useMutation({
+    mutationFn: () =>
+      downloadPlatformMonthlyGstCsv({
+        year: Number(reportYear),
+        month: Number(reportMonth),
+      }),
+    onSuccess: () => toast.success("GST CSV downloaded"),
+    onError: (err: unknown) => {
+      const msg =
+        err && typeof err === "object" && "response" in err
+          ? (err as { response?: { data?: { message?: string } } }).response
+              ?.data?.message
+          : undefined;
+      toast.error(msg || "Could not download GST CSV");
+    },
+  });
+
   const backfillMutation = useMutation({
     mutationFn: () =>
       backfillPlatformBooks({
@@ -600,6 +618,21 @@ export default function RevenuePage() {
             size="sm"
             variant="outline"
             className="border-white/15 text-white"
+            disabled={gstCsvMutation.isPending}
+            onClick={() => gstCsvMutation.mutate()}
+          >
+            {gstCsvMutation.isPending ? (
+              <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Download className="mr-1 h-3.5 w-3.5" />
+            )}
+            Download GST CSV
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="border-white/15 text-white"
             disabled={backfillMutation.isPending}
             onClick={() => backfillMutation.mutate()}
           >
@@ -611,8 +644,8 @@ export default function RevenuePage() {
             Backfill month books
           </Button>
           <p className="text-[11px] text-white/40 sm:ml-auto">
-            PDF includes collections, payouts, expenses by tag, commission &amp;
-            platform GST.
+            PDF includes cashbook + per-order GST (taxable, SGST, CGST, platform
+            vs restaurant). CSV is GST detail only for filing.
           </p>
         </CardContent>
       </Card>

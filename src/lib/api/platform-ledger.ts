@@ -387,3 +387,26 @@ export async function downloadPlatformMonthlyReportPdf(input: {
   a.remove();
   URL.revokeObjectURL(url);
 }
+
+export async function downloadPlatformMonthlyGstCsv(input: {
+  year: number;
+  month: number;
+}): Promise<void> {
+  const { data } = await api.get(`/platform-ledger/monthly-gst.csv`, {
+    params: { year: input.year, month: input.month },
+    responseType: "blob",
+    timeout: 60000,
+  });
+  const blob =
+    data instanceof Blob
+      ? data
+      : new Blob([data], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `pickfoo-platform-gst-${input.year}-${String(input.month).padStart(2, "0")}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
