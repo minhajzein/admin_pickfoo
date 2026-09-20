@@ -15,9 +15,15 @@ import {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  RestaurantLocationPicker,
+  type RestaurantAddressHint,
+  type RestaurantMapPoint,
+} from "@/components/map/RestaurantLocationPicker";
+import {
   updateRestaurantProfile,
   uploadRestaurantImage,
 } from "@/lib/api/restaurants";
+import { getApiErrorMessage } from "@/lib/axios";
 
 type ProfileRestaurant = {
   _id?: string;
@@ -26,7 +32,32 @@ type ProfileRestaurant = {
   contactNumber?: string;
   brandLogo?: string;
   image?: string;
+  address?: {
+    street?: string;
+    city?: string;
+    state?: string;
+    zipCode?: string;
+    coordinates?: { lat?: number; lng?: number } | null;
+  };
 };
+
+function pointFromRestaurant(
+  restaurant: ProfileRestaurant,
+): RestaurantMapPoint | null {
+  const lat = Number(restaurant.address?.coordinates?.lat);
+  const lng = Number(restaurant.address?.coordinates?.lng);
+  if (
+    !Number.isFinite(lat) ||
+    !Number.isFinite(lng) ||
+    lat < -90 ||
+    lat > 90 ||
+    lng < -180 ||
+    lng > 180
+  ) {
+    return null;
+  }
+  return { lat, lng };
+}
 
 function ImagePicker({
   label,
@@ -124,6 +155,13 @@ export function RestaurantProfileEditor({
   const [brandLogoPreview, setBrandLogoPreview] = useState(restaurant.brandLogo ?? "");
   const [coverStatic, setCoverStatic] = useState(restaurant.image ?? "");
   const [coverPreview, setCoverPreview] = useState(restaurant.image ?? "");
+  const [street, setStreet] = useState(restaurant.address?.street ?? "");
+  const [city, setCity] = useState(restaurant.address?.city ?? "");
+  const [state, setState] = useState(restaurant.address?.state || "Kerala");
+  const [zipCode, setZipCode] = useState(restaurant.address?.zipCode ?? "");
+  const [mapPoint, setMapPoint] = useState<RestaurantMapPoint | null>(() =>
+    pointFromRestaurant(restaurant),
+  );
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [uploadingCover, setUploadingCover] = useState(false);
 
@@ -135,13 +173,31 @@ export function RestaurantProfileEditor({
     setBrandLogoPreview(restaurant.brandLogo ?? "");
     setCoverStatic(restaurant.image ?? "");
     setCoverPreview(restaurant.image ?? "");
+    setStreet(restaurant.address?.street ?? "");
+    setCity(restaurant.address?.city ?? "");
+    setState(restaurant.address?.state || "Kerala");
+    setZipCode(restaurant.address?.zipCode ?? "");
+    setMapPoint(pointFromRestaurant(restaurant));
   }, [
     restaurant.name,
     restaurant.description,
     restaurant.contactNumber,
     restaurant.brandLogo,
     restaurant.image,
+    restaurant.address?.street,
+    restaurant.address?.city,
+    restaurant.address?.state,
+    restaurant.address?.zipCode,
+    restaurant.address?.coordinates?.lat,
+    restaurant.address?.coordinates?.lng,
   ]);
+
+  const applyAddressHint = (hint: RestaurantAddressHint) => {
+    if (hint.street) setStreet(hint.street);
+    if (hint.city) setCity(hint.city);
+    if (hint.state) setState(hint.state);
+    if (hint.zipCode) setZipCode(hint.zipCode);
+  };
 
   const saveMutation = useMutation({
     mutationFn: () =>
@@ -151,6 +207,13 @@ export function RestaurantProfileEditor({
         contactNumber: contactNumber.trim(),
         brandLogo: brandLogoStatic,
         image: coverStatic,
+        address: {
+          street: street.trim(),
+          city: city.trim(),
+          state: state.trim() || "Kerala",
+          zipCode: zipCode.trim(),
+          ...(mapPoint ? { coordinates: mapPoint } : {}),
+        },
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["restaurant", restaurantId] });
@@ -158,9 +221,7 @@ export function RestaurantProfileEditor({
       toast.success("Restaurant details updated");
     },
     onError: (err) => {
-      toast.error(
-        err instanceof Error ? err.message : "Failed to update restaurant details",
-      );
+      toast.error(getApiErrorMessage(err, "Failed to update restaurant details"));
     },
   });
 
@@ -200,8 +261,8 @@ export function RestaurantProfileEditor({
       <CardHeader className="pb-2">
         <CardTitle className="text-lg">Restaurant details</CardTitle>
         <CardDescription className="text-white/40">
-          Update brand name, login &amp; contact mobile, description, logo, and
-          storefront cover shown to customers.
+          Update brand name, login &amp; contact mobile, address, map pin,
+          description, logo, and storefront cover shown to customers.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
@@ -240,6 +301,77 @@ export function RestaurantProfileEditor({
 
         <div className="space-y-1.5">
           <label className="text-[10px] font-black uppercase tracking-widest text-white/40">
+            Street address
+          </label>
+          <input
+            type="text"
+            value={street}
+            onChange={(e) => setStreet(e.target.value)}
+            disabled={busy}
+            className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white focus:border-[#98E32F]/50 focus:outline-none disabled:opacity-60"
+            placeholder="Building, road, landmark"
+          />
+        </div>
+
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-black uppercase tracking-widest text-white/40">
+              City
+            </label>
+            <input
+              type="text"
+              value={city}
+              onChange={(e) => setCity(e.target.value)}
+              disabled={busy}
+              className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white focus:border-[#98E32F]/50 focus:outline-none disabled:opacity-60"
+              placeholder="Kalpetta"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-black uppercase tracking-widest text-white/40">
+              State
+            </label>
+            <input
+              type="text"
+              value={state}
+              onChange={(e) => setState(e.target.value)}
+              disabled={busy}
+              className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white focus:border-[#98E32F]/50 focus:outline-none disabled:opacity-60"
+              placeholder="Kerala"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-black uppercase tracking-widest text-white/40">
+              PIN code
+            </label>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={zipCode}
+              onChange={(e) => setZipCode(e.target.value)}
+              disabled={busy}
+              className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white focus:border-[#98E32F]/50 focus:outline-none disabled:opacity-60"
+              placeholder="673121"
+            />
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <label className="text-[10px] font-black uppercase tracking-widest text-white/40">
+            Map location
+          </label>
+          <RestaurantLocationPicker
+            lat={mapPoint?.lat ?? null}
+            lng={mapPoint?.lng ?? null}
+            name={name || restaurant.name}
+            disabled={busy}
+            onChange={setMapPoint}
+            onAddressHint={applyAddressHint}
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <label className="text-[10px] font-black uppercase tracking-widest text-white/40">
             Description
           </label>
           <Textarea
@@ -272,7 +404,15 @@ export function RestaurantProfileEditor({
         <Button
           type="button"
           className="w-full bg-[#98E32F] font-bold text-[#013644] hover:bg-[#86c926]"
-          disabled={busy || !name.trim() || !contactNumber.trim()}
+          disabled={
+            busy ||
+            !name.trim() ||
+            !contactNumber.trim() ||
+            !street.trim() ||
+            !city.trim() ||
+            !zipCode.trim() ||
+            !mapPoint
+          }
           onClick={() => {
             if (!name.trim()) {
               toast.error("Brand name is required");
@@ -282,6 +422,14 @@ export function RestaurantProfileEditor({
             const ten = digits.length >= 10 ? digits.slice(-10) : digits;
             if (!/^[6-9]\d{9}$/.test(ten)) {
               toast.error("Enter a valid 10-digit Indian mobile number");
+              return;
+            }
+            if (!street.trim() || !city.trim() || !zipCode.trim()) {
+              toast.error("Street, city, and PIN code are required");
+              return;
+            }
+            if (!mapPoint) {
+              toast.error("Drop a map pin for the restaurant location");
               return;
             }
             saveMutation.mutate();

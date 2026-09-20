@@ -485,6 +485,9 @@ export default function VerifyRestaurantPage() {
                     <br />
                     {restaurant.address.zipCode}
                   </p>
+                  <p className="mt-1 text-[11px] text-white/35">
+                    Change address and map pin in Restaurant details.
+                  </p>
                 </div>
               </div>
             </CardContent>

@@ -37,6 +37,13 @@ export type RestaurantProfileUpdate = {
   contactNumber?: string;
   brandLogo?: string;
   image?: string;
+  address?: {
+    street?: string;
+    city?: string;
+    state?: string;
+    zipCode?: string;
+    coordinates?: { lat: number; lng: number };
+  };
 };
 
 export async function updateRestaurantProfile(
