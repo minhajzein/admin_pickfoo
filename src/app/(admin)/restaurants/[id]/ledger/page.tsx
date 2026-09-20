@@ -144,7 +144,18 @@ function gstDestinationLabel(
   return null;
 }
 
+function isVoidedRestaurantCredit(tx: RestaurantLedgerTransaction): boolean {
+  if (tx.type !== "credit") return false;
+  if (tx.status === "refunded" || tx.displayStatus === "refunded") return true;
+  const order = tx.order;
+  if (order && typeof order === "object") {
+    if (order.paymentStatus === "refunded") return true;
+  }
+  return false;
+}
+
 function settlementLabel(tx: RestaurantLedgerTransaction): string {
+  if (isVoidedRestaurantCredit(tx)) return "Not credited";
   if (tx.type !== "credit") return "—";
   if (tx.razorpaySettled === true) return "Settled";
   if (tx.withdrawableAt) {
@@ -170,6 +181,7 @@ function batchesFromTransactions(txs: RestaurantLedgerTransaction[]) {
   const byDay = new Map<string, { amount: number; settleAt: string }>();
   for (const tx of txs) {
     if (tx.type !== "credit") continue;
+    if (isVoidedRestaurantCredit(tx)) continue;
     if (tx.razorpaySettled === true) continue;
     const settleAt = tx.withdrawableAt;
     if (!settleAt) continue;
@@ -956,8 +968,16 @@ export default function RestaurantLedgerPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {transactions.map((tx) => (
-                    <TableRow key={tx._id} className="border-white/5">
+                  {transactions.map((tx) => {
+                    const voidedCredit = isVoidedRestaurantCredit(tx);
+                    return (
+                    <TableRow
+                      key={tx._id}
+                      className={cn(
+                        "border-white/5",
+                        voidedCredit && "opacity-60",
+                      )}
+                    >
                       <TableCell className="text-xs text-white/60 whitespace-nowrap">
                         {formatDate(tx.createdAt)}
                       </TableCell>
@@ -966,7 +986,11 @@ export default function RestaurantLedgerPage() {
                           {tx.type === "credit" ? (
                             <ArrowUpRight
                               size={14}
-                              className="text-[#98E32F]"
+                              className={
+                                voidedCredit
+                                  ? "text-white/35"
+                                  : "text-[#98E32F]"
+                              }
                             />
                           ) : (
                             <ArrowDownLeft
@@ -1016,20 +1040,34 @@ export default function RestaurantLedgerPage() {
                         {settlementLabel(tx)}
                       </TableCell>
                       <TableCell className="text-right font-semibold">
-                        {inr(tx.amount)}
+                        {voidedCredit ? (
+                          <>
+                            <span className="block text-xs font-normal text-white/35 line-through">
+                              {inr(tx.amount)}
+                            </span>
+                            <span>{inr(0)}</span>
+                          </>
+                        ) : (
+                          inr(tx.amount)
+                        )}
                       </TableCell>
                       <TableCell>
                         {statusBadge(
-                          (tx.displayStatus ||
-                            tx.withdrawalStatus ||
-                            tx.status) as string,
+                          voidedCredit
+                            ? "refunded"
+                            : ((tx.displayStatus ||
+                                tx.withdrawalStatus ||
+                                tx.status) as string),
                         )}
                       </TableCell>
                       <TableCell className="max-w-55 truncate text-xs text-white/40">
-                        {tx.notes || "—"}
+                        {voidedCredit
+                          ? `Full refund · not credited to restaurant${tx.notes ? ` · ${tx.notes}` : ""}`
+                          : tx.notes || "—"}
                       </TableCell>
                     </TableRow>
-                  ))}
+                    );
+                  })}
                 </TableBody>
               </Table>
             )}
