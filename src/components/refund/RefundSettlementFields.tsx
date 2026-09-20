@@ -23,6 +23,7 @@ type Props = {
   maxRefund?: number;
   disabled?: boolean;
   showWalletOptions?: boolean;
+  showRefundAmount?: boolean;
 };
 
 function suggestRestaurantAmount(
@@ -47,12 +48,14 @@ export function RefundSettlementFields({
   maxRefund,
   disabled = false,
   showWalletOptions = true,
+  showRefundAmount = true,
 }: Props) {
   const effectiveRefund = resolveRefundAmount(state, presets);
   const refundCap =
     maxRefund != null && maxRefund > 0 ? maxRefund : presets.fullAmount;
 
   useEffect(() => {
+    if (!showRefundAmount) return;
     if (state.refundAmountMode === "custom" && !state.customAmount) {
       onChange({
         ...state,
@@ -61,7 +64,7 @@ export function RefundSettlementFields({
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.refundAmountMode]);
+  }, [state.refundAmountMode, showRefundAmount]);
 
   const setMode = (mode: RefundAmountMode) => {
     onChange({ ...state, refundAmountMode: mode });
@@ -69,6 +72,7 @@ export function RefundSettlementFields({
 
   return (
     <div className="space-y-4">
+      {showRefundAmount ? (
       <div className="space-y-2">
         <Label className="text-white/50">Refund amount</Label>
         <div className="grid gap-2">
@@ -137,6 +141,7 @@ export function RefundSettlementFields({
           {refundCap > 0 ? ` (max ${inr(refundCap)})` : ""}
         </p>
       </div>
+      ) : null}
 
       {showWalletOptions ? (
         <div className="space-y-3 rounded-md border border-white/10 bg-black/10 p-3">
@@ -146,7 +151,7 @@ export function RefundSettlementFields({
             <input
               type="checkbox"
               className="mt-1"
-              disabled={disabled || !caps.hasRestaurantCredit}
+              disabled={disabled || caps.maxRestaurantDeduction <= 0}
               checked={state.deductFromRestaurant}
               onChange={(e) => {
                 const checked = e.target.checked;
@@ -163,7 +168,10 @@ export function RefundSettlementFields({
             <span className="flex-1 space-y-2">
               <span>Deduct from restaurant wallet</span>
               <span className="block text-xs text-white/40">
-                Available {inr(caps.maxRestaurantDeduction)}
+                Remaining {inr(caps.maxRestaurantDeduction)}
+                {Number(caps.appliedRestaurantDeduction) > 0
+                  ? ` · already deducted ${inr(caps.appliedRestaurantDeduction)}`
+                  : ""}
                 {!caps.hasRestaurantCredit ? " · no credit on this order" : ""}
               </span>
               {state.deductFromRestaurant ? (
@@ -189,7 +197,7 @@ export function RefundSettlementFields({
             <input
               type="checkbox"
               className="mt-1"
-              disabled={disabled || !caps.hasPartnerTripEarning}
+              disabled={disabled || caps.maxPartnerDeduction <= 0}
               checked={state.deductFromPartner}
               onChange={(e) => {
                 const checked = e.target.checked;
@@ -205,7 +213,10 @@ export function RefundSettlementFields({
             <span className="flex-1 space-y-2">
               <span>Deduct from delivery partner wallet</span>
               <span className="block text-xs text-white/40">
-                Trip earning {inr(caps.maxPartnerDeduction)}
+                Remaining {inr(caps.maxPartnerDeduction)}
+                {Number(caps.appliedPartnerDeduction) > 0
+                  ? ` · already deducted ${inr(caps.appliedPartnerDeduction)}`
+                  : ""}
                 {!caps.hasPartnerTripEarning
                   ? " · partner not paid for this order yet"
                   : ""}

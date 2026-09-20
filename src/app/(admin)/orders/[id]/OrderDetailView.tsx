@@ -38,6 +38,7 @@ import { OfferPrice } from "@/components/ui/OfferPrice";
 import { raiseCustomerOrderFromRefs } from "@/lib/api/customer-payments";
 import {
   assignOrderPartner,
+  adjustOrderRefundDeductions,
   cancelSourceLabel,
   fetchDispatchOrder,
   isPaidAwaitingPrep,
@@ -57,6 +58,7 @@ import {
   emptyRefundSettlementState,
   fetchRefundPreview,
   validateRefundSettlement,
+  validateWalletDeductions,
   type RefundSettlementState,
 } from "@/lib/api/refund-settlement";
 import { RefundSettlementFields } from "@/components/refund/RefundSettlementFields";
@@ -76,6 +78,7 @@ import {
   Store,
   Undo2,
   User,
+  Wallet,
 } from "lucide-react";
 
 const OrderRouteMap = dynamic(() => import("@/components/map/OrderRouteMap"), {
@@ -200,6 +203,7 @@ export default function OrderDetailPage() {
   const [refundSettlement, setRefundSettlement] = useState<RefundSettlementState>(
     emptyRefundSettlementState(),
   );
+  const [deductOpen, setDeductOpen] = useState(false);
   const [pickupOpen, setPickupOpen] = useState(false);
   const [deliverOpen, setDeliverOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
@@ -213,11 +217,10 @@ export default function OrderDetailPage() {
     enabled: !!orderRef,
   });
 
-  const canMarkRefundedEarly = order?.paymentStatus === "paid";
   const { data: refundPreview, isLoading: refundPreviewLoading } = useQuery({
     queryKey: ["orders", "refund-preview", orderRef],
     queryFn: () => fetchRefundPreview(orderRef),
-    enabled: refundOpen && !!orderRef && !!canMarkRefundedEarly,
+    enabled: (refundOpen || deductOpen) && !!orderRef,
   });
 
   const needsPartnerPicker = pickupOpen || deliverOpen || assignOpen;
@@ -338,6 +341,63 @@ export default function OrderDetailPage() {
             ? err.message
             : undefined;
       toast.error(msg || "Could not mark refunded");
+    },
+  });
+
+  const deductMutation = useMutation({
+    mutationFn: () => {
+      if (!refundPreview) {
+        throw new Error("Deduction options are still loading");
+      }
+      const validationError = validateWalletDeductions(
+        refundSettlement,
+        refundPreview.caps,
+      );
+      if (validationError) throw new Error(validationError);
+      const settlement = buildRefundSettlementPayload(
+        refundSettlement,
+        refundPreview.presets,
+      );
+      return adjustOrderRefundDeductions(orderRef, {
+        reason: refundReason,
+        deductFromRestaurant: settlement.deductFromRestaurant,
+        restaurantDeductionAmount: settlement.restaurantDeductionAmount,
+        deductFromPartner: settlement.deductFromPartner,
+        partnerDeductionAmount: settlement.partnerDeductionAmount,
+      });
+    },
+    onSuccess: (res) => {
+      const wd = res.data?.walletDeductions;
+      const parts: string[] = [];
+      if (wd && wd.restaurantApplied > 0) {
+        parts.push(`restaurant −₹${wd.restaurantApplied}`);
+      }
+      if (wd && wd.partnerApplied > 0) {
+        parts.push(`partner −₹${wd.partnerApplied}`);
+      }
+      toast.success(
+        parts.length > 0
+          ? `Wallet deductions updated · ${parts.join(", ")}`
+          : "Wallet deductions updated",
+      );
+      setDeductOpen(false);
+      setRefundReason("");
+      setRefundSettlement(emptyRefundSettlementState());
+      queryClient.invalidateQueries({
+        queryKey: ["orders", "dispatch-order", orderRef],
+      });
+      queryClient.invalidateQueries({ queryKey: ["orders", "refund-preview", orderRef] });
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
+    },
+    onError: (err: unknown) => {
+      const msg =
+        err && typeof err === "object" && "response" in err
+          ? (err as { response?: { data?: { message?: string } } }).response
+              ?.data?.message
+          : err instanceof Error
+            ? err.message
+            : undefined;
+      toast.error(msg || "Could not adjust deductions");
     },
   });
 
@@ -516,6 +576,12 @@ export default function OrderDetailPage() {
     createdAt: order.createdAt || new Date().toISOString(),
   });
   const canMarkRefunded = order.paymentStatus === "paid";
+  const hasRecordedRefund =
+    order.paymentStatus === "refunded" ||
+    order.refundKind === "full" ||
+    order.refundKind === "partial" ||
+    (order.refundAmount != null && order.refundAmount > 0);
+  const canAdjustDeductions = hasRecordedRefund;
   const paymentLabel = paymentStatusLabel(order);
   const canCleanupRefundedDispatch =
     order.paymentStatus === "refunded" &&
@@ -710,6 +776,17 @@ export default function OrderDetailPage() {
                 {canCleanupRefundedDispatch
                   ? "Stop partner offers"
                   : "Mark refunded"}
+              </Button>
+            ) : null}
+            {canAdjustDeductions ? (
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-amber-400/40 text-amber-300 hover:bg-amber-500/10"
+                onClick={() => setDeductOpen(true)}
+              >
+                <Wallet className="mr-1 h-3.5 w-3.5" />
+                Adjust deductions
               </Button>
             ) : null}
             {["payment-expired", "cancelled", "accepted-awaiting-payment"].includes(
@@ -1166,6 +1243,20 @@ export default function OrderDetailPage() {
               {order.refundReason ? (
                 <DetailRow label="Refund reason" value={order.refundReason} />
               ) : null}
+              {order.restaurantDeductionAmount != null &&
+              order.restaurantDeductionAmount > 0 ? (
+                <DetailRow
+                  label="Restaurant deduction"
+                  value={formatMoney(order.restaurantDeductionAmount)}
+                />
+              ) : null}
+              {order.partnerDeductionAmount != null &&
+              order.partnerDeductionAmount > 0 ? (
+                <DetailRow
+                  label="Partner deduction"
+                  value={formatMoney(order.partnerDeductionAmount)}
+                />
+              ) : null}
               {canMarkRefunded || canCleanupRefundedDispatch ? (
                 <Button
                   type="button"
@@ -1178,6 +1269,18 @@ export default function OrderDetailPage() {
                   {canCleanupRefundedDispatch
                     ? "Stop partner offers"
                     : "Mark refunded"}
+                </Button>
+              ) : null}
+              {canAdjustDeductions ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="mt-2 w-full border-amber-400/40 text-amber-300 hover:bg-amber-500/10"
+                  onClick={() => setDeductOpen(true)}
+                >
+                  <Wallet className="mr-1 h-3.5 w-3.5" />
+                  Adjust deductions
                 </Button>
               ) : null}
             </CardContent>
@@ -1267,6 +1370,84 @@ export default function OrderDetailPage() {
               {canCleanupRefundedDispatch
                 ? "Stop partner offers"
                 : "Mark refunded"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={deductOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeductOpen(false);
+            setRefundReason("");
+            setRefundSettlement(emptyRefundSettlementState());
+          } else {
+            setDeductOpen(true);
+          }
+        }}
+      >
+        <DialogContent className="max-h-[90vh] overflow-y-auto border-white/10 bg-[#002833] text-white sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-white">Adjust wallet deductions</DialogTitle>
+            <DialogDescription className="text-white/50">
+              This order is already refunded. Deduct remaining restaurant credit
+              or partner trip earning without changing the customer refund.
+            </DialogDescription>
+          </DialogHeader>
+          {refundPreviewLoading || !refundPreview ? (
+            <div className="flex items-center justify-center py-8 text-white/50">
+              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+              Loading deduction options…
+            </div>
+          ) : (
+            <RefundSettlementFields
+              state={refundSettlement}
+              onChange={setRefundSettlement}
+              presets={refundPreview.presets}
+              caps={refundPreview.caps}
+              showRefundAmount={false}
+            />
+          )}
+          <div className="space-y-2">
+            <Label className="text-white/50">Reason (optional)</Label>
+            <Input
+              value={refundReason}
+              onChange={(e) => setRefundReason(e.target.value)}
+              placeholder="Missed clawback after refund..."
+              className="border-white/10 bg-black/20 text-white"
+            />
+          </div>
+          <DialogFooter className="gap-2 sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              className="border-white/10"
+              onClick={() => {
+                setDeductOpen(false);
+                setRefundReason("");
+                setRefundSettlement(emptyRefundSettlementState());
+              }}
+              disabled={deductMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              className="bg-amber-400 text-[#013644] font-semibold hover:bg-amber-300"
+              disabled={
+                deductMutation.isPending ||
+                refundPreviewLoading ||
+                !refundPreview
+              }
+              onClick={() => deductMutation.mutate()}
+            >
+              {deductMutation.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Wallet className="mr-2 h-4 w-4" />
+              )}
+              Apply deductions
             </Button>
           </DialogFooter>
         </DialogContent>

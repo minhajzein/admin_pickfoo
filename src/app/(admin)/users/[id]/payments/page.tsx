@@ -28,9 +28,11 @@ import {
   emptyRefundSettlementState,
   fetchRefundPreview,
   validateRefundSettlement,
+  validateWalletDeductions,
   type RefundSettlementState,
 } from "@/lib/api/refund-settlement";
 import { RefundSettlementFields } from "@/components/refund/RefundSettlementFields";
+import { adjustOrderRefundDeductions } from "@/lib/api/orders";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -159,6 +161,7 @@ export default function CustomerPaymentsPage() {
   const [refundTx, setRefundTx] = useState<CustomerPaymentTransaction | null>(
     null,
   );
+  const [adjustMode, setAdjustMode] = useState(false);
   const [reason, setReason] = useState("");
   const [recordOnly, setRecordOnly] = useState(false);
   const [refundSettlement, setRefundSettlement] = useState<RefundSettlementState>(
@@ -271,6 +274,73 @@ export default function CustomerPaymentsPage() {
             ? err.message
             : undefined;
       toast.error(msg || "Refund failed");
+    },
+  });
+
+  const deductMutation = useMutation({
+    mutationFn: () => {
+      if (!refundTx) throw new Error("No payment selected");
+      if (!refundOrderRef) {
+        throw new Error("Cannot adjust deductions without a linked order");
+      }
+      if (!refundPreview) {
+        throw new Error("Deduction options are still loading");
+      }
+      const validationError = validateWalletDeductions(
+        refundSettlement,
+        refundPreview.caps,
+      );
+      if (validationError) throw new Error(validationError);
+      const settlement = buildRefundSettlementPayload(
+        refundSettlement,
+        refundPreview.presets,
+      );
+      return adjustOrderRefundDeductions(refundOrderRef, {
+        reason: reason.trim() || undefined,
+        deductFromRestaurant: settlement.deductFromRestaurant,
+        restaurantDeductionAmount: settlement.restaurantDeductionAmount,
+        deductFromPartner: settlement.deductFromPartner,
+        partnerDeductionAmount: settlement.partnerDeductionAmount,
+      });
+    },
+    onSuccess: (res) => {
+      const wd = res.data?.walletDeductions;
+      const parts: string[] = [];
+      if (wd && wd.restaurantApplied > 0) {
+        parts.push(`restaurant −₹${wd.restaurantApplied}`);
+      }
+      if (wd && wd.partnerApplied > 0) {
+        parts.push(`partner −₹${wd.partnerApplied}`);
+      }
+      toast.success(
+        parts.length > 0
+          ? `Wallet deductions updated · ${parts.join(", ")}`
+          : "Wallet deductions updated",
+      );
+      queryClient.invalidateQueries({
+        queryKey: ["customer-payments", userId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["customer-payments-tx", userId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["orders", "refund-preview", refundOrderRef],
+      });
+      setRefundOpen(false);
+      setRefundTx(null);
+      setAdjustMode(false);
+      setReason("");
+      setRefundSettlement(emptyRefundSettlementState());
+    },
+    onError: (err: unknown) => {
+      const msg =
+        err && typeof err === "object" && "response" in err
+          ? (err as { response?: { data?: { message?: string } } }).response
+              ?.data?.message
+          : err instanceof Error
+            ? err.message
+            : undefined;
+      toast.error(msg || "Could not adjust deductions");
     },
   });
 
@@ -571,12 +641,30 @@ export default function CustomerPaymentsPage() {
                               setRefundTx(tx);
                               setReason("");
                               setRecordOnly(false);
+                              setAdjustMode(false);
                               setRefundSettlement(emptyRefundSettlementState());
                               setRefundOpen(true);
                             }}
                           >
                             <RotateCcw className="mr-1 h-3.5 w-3.5" />
                             Refund
+                          </Button>
+                        ) : tx.status === "refunded" && orderRefFromTx(tx) ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="border-amber-400/40 text-amber-300 hover:bg-amber-500/10"
+                            onClick={() => {
+                              setRefundTx(tx);
+                              setReason("");
+                              setRecordOnly(false);
+                              setAdjustMode(true);
+                              setRefundSettlement(emptyRefundSettlementState());
+                              setRefundOpen(true);
+                            }}
+                          >
+                            <Wallet className="mr-1 h-3.5 w-3.5" />
+                            Deductions
                           </Button>
                         ) : (
                           orderNeedsRaise(tx) ? null : (
@@ -601,24 +689,28 @@ export default function CustomerPaymentsPage() {
             setRefundTx(null);
             setReason("");
             setRecordOnly(false);
+            setAdjustMode(false);
             setRefundSettlement(emptyRefundSettlementState());
           }
         }}
       >
         <DialogContent className="max-h-[90vh] overflow-y-auto bg-[#002833] border-white/10 text-white sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Refund payment</DialogTitle>
+            <DialogTitle>
+              {adjustMode ? "Adjust wallet deductions" : "Refund payment"}
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <p className="text-sm text-white/50">
-              Order {refundTx ? orderLabel(refundTx) : "—"} · captured{" "}
-              {refundTx ? inr(refundTx.amount) : ""}
+              {adjustMode
+                ? `Order ${refundTx ? orderLabel(refundTx) : "—"} is already refunded. Deduct remaining restaurant or partner wallet credit without changing the customer refund.`
+                : `Order ${refundTx ? orderLabel(refundTx) : "—"} · captured ${refundTx ? inr(refundTx.amount) : ""}`}
             </p>
             {refundOrderRef ? (
               refundPreviewLoading || !refundPreview ? (
                 <div className="flex items-center justify-center py-8 text-white/50">
                   <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                  Loading refund options…
+                  Loading {adjustMode ? "deduction" : "refund"} options…
                 </div>
               ) : (
                 <RefundSettlementFields
@@ -627,9 +719,10 @@ export default function CustomerPaymentsPage() {
                   presets={refundPreview.presets}
                   caps={refundPreview.caps}
                   maxRefund={Number(refundTx?.amount) || undefined}
+                  showRefundAmount={!adjustMode}
                 />
               )
-            ) : refundTx ? (
+            ) : refundTx && !adjustMode ? (
               <RefundSettlementFields
                 state={refundSettlement}
                 onChange={setRefundSettlement}
@@ -656,22 +749,28 @@ export default function CustomerPaymentsPage() {
               <Input
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
-                placeholder="Cancelled order / duplicate charge..."
+                placeholder={
+                  adjustMode
+                    ? "Missed clawback after refund..."
+                    : "Cancelled order / duplicate charge..."
+                }
                 className="bg-black/20 border-white/10"
               />
             </div>
-            <label className="flex items-start gap-2 text-sm text-white/60 cursor-pointer">
-              <input
-                type="checkbox"
-                className="mt-1"
-                checked={recordOnly}
-                onChange={(e) => setRecordOnly(e.target.checked)}
-              />
-              <span>
-                Record only (skip Razorpay API — use when refunded offline /
-                already refunded in dashboard)
-              </span>
-            </label>
+            {!adjustMode ? (
+              <label className="flex items-start gap-2 text-sm text-white/60 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={recordOnly}
+                  onChange={(e) => setRecordOnly(e.target.checked)}
+                />
+                <span>
+                  Record only (skip Razorpay API — use when refunded offline /
+                  already refunded in dashboard)
+                </span>
+              </label>
+            ) : null}
           </div>
           <DialogFooter>
             <Button
@@ -682,21 +781,31 @@ export default function CustomerPaymentsPage() {
                 setRefundTx(null);
                 setReason("");
                 setRecordOnly(false);
+                setAdjustMode(false);
                 setRefundSettlement(emptyRefundSettlementState());
               }}
             >
               Cancel
             </Button>
             <Button
-              className="bg-sky-400 text-[#013644] font-semibold hover:bg-sky-300"
+              className={
+                adjustMode
+                  ? "bg-amber-400 text-[#013644] font-semibold hover:bg-amber-300"
+                  : "bg-sky-400 text-[#013644] font-semibold hover:bg-sky-300"
+              }
               disabled={
                 refundMutation.isPending ||
+                deductMutation.isPending ||
                 (!!refundOrderRef && (refundPreviewLoading || !refundPreview))
               }
-              onClick={() => refundMutation.mutate()}
+              onClick={() =>
+                adjustMode ? deductMutation.mutate() : refundMutation.mutate()
+              }
             >
-              {refundMutation.isPending ? (
+              {refundMutation.isPending || deductMutation.isPending ? (
                 <Loader2 className="animate-spin h-4 w-4" />
+              ) : adjustMode ? (
+                "Apply deductions"
               ) : (
                 "Confirm refund"
               )}

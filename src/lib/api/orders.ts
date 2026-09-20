@@ -141,6 +141,10 @@ export interface AdminOrderDetail {
   refundReason?: string | null;
   refundAmount?: number | null;
   refundKind?: "partial" | "full" | string | null;
+  restaurantDeductionAmount?: number | null;
+  partnerDeductionAmount?: number | null;
+  restaurantDeductionRemaining?: number | null;
+  partnerDeductionRemaining?: number | null;
   dispatchHold?: {
     active?: boolean;
     reason?: string | null;
@@ -313,6 +317,47 @@ export async function markOrderRefunded(
     {
       reason: reason?.trim() || undefined,
       ...settlement,
+    },
+  );
+  return data;
+}
+
+export async function adjustOrderRefundDeductions(
+  orderRef: string,
+  payload: {
+    reason?: string;
+  } & Pick<
+    RefundSettlementPayload,
+    | "deductFromRestaurant"
+    | "restaurantDeductionAmount"
+    | "deductFromPartner"
+    | "partnerDeductionAmount"
+  >,
+): Promise<{
+  success: boolean;
+  data: {
+    id: string;
+    pickfooId?: string | null;
+    paymentStatus?: string | null;
+    refundKind?: string | null;
+    walletDeductions?: {
+      restaurantApplied: number;
+      partnerApplied: number;
+    } | null;
+    restaurantDeductionAmount?: number;
+    partnerDeductionAmount?: number;
+    restaurantDeductionRemaining?: number;
+    partnerDeductionRemaining?: number;
+  };
+}> {
+  const { data } = await api.post(
+    `/dispatch/orders/${encodeURIComponent(orderRef)}/adjust-refund-deductions`,
+    {
+      reason: payload.reason?.trim() || undefined,
+      deductFromRestaurant: payload.deductFromRestaurant,
+      restaurantDeductionAmount: payload.restaurantDeductionAmount,
+      deductFromPartner: payload.deductFromPartner,
+      partnerDeductionAmount: payload.partnerDeductionAmount,
     },
   );
   return data;

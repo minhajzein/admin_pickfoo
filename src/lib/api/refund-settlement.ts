@@ -16,6 +16,8 @@ export type RefundCaps = {
   assignedPartnerId: string | null;
   hasRestaurantCredit: boolean;
   hasPartnerTripEarning: boolean;
+  appliedRestaurantDeduction?: number;
+  appliedPartnerDeduction?: number;
 };
 
 export type RefundPreviewData = {
@@ -110,13 +112,30 @@ export function validateRefundSettlement(
     return `Refund amount exceeds maximum (${cap.toFixed(2)})`;
   }
 
+  return validateSelectedWalletAmounts(state, caps);
+}
+
+export function validateWalletDeductions(
+  state: RefundSettlementState,
+  caps: RefundCaps,
+): string | null {
+  if (!state.deductFromRestaurant && !state.deductFromPartner) {
+    return "Select a restaurant or partner wallet deduction";
+  }
+  return validateSelectedWalletAmounts(state, caps);
+}
+
+function validateSelectedWalletAmounts(
+  state: RefundSettlementState,
+  caps: RefundCaps,
+): string | null {
   if (state.deductFromRestaurant) {
     const amt = Number(state.restaurantDeductionAmount);
     if (!Number.isFinite(amt) || amt <= 0) {
       return "Enter a restaurant deduction amount";
     }
     if (amt > caps.maxRestaurantDeduction + 0.001) {
-      return `Restaurant deduction exceeds available credit (${caps.maxRestaurantDeduction.toFixed(2)})`;
+      return `Restaurant deduction exceeds remaining credit (${caps.maxRestaurantDeduction.toFixed(2)})`;
     }
   }
 
@@ -129,7 +148,7 @@ export function validateRefundSettlement(
       return "Partner has no trip earning for this order yet";
     }
     if (amt > caps.maxPartnerDeduction + 0.001) {
-      return `Partner deduction exceeds trip earning (${caps.maxPartnerDeduction.toFixed(2)})`;
+      return `Partner deduction exceeds remaining trip earning (${caps.maxPartnerDeduction.toFixed(2)})`;
     }
   }
 
