@@ -279,15 +279,19 @@ function OfferImpactPreviewPanel({
   );
 }
 
-const typeLabels: Record<CustomerOfferType, string> = {
+const typeLabels: Record<Exclude<CustomerOfferType, "free_delivery">, string> = {
   flat: "Flat ₹ off",
   percent: "Percentage off",
-  free_delivery: "Free delivery",
   bogo: "Buy and get",
   combo: "Combo meal",
   order_cashback: "Spend and get cashback",
   order_count_cashback: "Complete N orders cashback",
 };
+
+function offerTypeLabel(type: CustomerOfferType) {
+  if (type === "free_delivery") return "Free delivery (removed)";
+  return typeLabels[type];
+}
 
 type AudiencePreset =
   | "everyone"
@@ -808,6 +812,10 @@ export default function CustomerOffersPage() {
   }
 
   function openEdit(row: AdminCustomerOffer) {
+    if (row.type === "free_delivery") {
+      toast.error("Free delivery offers have been removed");
+      return;
+    }
     setEditingId(row.id);
     setForm(formFromOffer(row));
     setDishFilterRestaurantId("");
@@ -895,7 +903,7 @@ export default function CustomerOffersPage() {
                         <div className="font-medium text-white">{row.title}</div>
                         <div className="text-xs text-white/50">{row.subtitle}</div>
                       </TableCell>
-                      <TableCell className="text-white/80">{typeLabels[row.type]}</TableCell>
+                      <TableCell className="text-white/80">{offerTypeLabel(row.type)}</TableCell>
                       <TableCell className="text-white/80">
                         <div className="capitalize">
                           {row.audience === "segment"
@@ -1298,63 +1306,6 @@ export default function CustomerOffersPage() {
               </div>
             )}
 
-            {form.type === "free_delivery" && (
-              <div className="grid grid-cols-2 gap-3">
-                <div className="grid gap-2">
-                  <Label>Unlock when</Label>
-                  <select
-                    className="h-10 rounded-md border border-white/15 bg-transparent px-3 text-sm text-white"
-                    value={form.freeDeliveryUnlock}
-                    onChange={(e) =>
-                      setForm({
-                        ...form,
-                        freeDeliveryUnlock: e.target.value as FreeDeliveryUnlock,
-                      })
-                    }
-                  >
-                    <option className="bg-[#013644]" value="min_order">
-                      Min order amount
-                    </option>
-                    <option className="bg-[#013644]" value="commission_cover">
-                      Commission covers delivery
-                    </option>
-                  </select>
-                </div>
-                {form.freeDeliveryUnlock === "min_order" ? (
-                  <div className="grid gap-2">
-                    <Label>Min order ₹ for free delivery</Label>
-                    <Input
-                      type="number"
-                      value={form.minOrderAmount}
-                      onChange={(e) =>
-                        setForm({ ...form, minOrderAmount: Number(e.target.value) })
-                      }
-                    />
-                  </div>
-                ) : (
-                  <div className="grid gap-2">
-                    <Label>Commission × delivery fee</Label>
-                    <Input
-                      type="number"
-                      min={1}
-                      max={20}
-                      step={0.5}
-                      value={form.commissionCoverMultiplier}
-                      onChange={(e) =>
-                        setForm({
-                          ...form,
-                          commissionCoverMultiplier: Number(e.target.value) || 2,
-                        })
-                      }
-                    />
-                    <p className="text-xs text-white/50">
-                      Unlocks when restaurant commission ≥ this × delivery fee (e.g. 2×).
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
-
             {form.type === "order_cashback" && (
               <div className="grid grid-cols-2 gap-3">
                 <div className="grid gap-2">
@@ -1737,28 +1688,6 @@ export default function CustomerOffersPage() {
                   0 = no limit. Customer must be within this distance to use the offer.
                 </p>
               </div>
-              {form.type === "free_delivery" && (
-                <div className="grid gap-2">
-                  <Label>Who pays free delivery?</Label>
-                  <select
-                    className="h-10 rounded-md border border-white/15 bg-transparent px-3 text-sm text-white"
-                    value={form.freeDeliveryFundingSource}
-                    onChange={(e) =>
-                      setForm({
-                        ...form,
-                        freeDeliveryFundingSource: e.target.value as FreeDeliveryFundingSource,
-                      })
-                    }
-                  >
-                    <option className="bg-[#013644]" value="platform">
-                      Platform wallet
-                    </option>
-                    <option className="bg-[#013644]" value="restaurant">
-                      Restaurant (deduct from settlement)
-                    </option>
-                  </select>
-                </div>
-              )}
             </div>
 
             <div className="grid gap-2">
