@@ -438,7 +438,9 @@ export default function PartnersPage() {
           <DialogHeader>
             <DialogTitle>Edit delivery zones</DialogTitle>
             <DialogDescription className="text-white/50">
-              {editPartner?.fullName} — select all zones this partner can serve.
+              {editPartner?.fullName} — select every zone this partner may take
+              orders from. While online they only unlock the zone they are
+              standing in.
             </DialogDescription>
           </DialogHeader>
           <div className="max-h-[50vh] space-y-2 overflow-y-auto py-2">

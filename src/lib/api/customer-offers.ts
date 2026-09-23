@@ -11,6 +11,7 @@ export type OfferRestaurantOption = {
   name: string;
   city: string;
   image: string;
+  commissionPercent?: number;
 };
 
 export type OfferMenuItemOption = {
@@ -85,6 +86,17 @@ export type OfferPreviewResult = {
     expectedOrderCount: number;
   };
   fundingLabel: OfferPreviewPerOrder["fundingLabel"];
+  commissionBudget?: {
+    commissionPercent: number;
+    sampleCartAmount: number;
+    commissionPool: number;
+    safeMaxFromCommission: number;
+    restaurants: Array<{
+      id: string;
+      name: string;
+      commissionPercent: number;
+    }>;
+  };
   perOrder: OfferPreviewPerOrder;
   scenarios: OfferPreviewScenario[];
   purchaseChance: {

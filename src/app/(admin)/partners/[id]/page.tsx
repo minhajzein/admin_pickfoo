@@ -210,8 +210,8 @@ export default function PartnerDetailsPage() {
       queryClient.invalidateQueries({ queryKey: ["partners"] });
       toast.success(
         updated.allowOrdersFromAnywhere
-          ? "Partner can take orders from anywhere"
-          : "Partner limited to assigned zones",
+          ? "Partner can go online outside assigned zones"
+          : "Partner must stay inside assigned zones",
       );
     },
     onError: () =>
@@ -518,6 +518,29 @@ export default function PartnerDetailsPage() {
                 <p className={partner.isOnline ? "text-[#98E32F]" : "text-white/50"}>
                   {partner.isOnline ? "Online" : "Offline"}
                 </p>
+                {partner.isOnline && (
+                  <p className="text-white/70 mt-1">
+                    Active zone:{" "}
+                    {typeof partner.activeZoneId === "object" &&
+                    partner.activeZoneId &&
+                    "name" in partner.activeZoneId
+                      ? String(partner.activeZoneId.name)
+                      : partner.zones?.find((z) => {
+                          const activeId =
+                            typeof partner.activeZoneId === "string"
+                              ? partner.activeZoneId
+                              : partner.activeZoneId &&
+                                  typeof partner.activeZoneId === "object" &&
+                                  "_id" in partner.activeZoneId
+                                ? String(
+                                    (partner.activeZoneId as { _id: string })
+                                      ._id,
+                                  )
+                                : null;
+                          return z._id === activeId;
+                        })?.name || "None (outside polygons)"}
+                  </p>
+                )}
                 <p className={partner.onDuty ? "text-cyan-300" : "text-white/50"}>
                   {partner.onDuty ? "On duty" : "Off duty"}
                 </p>
@@ -691,10 +714,11 @@ export default function PartnerDetailsPage() {
             <CardHeader>
               <CardTitle>Orders from anywhere</CardTitle>
               <CardDescription className="text-white/50">
-                Allow this partner to receive offers for any restaurant zone
-                when no partner is available inside that zone (still within the
-                normal distance limit). Zone partners are always preferred
-                first.
+                Lets this partner go online outside assigned polygons without
+                auto-offline. They still only unlock restaurants in the zone
+                they are physically in, and only for zones you assign below.
+                Prefer assigning specific delivery zones instead of relying on
+                this flag.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -710,12 +734,12 @@ export default function PartnerDetailsPage() {
                 />
                 <span className="text-sm">
                   <span className="block font-medium">
-                    Take orders from anywhere
+                    Go online outside assigned zones
                   </span>
                   <span className="block text-white/50 text-xs mt-1">
                     {partner.allowOrdersFromAnywhere
-                      ? "Enabled — used only after no zone partner is available"
-                      : "Disabled — only offers from assigned zones"}
+                      ? "Enabled — still only serves the zone they are standing in"
+                      : "Disabled — must stay inside assigned zones to stay online"}
                   </span>
                 </span>
                 {allowAnywhereMutation.isPending && (
@@ -764,7 +788,12 @@ export default function PartnerDetailsPage() {
                 <MapPin className="h-4 w-4 text-[#98E32F]" />
                 Delivery zones
               </CardTitle>
-              <CardDescription className="text-white/50">{zoneCountLabel}</CardDescription>
+              <CardDescription className="text-white/50">
+                {zoneCountLabel}. Select every zone this partner may take
+                orders from. While online they only unlock the zone they are
+                physically inside — customers in other zones cannot order from
+                them.
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="max-h-64 space-y-2 overflow-y-auto">

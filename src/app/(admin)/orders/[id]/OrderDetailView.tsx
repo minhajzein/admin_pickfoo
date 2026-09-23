@@ -823,6 +823,17 @@ export default function OrderDetailPage() {
               ? ` (${order.commissionPercent}% on offer food)`
               : ""}
           </p>
+          {(order.offerFunding?.commission ?? 0) > 0.009 ||
+          (order.offerFunding?.menuItem ?? 0) > 0.009 ? (
+            <p className="mt-0.5 text-[11px] text-white/55">
+              {(order.offerFunding?.commission ?? 0) > 0.009 &&
+              (order.offerFunding?.menuItem ?? 0) > 0.009
+                ? `Offer split · commission ${formatMoney(order.offerFunding?.commission)} · menu ${formatMoney(order.offerFunding?.menuItem)}`
+                : (order.offerFunding?.commission ?? 0) > 0.009
+                  ? `Offer deducted from commission ${formatMoney(order.offerFunding?.commission)}`
+                  : `Offer from restaurant ${formatMoney(order.offerFunding?.menuItem)}`}
+            </p>
+          ) : null}
         </div>
       </div>
 
@@ -1096,6 +1107,120 @@ export default function OrderDetailPage() {
               label="Discount"
               value={formatMoney(order.discountAmount)}
             />
+            {(order.cashbackAmount ?? 0) > 0 ? (
+              <DetailRow
+                label="Cashback"
+                value={formatMoney(order.cashbackAmount)}
+              />
+            ) : null}
+            {order.appliedCouponCode ? (
+              <DetailRow label="Coupon" value={order.appliedCouponCode} />
+            ) : null}
+            {(() => {
+              const funding = order.offerFunding;
+              const fromCommission = Math.max(0, Number(funding?.commission) || 0);
+              const fromMenu = Math.max(0, Number(funding?.menuItem) || 0);
+              const fromPlatformDelivery = Math.max(
+                0,
+                Number(funding?.platformDelivery) || 0,
+              );
+              const fromRestaurantDelivery = Math.max(
+                0,
+                Number(funding?.restaurantDelivery) || 0,
+              );
+              const hasFunding =
+                fromCommission > 0.009 ||
+                fromMenu > 0.009 ||
+                fromPlatformDelivery > 0.009 ||
+                fromRestaurantDelivery > 0.009;
+              if (!hasFunding) return null;
+              const isSplit = fromCommission > 0.009 && fromMenu > 0.009;
+              return (
+                <>
+                  <DetailRow
+                    label={
+                      isSplit
+                        ? "Offer funding (split)"
+                        : fromCommission > 0.009
+                          ? "Deducted from commission"
+                          : "Offer funded by restaurant"
+                    }
+                    value={
+                      <span className="text-right text-[#98E32F]">
+                        {isSplit ? (
+                          <>
+                            Commission {formatMoney(fromCommission)}
+                            <span className="text-white/45"> · </span>
+                            Menu {formatMoney(fromMenu)}
+                          </>
+                        ) : fromCommission > 0.009 ? (
+                          formatMoney(fromCommission)
+                        ) : (
+                          formatMoney(fromMenu)
+                        )}
+                      </span>
+                    }
+                  />
+                  {fromPlatformDelivery > 0.009 ? (
+                    <DetailRow
+                      label="Free delivery (platform)"
+                      value={formatMoney(fromPlatformDelivery)}
+                    />
+                  ) : null}
+                  {fromRestaurantDelivery > 0.009 ? (
+                    <DetailRow
+                      label="Free delivery (restaurant)"
+                      value={formatMoney(fromRestaurantDelivery)}
+                    />
+                  ) : null}
+                </>
+              );
+            })()}
+            {(order.appliedOffers?.length ?? 0) > 0 ? (
+              <DetailRow
+                label="Applied offers"
+                value={
+                  <div className="space-y-1.5 text-right">
+                    {order.appliedOffers!.map((o) => {
+                      const c = Math.max(0, Number(o.fundedFromCommission) || 0);
+                      const m = Math.max(0, Number(o.fundedFromMenuItem) || 0);
+                      const split = c > 0.009 && m > 0.009;
+                      return (
+                        <div key={`${o.offerId}-${o.title}`} className="text-xs">
+                          <p className="font-medium text-white">
+                            {o.title || o.type || "Offer"}
+                            {(o.discountAmount > 0 || o.cashbackAmount > 0) && (
+                              <span className="ml-1 text-white/50">
+                                (
+                                {o.discountAmount > 0
+                                  ? formatMoney(o.discountAmount)
+                                  : ""}
+                                {o.discountAmount > 0 && o.cashbackAmount > 0
+                                  ? " + "
+                                  : ""}
+                                {o.cashbackAmount > 0
+                                  ? `${formatMoney(o.cashbackAmount)} cashback`
+                                  : ""}
+                                )
+                              </span>
+                            )}
+                          </p>
+                          {(c > 0.009 || m > 0.009) && (
+                            <p className="text-[#98E32F]/90">
+                              {split
+                                ? `Split · commission ${formatMoney(c)} · menu ${formatMoney(m)}`
+                                : c > 0.009
+                                  ? `From commission ${formatMoney(c)}`
+                                  : `From restaurant ${formatMoney(m)}`}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                }
+              />
+            ) : null}
             <DetailRow label="Tip" value={formatMoney(order.tipAmount)} />
             <DetailRow
               label={`GST (${
@@ -1124,6 +1249,25 @@ export default function OrderDetailPage() {
                 </span>
               }
             />
+            {(order.offerFunding?.commission ?? 0) > 0.009 ? (
+              <DetailRow
+                label="Commission after offer cost"
+                value={
+                  <span className="text-white/80">
+                    {formatMoney(
+                      Math.max(
+                        0,
+                        order.platformCommission -
+                          (order.offerFunding?.commission ?? 0),
+                      ),
+                    )}
+                    <span className="ml-1 text-[10px] text-white/40">
+                      (retained − deducted {formatMoney(order.offerFunding?.commission)})
+                    </span>
+                  </span>
+                }
+              />
+            ) : null}
             <DetailRow
               label="Total"
               value={

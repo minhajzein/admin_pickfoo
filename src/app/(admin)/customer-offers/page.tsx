@@ -742,10 +742,10 @@ export default function CustomerOffersPage() {
 
   const fundingHint = useMemo(() => {
     if (form.fundingSource === "commission")
-      return "Platform commission absorbs the discount.";
+      return "Platform commission absorbs the discount. Customer still sees the offer price / checkout discount.";
     if (form.fundingSource === "menu_item")
       return "Restaurant item payout is reduced by the discount.";
-    return "Split the discount between commission and restaurant item amount.";
+    return "Split the discount between platform commission and restaurant item amount.";
   }, [form.fundingSource]);
 
   const previewPayload = useMemo(
@@ -794,6 +794,42 @@ export default function CustomerOffersPage() {
     enabled: open && Boolean(debouncedPreviewKey),
     placeholderData: keepPreviousData,
   });
+
+  const commissionBudget = previewQuery.data?.commissionBudget;
+  const commissionPct =
+    commissionBudget?.commissionPercent ??
+    previewQuery.data?.assumptions.commissionPercent ??
+    12;
+  const commissionPool = commissionBudget?.commissionPool ?? 0;
+  const safeMaxFromCommission = commissionBudget?.safeMaxFromCommission ?? 0;
+  const discountForFunding =
+    form.type === "order_cashback" || form.type === "order_count_cashback"
+      ? form.cashbackAmount || form.discountValue
+      : form.type === "percent"
+        ? Math.min(
+            ((previewAssumptions.sampleCartAmount || 0) * (form.discountValue || 0)) /
+              100,
+            form.maxDiscountAmount > 0
+              ? form.maxDiscountAmount
+              : Number.POSITIVE_INFINITY,
+          )
+        : form.discountValue || 0;
+  const commissionFundedAmount = (() => {
+    if (form.fundingSource === "commission") return discountForFunding;
+    if (form.fundingSource === "menu_item") return 0;
+    if (form.fundingShareMode === "amount") {
+      return Math.min(form.commissionShare || 0, discountForFunding);
+    }
+    const cPct = Math.max(0, form.commissionShare || 0);
+    const mPct = Math.max(0, form.menuItemShare || 0);
+    const sum = cPct + mPct;
+    const cUse = sum > 0 ? cPct / sum : 0.5;
+    return Math.round(discountForFunding * cUse * 100) / 100;
+  })();
+  const maxCommissionShareAmount = Math.min(
+    discountForFunding || 0,
+    safeMaxFromCommission || commissionPool || 0,
+  );
 
   function openCreate() {
     setEditingId(null);
@@ -1713,50 +1749,189 @@ export default function CustomerOffersPage() {
                 </option>
               </select>
               <p className="text-xs text-white/50">{fundingHint}</p>
+              <div className="rounded-md border border-[#98E32F]/35 bg-[#98E32F]/10 p-3 text-xs text-white/85 space-y-1.5">
+                <p className="font-semibold text-[#98E32F]">
+                  Platform commission budget
+                  {form.restaurantIds.length === 0 && !form.comboRestaurantId
+                    ? " (default 12%)"
+                    : ""}
+                </p>
+                <p>
+                  Rate{" "}
+                  <span className="font-semibold text-white">
+                    {commissionPct.toFixed(commissionPct % 1 === 0 ? 0 : 1)}%
+                  </span>
+                  {" · "}
+                  on sample cart {inr(previewAssumptions.sampleCartAmount)} →
+                  pool{" "}
+                  <span className="font-semibold text-white">
+                    {inr(commissionPool)}
+                  </span>
+                </p>
+                <p>
+                  Safe max from commission (break-even):{" "}
+                  <span className="font-semibold text-white">
+                    {inr(safeMaxFromCommission)}
+                  </span>
+                </p>
+                <p>
+                  This offer uses from commission:{" "}
+                  <span
+                    className={
+                      commissionFundedAmount > safeMaxFromCommission + 0.009
+                        ? "font-semibold text-amber-300"
+                        : "font-semibold text-white"
+                    }
+                  >
+                    {inr(commissionFundedAmount)}
+                  </span>
+                  {commissionFundedAmount > safeMaxFromCommission + 0.009
+                    ? " — above safe max (platform loss risk)"
+                    : ""}
+                </p>
+                {(commissionBudget?.restaurants?.length ?? 0) > 0 && (
+                  <p className="text-white/55">
+                    Restaurants:{" "}
+                    {commissionBudget!.restaurants
+                      .map(
+                        (r) =>
+                          `${r.name || r.id.slice(-6)} (${r.commissionPercent}%)`,
+                      )
+                      .join(" · ")}
+                    . Budget uses the lowest rate.
+                  </p>
+                )}
+                {(form.fundingSource === "commission" ||
+                  form.fundingSource === "both") &&
+                  safeMaxFromCommission > 0 && (
+                    <button
+                      type="button"
+                      className="mt-1 rounded border border-[#98E32F]/60 px-2 py-1 text-[11px] font-semibold text-[#98E32F] hover:bg-[#98E32F]/15"
+                      onClick={() => {
+                        if (form.fundingSource === "both") {
+                          if (form.fundingShareMode === "amount") {
+                            setForm({
+                              ...form,
+                              commissionShare: maxCommissionShareAmount,
+                              menuItemShare: Math.max(
+                                0,
+                                Math.round(
+                                  (discountForFunding - maxCommissionShareAmount) *
+                                    100,
+                                ) / 100,
+                              ),
+                            });
+                          } else {
+                            const total = Math.max(discountForFunding, 0.01);
+                            const cPct = Math.round(
+                              (maxCommissionShareAmount / total) * 100,
+                            );
+                            setForm({
+                              ...form,
+                              commissionShare: Math.min(100, Math.max(0, cPct)),
+                              menuItemShare: Math.min(
+                                100,
+                                Math.max(0, 100 - cPct),
+                              ),
+                            });
+                          }
+                          return;
+                        }
+                        if (form.type === "flat") {
+                          setForm({
+                            ...form,
+                            discountValue: safeMaxFromCommission,
+                          });
+                        }
+                      }}
+                    >
+                      Use max safe commission
+                    </button>
+                  )}
+                {(form.type === "flat" || form.type === "percent") &&
+                  form.scope === "all" && (
+                    <p className="text-amber-200/90">
+                      Tip: scope to restaurants or items (and prefer Percentage
+                      off) so the customer app can show strike-through offer
+                      prices on dishes. Cart-level “all” flats still apply at
+                      checkout only.
+                    </p>
+                  )}
+              </div>
             </div>
 
             {form.fundingSource === "both" && (
-              <div className="grid grid-cols-3 gap-3">
-                <div className="grid gap-2">
-                  <Label>Share mode</Label>
-                  <select
-                    className="h-10 rounded-md border border-white/15 bg-transparent px-3 text-sm text-white"
-                    value={form.fundingShareMode}
-                    onChange={(e) =>
-                      setForm({
-                        ...form,
-                        fundingShareMode: e.target.value as OfferFundingShareMode,
-                      })
-                    }
-                  >
-                    <option className="bg-[#013644]" value="percent">
-                      Percent
-                    </option>
-                    <option className="bg-[#013644]" value="amount">
-                      Amount ₹
-                    </option>
-                  </select>
+              <div className="space-y-3">
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="grid gap-2">
+                    <Label>Share mode</Label>
+                    <select
+                      className="h-10 rounded-md border border-white/15 bg-transparent px-3 text-sm text-white"
+                      value={form.fundingShareMode}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          fundingShareMode: e.target.value as OfferFundingShareMode,
+                        })
+                      }
+                    >
+                      <option className="bg-[#013644]" value="percent">
+                        Percent
+                      </option>
+                      <option className="bg-[#013644]" value="amount">
+                        Amount ₹
+                      </option>
+                    </select>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>
+                      Commission share
+                      {form.fundingShareMode === "amount"
+                        ? ` (max ${inr(maxCommissionShareAmount)})`
+                        : " %"}
+                    </Label>
+                    <Input
+                      type="number"
+                      value={form.commissionShare}
+                      max={
+                        form.fundingShareMode === "amount"
+                          ? maxCommissionShareAmount || undefined
+                          : 100
+                      }
+                      onChange={(e) => {
+                        let next = Number(e.target.value);
+                        if (form.fundingShareMode === "amount") {
+                          next = Math.min(
+                            Math.max(0, next),
+                            maxCommissionShareAmount || next,
+                          );
+                        }
+                        setForm({ ...form, commissionShare: next });
+                      }}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>
+                      Menu item share
+                      {form.fundingShareMode === "amount" ? " ₹" : " %"}
+                    </Label>
+                    <Input
+                      type="number"
+                      value={form.menuItemShare}
+                      onChange={(e) =>
+                        setForm({ ...form, menuItemShare: Number(e.target.value) })
+                      }
+                    />
+                  </div>
                 </div>
-                <div className="grid gap-2">
-                  <Label>Commission share</Label>
-                  <Input
-                    type="number"
-                    value={form.commissionShare}
-                    onChange={(e) =>
-                      setForm({ ...form, commissionShare: Number(e.target.value) })
-                    }
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label>Menu item share</Label>
-                  <Input
-                    type="number"
-                    value={form.menuItemShare}
-                    onChange={(e) =>
-                      setForm({ ...form, menuItemShare: Number(e.target.value) })
-                    }
-                  />
-                </div>
+                <p className="text-xs text-white/55">
+                  From platform commission you can choose up to{" "}
+                  <span className="font-semibold text-[#98E32F]">
+                    {inr(maxCommissionShareAmount)}
+                  </span>{" "}
+                  of this discount ({commissionPct}% restaurant commission).
+                  Remaining is restaurant-funded.
+                </p>
               </div>
             )}
 
@@ -1776,8 +1951,9 @@ export default function CustomerOffersPage() {
                 {form.restaurantIds.length > 0 && (
                   <div className="flex flex-wrap gap-2">
                     {form.restaurantIds.map((id) => {
-                      const name =
-                        restoOptions.find((r) => r.id === id)?.name || `Restaurant ${id.slice(-6)}`;
+                      const opt = restoOptions.find((r) => r.id === id);
+                      const name = opt?.name || `Restaurant ${id.slice(-6)}`;
+                      const pct = opt?.commissionPercent;
                       return (
                         <button
                           key={id}
@@ -1791,7 +1967,8 @@ export default function CustomerOffersPage() {
                           }
                           title="Remove"
                         >
-                          {name} ×
+                          {name}
+                          {typeof pct === "number" ? ` · ${pct}%` : ""} ×
                         </button>
                       );
                     })}

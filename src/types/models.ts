@@ -253,8 +253,13 @@ export interface Partner {
   status: PartnerStatusType;
   rejectionReason?: string;
   priorityLevel?: number;
-  /** When true, partner can receive offers outside their assigned zones. */
+  /**
+   * When true, partner can go online outside assigned polygons.
+   * Order offers still only unlock the zone they are physically in.
+   */
   allowOrdersFromAnywhere?: boolean;
+  /** Zone the partner is currently online inside (from live GPS). */
+  activeZoneId?: string | DeliveryZoneSummary | null;
   isOnline: boolean;
   onDuty: boolean;
   currentAssignmentOrderId?: string | null;

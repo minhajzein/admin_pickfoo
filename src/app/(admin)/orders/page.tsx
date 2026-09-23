@@ -253,6 +253,27 @@ function AmountBreakdown({ row }: { row: AdminOrderRow }) {
         </span>
         <span>{formatMoney(row.platformCommission)}</span>
       </div>
+      {(row.offerFundingCommission ?? 0) > 0.009 ||
+      (row.offerFundingMenuItem ?? 0) > 0.009 ? (
+        <div className="flex justify-between gap-3 text-[11px] text-white/55">
+          <span>
+            {(row.offerFundingCommission ?? 0) > 0.009 &&
+            (row.offerFundingMenuItem ?? 0) > 0.009
+              ? "Offer split"
+              : (row.offerFundingCommission ?? 0) > 0.009
+                ? "From commission"
+                : "From restaurant"}
+          </span>
+          <span className="text-right">
+            {(row.offerFundingCommission ?? 0) > 0.009 &&
+            (row.offerFundingMenuItem ?? 0) > 0.009
+              ? `${formatMoney(row.offerFundingCommission)} + ${formatMoney(row.offerFundingMenuItem)}`
+              : (row.offerFundingCommission ?? 0) > 0.009
+                ? formatMoney(row.offerFundingCommission)
+                : formatMoney(row.offerFundingMenuItem)}
+          </span>
+        </div>
+      ) : null}
     </div>
   );
 }

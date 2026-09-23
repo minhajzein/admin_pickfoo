@@ -14,6 +14,10 @@ export interface AdminOrderRow {
   /** Catalog food − offer discount (primary food amount when offers apply). */
   offerItemTotal?: number | null;
   discountAmount?: number | null;
+  /** Offer discount paid from platform commission. */
+  offerFundingCommission?: number | null;
+  /** Offer discount paid from restaurant menu item payout. */
+  offerFundingMenuItem?: number | null;
   /** Packing subtotal (packingCharge × qty). */
   packingTotal?: number | null;
   deliveryFee?: number | null;
@@ -157,6 +161,7 @@ export interface AdminOrderDetail {
   partnerDeliveryFee?: number;
   customerDeliveryFee?: number;
   discountAmount: number;
+  cashbackAmount?: number;
   tipAmount: number;
   taxableAmount?: number | null;
   sgstAmount: number;
@@ -167,6 +172,22 @@ export interface AdminOrderDetail {
   totalAmount?: number | null;
   platformCommission: number;
   commissionPercent: number;
+  offerFunding?: {
+    commission: number;
+    menuItem: number;
+    platformDelivery?: number;
+    restaurantDelivery?: number;
+  } | null;
+  appliedOffers?: Array<{
+    offerId: string;
+    title: string;
+    type: string;
+    discountAmount: number;
+    cashbackAmount: number;
+    fundedFromCommission: number;
+    fundedFromMenuItem: number;
+  }> | null;
+  appliedCouponCode?: string | null;
   cookingRequests?: string | null;
   includeCutlery: boolean;
   deliveryTier?: string | null;

@@ -88,6 +88,14 @@ function candidateForOffer(
     return listPrice - save;
   }
 
+  // Item-scoped flat discounts show as unit sale prices (₹ off each matching dish).
+  if (type === "flat") {
+    const itemScoped =
+      offer.scope === "items" || (offer.menuItemIds || []).length > 0;
+    if (!itemScoped || offer.discountValue <= 0) return null;
+    return Math.max(0, listPrice - offer.discountValue);
+  }
+
   if (type === "bogo") {
     const getId = String(offer.getMenuItemId || offer.buyMenuItemId || "").trim();
     if (!getId || getId !== menuItemId) return null;
