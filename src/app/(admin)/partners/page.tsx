@@ -284,9 +284,20 @@ export default function PartnersPage() {
                     className="border-white/5 hover:bg-white/5"
                   >
                     <TableCell>
-                      <div className="flex flex-col">
+                      <div className="flex flex-col gap-1">
                         <span className="font-medium">{p.fullName}</span>
                         <span className="text-xs text-white/40">{p.email}</span>
+                        {p.employmentType === "restaurant" && (
+                          <Badge
+                            variant="outline"
+                            className="w-fit border-[#98E32F]/40 text-[10px] text-[#98E32F]"
+                          >
+                            {typeof p.restaurantId === "object" &&
+                            p.restaurantId?.name
+                              ? p.restaurantId.name
+                              : "Restaurant dedicated"}
+                          </Badge>
+                        )}
                       </div>
                     </TableCell>
                     <TableCell className="text-white/80">{p.phone}</TableCell>

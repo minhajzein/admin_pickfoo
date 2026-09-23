@@ -19,6 +19,8 @@ export interface AdminMenuItem {
   categories?: string[];
   isVeg: boolean;
   isActive: boolean;
+  /** ISO date — timed pause until this Instant; null = permanent when inactive. */
+  inactiveUntil?: string | null;
   /** Highlighted in Featured strip when restaurant has ≥4 featured items. */
   isFeatured?: boolean;
   availableFrom?: string;
@@ -63,6 +65,9 @@ export interface AdminMenuItemInput {
   isVeg: boolean;
   isActive: boolean;
   isFeatured?: boolean;
+  /** 'today' = off until next IST midnight; omit for permanent off. */
+  pause?: "today" | null;
+  inactiveUntil?: string | null;
   availableFrom?: string;
   availableTo?: string;
   /** Multiple daily HH:mm windows; empty = all day. */

@@ -34,7 +34,7 @@ export const CustomerStyleMenuCard = memo(function CustomerStyleMenuCard({
   offerPrice,
   onEdit,
   onDelete,
-  onToggleActive,
+  onSetAvailability,
   isTogglingActive = false,
   onToggleFeatured,
   isTogglingFeatured = false,
@@ -45,7 +45,10 @@ export const CustomerStyleMenuCard = memo(function CustomerStyleMenuCard({
   offerPrice?: number | null;
   onEdit?: () => void;
   onDelete?: () => void;
-  onToggleActive?: (next: boolean) => void;
+  onSetAvailability?: (next: {
+    isActive: boolean;
+    pause?: "today" | null;
+  }) => void;
   isTogglingActive?: boolean;
   onToggleFeatured?: (next: boolean) => void;
   isTogglingFeatured?: boolean;
@@ -73,6 +76,15 @@ export const CustomerStyleMenuCard = memo(function CustomerStyleMenuCard({
   const listPrice = displayPrice(item);
   const dealPrice = displayOfferPrice(item, offerPrice);
   const isFeatured = item.isFeatured === true;
+  const isOffToday =
+    !item.isActive &&
+    !!item.inactiveUntil &&
+    new Date(item.inactiveUntil).getTime() > Date.now();
+  const statusLabel = item.isActive
+    ? "Active"
+    : isOffToday
+      ? "Off today"
+      : "Off";
 
   return (
     <div className="group flex flex-col rounded-[20px] bg-[#F5FFE5] overflow-hidden shadow-sm border border-black/5">
@@ -156,7 +168,7 @@ export const CustomerStyleMenuCard = memo(function CustomerStyleMenuCard({
         {!item.isActive && (
           <div className="absolute inset-0 z-[5] bg-black/45 flex items-center justify-center rounded-tr-[20px] rounded-tl-[20px] rounded-br-[20px]">
             <span className="text-[10px] font-bold uppercase tracking-wider bg-black/60 text-white px-2 py-1 rounded">
-              Inactive
+              {isOffToday ? "Off today" : "Inactive"}
             </span>
           </div>
         )}
@@ -237,30 +249,60 @@ export const CustomerStyleMenuCard = memo(function CustomerStyleMenuCard({
           </div>
         </div>
 
-        {onToggleActive && (
-          <div className="mt-2 flex items-center justify-between gap-2">
+        {onSetAvailability && (
+          <div className="mt-2 space-y-1.5">
             <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">
               Status
             </span>
-            <button
-              type="button"
-              disabled={isTogglingActive}
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggleActive(!item.isActive);
-              }}
-              className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide transition-colors disabled:opacity-60 ${
-                item.isActive
-                  ? "bg-[#98E32F] text-[#013644]"
-                  : "bg-neutral-200 text-neutral-600"
-              }`}
-              title={item.isActive ? "Set inactive" : "Set active"}
-            >
-              {isTogglingActive ? (
-                <Loader2 size={12} className="animate-spin" />
-              ) : null}
-              {item.isActive ? "Active" : "Off"}
-            </button>
+            <div className="grid grid-cols-3 gap-1">
+              {(
+                [
+                  { label: "Active", isActive: true, pause: null },
+                  { label: "Today", isActive: false, pause: "today" as const },
+                  { label: "Off", isActive: false, pause: null },
+                ] as const
+              ).map((opt) => {
+                const selected =
+                  opt.isActive === true
+                    ? item.isActive
+                    : opt.pause === "today"
+                      ? isOffToday
+                      : !item.isActive && !isOffToday;
+                return (
+                  <button
+                    key={opt.label}
+                    type="button"
+                    disabled={isTogglingActive}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSetAvailability({
+                        isActive: opt.isActive,
+                        pause: opt.pause,
+                      });
+                    }}
+                    className={`rounded-lg px-1 py-1.5 text-[9px] font-black uppercase tracking-wide transition-colors disabled:opacity-60 ${
+                      selected
+                        ? "bg-[#98E32F] text-[#013644]"
+                        : "bg-neutral-200 text-neutral-600"
+                    }`}
+                    title={
+                      opt.pause === "today"
+                        ? "Off today — auto-on at schedule start"
+                        : opt.isActive
+                          ? "Active"
+                          : "Permanently off"
+                    }
+                  >
+                    {isTogglingActive && selected ? (
+                      <Loader2 size={10} className="animate-spin mx-auto" />
+                    ) : (
+                      opt.label
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-[9px] text-neutral-400">{statusLabel}</p>
           </div>
         )}
 

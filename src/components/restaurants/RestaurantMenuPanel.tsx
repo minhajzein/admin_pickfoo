@@ -107,6 +107,8 @@ const emptyForm = (
   isVeg: true,
   isActive: true,
   isFeatured: false,
+  pause: null,
+  inactiveUntil: null,
   availableFrom: "",
   availableTo: "",
   availableSlots: [],
@@ -503,11 +505,20 @@ export function RestaurantMenuPanel({
     mutationFn: ({
       itemId,
       isActive,
+      pause,
     }: {
       itemId: string;
       isActive: boolean;
-    }) => updateRestaurantMenuItem(restaurantId, itemId, { isActive }),
-    onMutate: async ({ itemId, isActive }) => {
+      pause?: "today" | null;
+    }) =>
+      updateRestaurantMenuItem(
+        restaurantId,
+        itemId,
+        pause === "today"
+          ? { pause: "today", isActive: false }
+          : { isActive, inactiveUntil: null },
+      ),
+    onMutate: async ({ itemId, isActive, pause }) => {
       await queryClient.cancelQueries({
         queryKey: ["restaurant-menu", restaurantId],
       });
@@ -519,14 +530,29 @@ export function RestaurantMenuPanel({
         ["restaurant-menu", restaurantId],
         (current) =>
           (current ?? []).map((item) =>
-            item._id === itemId ? { ...item, isActive } : item,
+            item._id === itemId
+              ? {
+                  ...item,
+                  isActive,
+                  inactiveUntil:
+                    pause === "today"
+                      ? new Date(
+                          Date.now() + 24 * 60 * 60 * 1000,
+                        ).toISOString()
+                      : null,
+                }
+              : item,
           ),
       );
       return { previous };
     },
     onSuccess: (_data, variables) => {
       toast.success(
-        variables.isActive ? "Menu item activated" : "Menu item set to off",
+        variables.isActive
+          ? "Menu item activated"
+          : variables.pause === "today"
+            ? "Off today — auto-on at schedule start"
+            : "Menu item set to off",
       );
     },
     onError: (err: unknown, _variables, context) => {
@@ -676,6 +702,11 @@ export function RestaurantMenuPanel({
             isVeg: item.isVeg,
             isActive: item.isActive,
             isFeatured: item.isFeatured ?? false,
+            pause:
+              !item.isActive && item.inactiveUntil
+                ? ("today" as const)
+                : null,
+            inactiveUntil: item.inactiveUntil ?? null,
             availableFrom: item.availableFrom || "",
             availableTo: item.availableTo || "",
             availableSlots: menuItemAvailabilitySlots(item),
@@ -892,6 +923,13 @@ export function RestaurantMenuPanel({
       image: form.image || undefined,
       restaurantTypes: form.restaurantTypes ?? ["restaurant"],
       completeMealItemIds: form.completeMealItemIds ?? [],
+      ...(form.pause === "today"
+        ? { pause: "today" as const, isActive: false }
+        : {
+            isActive: form.isActive,
+            inactiveUntil: null,
+            pause: null,
+          }),
       availableSlots: (form.availableSlots ?? [])
         .map((s) => ({
           from: (s.from ?? "").trim(),
@@ -1114,10 +1152,11 @@ export function RestaurantMenuPanel({
                   name: item.name,
                 })
               }
-              onToggleActive={(next) =>
+              onSetAvailability={(next) =>
                 toggleActiveMutation.mutate({
                   itemId: item._id,
-                  isActive: next,
+                  isActive: next.isActive,
+                  pause: next.pause,
                 })
               }
               isTogglingActive={
@@ -1879,10 +1918,17 @@ export function RestaurantMenuPanel({
                   <label className="text-[10px] font-bold text-white/40 uppercase tracking-wider mb-2.5 block">
                     Availability
                   </label>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-3 gap-2">
                     <button
                       type="button"
-                      onClick={() => setForm((p) => ({ ...p, isActive: true }))}
+                      onClick={() =>
+                        setForm((p) => ({
+                          ...p,
+                          isActive: true,
+                          pause: null,
+                          inactiveUntil: null,
+                        }))
+                      }
                       className={`py-2.5 rounded-xl text-[11px] font-black uppercase transition-colors ${
                         form.isActive
                           ? "bg-[#98E32F] text-[#013644]"
@@ -1893,9 +1939,33 @@ export function RestaurantMenuPanel({
                     </button>
                     <button
                       type="button"
-                      onClick={() => setForm((p) => ({ ...p, isActive: false }))}
+                      onClick={() =>
+                        setForm((p) => ({
+                          ...p,
+                          isActive: false,
+                          pause: "today",
+                        }))
+                      }
                       className={`py-2.5 rounded-xl text-[11px] font-black uppercase transition-colors ${
-                        !form.isActive
+                        !form.isActive && form.pause === "today"
+                          ? "bg-[#98E32F] text-[#013644]"
+                          : "bg-white/5 text-white/50 hover:text-white"
+                      }`}
+                    >
+                      Off today
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setForm((p) => ({
+                          ...p,
+                          isActive: false,
+                          pause: null,
+                          inactiveUntil: null,
+                        }))
+                      }
+                      className={`py-2.5 rounded-xl text-[11px] font-black uppercase transition-colors ${
+                        !form.isActive && form.pause !== "today"
                           ? "bg-[#98E32F] text-[#013644]"
                           : "bg-white/5 text-white/50 hover:text-white"
                       }`}
@@ -1903,6 +1973,16 @@ export function RestaurantMenuPanel({
                       Off
                     </button>
                   </div>
+                  {!form.isActive && form.pause === "today" ? (
+                    <p className="mt-2 text-[10px] text-white/35 leading-snug">
+                      {(form.availableSlots ?? []).some((s) => (s.from ?? "").trim())
+                        ? `Auto-activates tomorrow at ${[...(form.availableSlots ?? [])]
+                            .map((s) => (s.from ?? "").trim())
+                            .filter(Boolean)
+                            .sort()[0]} (schedule start).`
+                        : "Auto-activates at tomorrow midnight (IST). No schedule set."}
+                    </p>
+                  ) : null}
                 </div>
 
                 <div className="rounded-xl border border-white/10 bg-black/20 p-3">

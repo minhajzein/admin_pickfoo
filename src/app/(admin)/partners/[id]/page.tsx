@@ -21,12 +21,16 @@ import {
   updatePartnerDetails,
   updatePartnerPriorityLevel,
   updatePartnerAllowOrdersFromAnywhere,
+  updatePartnerRestaurantLink,
   updatePartnerSecurityDeposit,
   updatePartnerZones,
   verifyPartner,
   type SecurityDepositAction,
 } from "@/lib/api/partners";
 import { fetchZones } from "@/lib/api/zones";
+import api from "@/lib/axios";
+import { parsePaginatedResponse } from "@/lib/pagination";
+import type { Restaurant } from "@/types/models";
 import {
   Loader2,
   ArrowLeft,
@@ -38,6 +42,7 @@ import {
   Wallet,
   Bike,
   Pencil,
+  Store,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -156,6 +161,8 @@ export default function PartnerDetailsPage() {
   const [fullNameDraft, setFullNameDraft] = useState("");
   const [phoneDraft, setPhoneDraft] = useState("");
   const [emailDraft, setEmailDraft] = useState("");
+  const [restaurantIdDraft, setRestaurantIdDraft] = useState<string | null>(null);
+  const [restaurantSearch, setRestaurantSearch] = useState("");
 
   const { data: partner, isLoading } = useQuery({
     queryKey: ["partner", partnerId],
@@ -168,6 +175,40 @@ export default function PartnerDetailsPage() {
     queryFn: () =>
       fetchZones({ district: "Wayanad", includeInactive: false }),
   });
+
+  const { data: restaurantOptions = [] } = useQuery({
+    queryKey: ["partners", "restaurant-link-options"],
+    queryFn: async () => {
+      const { data } = await api.get("/restaurants", {
+        params: { page: 1, limit: 200, status: "active" },
+      });
+      return parsePaginatedResponse<Restaurant>(data).data;
+    },
+    staleTime: 5 * 60_000,
+  });
+
+  const linkedRestaurantId = useMemo(() => {
+    if (restaurantIdDraft !== null) return restaurantIdDraft;
+    const raw = partner?.restaurantId;
+    if (!raw) return "";
+    if (typeof raw === "string") return raw;
+    return raw._id ?? "";
+  }, [partner?.restaurantId, restaurantIdDraft]);
+
+  const linkedRestaurantName = useMemo(() => {
+    const raw = partner?.restaurantId;
+    if (raw && typeof raw === "object" && raw.name) return raw.name;
+    const match = restaurantOptions.find((r) => r._id === linkedRestaurantId);
+    return match?.name ?? null;
+  }, [partner?.restaurantId, restaurantOptions, linkedRestaurantId]);
+
+  const filteredRestaurants = useMemo(() => {
+    const q = restaurantSearch.trim().toLowerCase();
+    if (!q) return restaurantOptions.slice(0, 40);
+    return restaurantOptions
+      .filter((r) => (r.name || "").toLowerCase().includes(q))
+      .slice(0, 40);
+  }, [restaurantOptions, restaurantSearch]);
 
   const selectedZoneIds = useMemo(() => {
     if (selectedZoneIdsDraft) return selectedZoneIdsDraft;
@@ -216,6 +257,25 @@ export default function PartnerDetailsPage() {
     },
     onError: () =>
       toast.error("Failed to update take-orders-from-anywhere setting"),
+  });
+
+  const restaurantLinkMutation = useMutation({
+    mutationFn: (restaurantId: string | null) =>
+      updatePartnerRestaurantLink(String(partnerId), restaurantId),
+    onSuccess: (updated) => {
+      queryClient.invalidateQueries({ queryKey: ["partner", partnerId] });
+      queryClient.invalidateQueries({ queryKey: ["partners"] });
+      setRestaurantIdDraft(null);
+      setRestaurantSearch("");
+      toast.success(
+        updated.employmentType === "restaurant"
+          ? "Partner linked to restaurant — they will only get that restaurant's orders"
+          : "Partner unlinked — back on platform fleet",
+      );
+    },
+    onError: (error: unknown) => {
+      toast.error(apiErrorMessage(error, "Failed to update restaurant link"));
+    },
   });
 
   const verificationMutation = useMutation({
@@ -707,6 +767,102 @@ export default function PartnerDetailsPage() {
                 )}
                 Save priority
               </Button>
+            </CardContent>
+          </Card>
+
+          <Card className="border-white/5 bg-[#002833] text-white">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Store className="h-4 w-4 text-[#98E32F]" />
+                Dedicated restaurant
+              </CardTitle>
+              <CardDescription className="text-white/50">
+                Link this partner to one restaurant. They will only receive
+                pickup orders from that kitchen (preferred over the zone fleet
+                when online). Clear the link to return them to the platform
+                fleet.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {partner.employmentType === "restaurant" && linkedRestaurantName ? (
+                <div className="rounded-lg border border-[#98E32F]/30 bg-[#98E32F]/10 px-3 py-2 text-sm">
+                  Currently linked to{" "}
+                  <span className="font-semibold text-[#98E32F]">
+                    {linkedRestaurantName}
+                  </span>
+                </div>
+              ) : (
+                <p className="text-sm text-white/50">
+                  Platform fleet — receives zone-based pickup offers.
+                </p>
+              )}
+              <Input
+                placeholder="Search restaurants…"
+                value={restaurantSearch}
+                onChange={(e) => setRestaurantSearch(e.target.value)}
+                className="border-white/10 bg-[#013644] text-white"
+              />
+              <div className="max-h-48 space-y-1 overflow-y-auto rounded-lg border border-white/10 p-1">
+                {filteredRestaurants.length === 0 ? (
+                  <p className="px-2 py-3 text-xs text-white/40">
+                    No restaurants found
+                  </p>
+                ) : (
+                  filteredRestaurants.map((restaurant) => {
+                    const id = restaurant._id ?? "";
+                    const selected = linkedRestaurantId === id;
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => setRestaurantIdDraft(id)}
+                        className={`flex w-full items-center justify-between rounded-md px-2 py-2 text-left text-sm transition ${
+                          selected
+                            ? "bg-[#98E32F]/20 text-[#98E32F]"
+                            : "text-white/80 hover:bg-white/5"
+                        }`}
+                      >
+                        <span className="truncate">{restaurant.name}</span>
+                        {selected && (
+                          <Badge
+                            variant="outline"
+                            className="border-[#98E32F]/40 text-[10px] text-[#98E32F]"
+                          >
+                            Selected
+                          </Badge>
+                        )}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+              <div className="flex flex-col gap-2">
+                <Button
+                  className="w-full bg-[#98E32F] text-[#013644] hover:bg-[#86c926]"
+                  disabled={
+                    restaurantLinkMutation.isPending ||
+                    !restaurantIdDraft
+                  }
+                  onClick={() =>
+                    restaurantLinkMutation.mutate(linkedRestaurantId || null)
+                  }
+                >
+                  {restaurantLinkMutation.isPending && (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  )}
+                  Save restaurant link
+                </Button>
+                {partner.employmentType === "restaurant" && (
+                  <Button
+                    variant="outline"
+                    className="w-full border-white/10 text-white hover:bg-white/5"
+                    disabled={restaurantLinkMutation.isPending}
+                    onClick={() => restaurantLinkMutation.mutate(null)}
+                  >
+                    Unlink (back to platform)
+                  </Button>
+                )}
+              </div>
             </CardContent>
           </Card>
 

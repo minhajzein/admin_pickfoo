@@ -260,6 +260,13 @@ export interface Partner {
   allowOrdersFromAnywhere?: boolean;
   /** Zone the partner is currently online inside (from live GPS). */
   activeZoneId?: string | DeliveryZoneSummary | null;
+  /**
+   * platform = Pickfoo fleet (zone dispatch).
+   * restaurant = dedicated to one restaurant (only that kitchen's orders).
+   */
+  employmentType?: 'platform' | 'restaurant';
+  /** Set when employmentType is restaurant — populated as summary on admin APIs. */
+  restaurantId?: string | { _id: string; name: string; slug?: string; status?: string } | null;
   isOnline: boolean;
   onDuty: boolean;
   currentAssignmentOrderId?: string | null;

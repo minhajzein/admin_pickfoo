@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
@@ -229,7 +229,21 @@ export default function OrderDetailPage() {
     queryFn: () => fetchPartners({ status: "VERIFIED", limit: 200 }),
     enabled: needsPartnerPicker,
   });
-  const partnerOptions = partnersPage?.data ?? [];
+  const orderRestaurantId = order?.restaurant?.id
+    ? String(order.restaurant.id)
+    : "";
+  const partnerOptions = useMemo(() => {
+    const all = partnersPage?.data ?? [];
+    if (!orderRestaurantId) return all;
+    return all.filter((p) => {
+      if (p.employmentType !== "restaurant") return true;
+      const linked =
+        typeof p.restaurantId === "string"
+          ? p.restaurantId
+          : p.restaurantId?._id;
+      return linked === orderRestaurantId;
+    });
+  }, [partnersPage?.data, orderRestaurantId]);
 
   const invalidateOrder = () => {
     queryClient.invalidateQueries({
@@ -1781,14 +1795,25 @@ export default function OrderDetailPage() {
                 className="w-full rounded-md border border-white/10 bg-black/20 px-3 py-2 text-sm text-white"
               >
                 <option value="">Select partner…</option>
-                {partnerOptions.map((p) => (
+                {partnerOptions.map((p) => {
+                  const dedicatedName =
+                    p.employmentType === "restaurant" &&
+                    p.restaurantId &&
+                    typeof p.restaurantId === "object"
+                      ? p.restaurantId.name
+                      : p.employmentType === "restaurant"
+                        ? "dedicated"
+                        : null;
+                  return (
                   <option key={p._id} value={p._id}>
                     {p.fullName}
                     {p.phone ? ` · ${p.phone}` : ""}
                     {p.isOnline ? " · online" : ""}
                     {p.onDuty ? " · on duty" : ""}
+                    {dedicatedName ? ` · ${dedicatedName}` : ""}
                   </option>
-                ))}
+                  );
+                })}
               </select>
             )}
           </div>

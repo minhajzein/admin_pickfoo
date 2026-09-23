@@ -9,6 +9,8 @@ import type { Partner } from "@/types/models";
 export async function fetchPartners(params?: {
   status?: string;
   search?: string;
+  restaurantId?: string;
+  employmentType?: "platform" | "restaurant";
   page?: number;
   limit?: number;
 }): Promise<PaginatedResult<Partner>> {
@@ -16,6 +18,8 @@ export async function fetchPartners(params?: {
     params: {
       status: params?.status || undefined,
       search: params?.search?.trim() || undefined,
+      restaurantId: params?.restaurantId || undefined,
+      employmentType: params?.employmentType || undefined,
       page: params?.page ?? 1,
       limit: params?.limit ?? DEFAULT_PAGE_SIZE,
     },
@@ -54,6 +58,17 @@ export async function updatePartnerAllowOrdersFromAnywhere(
     `/partners/${partnerId}/allow-orders-from-anywhere`,
     { allowOrdersFromAnywhere },
   );
+  return data.data;
+}
+
+/** Link partner to one restaurant (dedicated), or pass null to return to platform fleet. */
+export async function updatePartnerRestaurantLink(
+  partnerId: string,
+  restaurantId: string | null,
+): Promise<Partner> {
+  const { data } = await api.patch(`/partners/${partnerId}/restaurant-link`, {
+    restaurantId,
+  });
   return data.data;
 }
 
