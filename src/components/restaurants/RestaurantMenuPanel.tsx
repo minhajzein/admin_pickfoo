@@ -109,12 +109,29 @@ const emptyForm = (
   isFeatured: false,
   availableFrom: "",
   availableTo: "",
+  availableSlots: [],
   image: "",
   ingredients: [],
   restaurantTypes:
     restaurantTypes.length > 0 ? [...restaurantTypes] : ["restaurant"],
   completeMealItemIds: [],
 });
+
+function menuItemAvailabilitySlots(
+  item: Pick<AdminMenuItem, "availableFrom" | "availableTo" | "availableSlots">,
+): { from: string; to: string }[] {
+  if (item.availableSlots && item.availableSlots.length > 0) {
+    return item.availableSlots
+      .map((s) => ({
+        from: (s.from ?? "").trim(),
+        to: (s.to ?? "").trim(),
+      }))
+      .filter((s) => s.from && s.to);
+  }
+  const from = (item.availableFrom ?? "").trim();
+  const to = (item.availableTo ?? "").trim();
+  return from && to ? [{ from, to }] : [];
+}
 
 function menuItemCategories(item: Pick<AdminMenuItem, "category" | "categories">): string[] {
   if (item.categories && item.categories.length > 0) {
@@ -171,14 +188,21 @@ function validateForm(
   if (!form.restaurantTypes || form.restaurantTypes.length === 0) {
     return "Select at least one restaurant type";
   }
-  const from = (form.availableFrom ?? "").trim();
-  const to = (form.availableTo ?? "").trim();
+  const slots = (form.availableSlots ?? [])
+    .map((s) => ({
+      from: (s.from ?? "").trim(),
+      to: (s.to ?? "").trim(),
+    }))
+    .filter((s) => s.from || s.to);
   const hhmm = /^([01]\d|2[0-3]):([0-5]\d)$/;
-  if ((from && !to) || (!from && to)) {
-    return "Set both available-from and available-to, or leave both empty";
+  for (const slot of slots) {
+    if (!slot.from || !slot.to) {
+      return "Each schedule needs both from and to times";
+    }
+    if (!hhmm.test(slot.from) || !hhmm.test(slot.to)) {
+      return "Schedule times must be HH:mm";
+    }
   }
-  if (from && !hhmm.test(from)) return "Available from must be HH:mm";
-  if (to && !hhmm.test(to)) return "Available to must be HH:mm";
   return null;
 }
 
@@ -654,6 +678,7 @@ export function RestaurantMenuPanel({
             isFeatured: item.isFeatured ?? false,
             availableFrom: item.availableFrom || "",
             availableTo: item.availableTo || "",
+            availableSlots: menuItemAvailabilitySlots(item),
             image: item.image || "",
             ingredients: item.ingredients ?? [],
             restaurantTypes: [...itemTypes],
@@ -867,8 +892,30 @@ export function RestaurantMenuPanel({
       image: form.image || undefined,
       restaurantTypes: form.restaurantTypes ?? ["restaurant"],
       completeMealItemIds: form.completeMealItemIds ?? [],
-      availableFrom: (form.availableFrom ?? "").trim(),
-      availableTo: (form.availableTo ?? "").trim(),
+      availableSlots: (form.availableSlots ?? [])
+        .map((s) => ({
+          from: (s.from ?? "").trim(),
+          to: (s.to ?? "").trim(),
+        }))
+        .filter((s) => s.from && s.to),
+      availableFrom: (() => {
+        const slots = (form.availableSlots ?? [])
+          .map((s) => ({
+            from: (s.from ?? "").trim(),
+            to: (s.to ?? "").trim(),
+          }))
+          .filter((s) => s.from && s.to);
+        return slots[0]?.from ?? "";
+      })(),
+      availableTo: (() => {
+        const slots = (form.availableSlots ?? [])
+          .map((s) => ({
+            from: (s.from ?? "").trim(),
+            to: (s.to ?? "").trim(),
+          }))
+          .filter((s) => s.from && s.to);
+        return slots[0]?.to ?? "";
+      })(),
     };
     try {
       setIsSaving(true);
@@ -1360,43 +1407,105 @@ export function RestaurantMenuPanel({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-[10px] font-bold text-white/40 uppercase tracking-wider">
-                  Available from
-                </label>
-                <Input
-                  type="time"
-                  value={form.availableFrom || ""}
-                  onChange={(e) =>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <label className="text-[10px] font-bold text-white/40 uppercase tracking-wider">
+                    Availability schedules
+                  </label>
+                  <p className="text-[10px] text-white/40 mt-1">
+                    Empty = all day (IST). Add morning + evening, etc. Overnight
+                    ranges supported (e.g. 22:00 → 02:00).
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="border-white/10 text-white shrink-0"
+                  onClick={() =>
                     setForm((p) => ({
                       ...p,
-                      availableFrom: e.target.value,
+                      availableSlots: [
+                        ...(p.availableSlots ?? []),
+                        { from: "17:00", to: "21:00" },
+                      ],
                     }))
                   }
-                  className="mt-1 bg-white/5 border-white/10 text-white"
-                />
+                >
+                  <Plus size={14} className="mr-1" />
+                  Add
+                </Button>
               </div>
-              <div>
-                <label className="text-[10px] font-bold text-white/40 uppercase tracking-wider">
-                  Available to
-                </label>
-                <Input
-                  type="time"
-                  value={form.availableTo || ""}
-                  onChange={(e) =>
-                    setForm((p) => ({
-                      ...p,
-                      availableTo: e.target.value,
-                    }))
-                  }
-                  className="mt-1 bg-white/5 border-white/10 text-white"
-                />
-              </div>
-              <p className="col-span-2 text-[10px] text-white/40">
-                Leave both empty for all-day availability (IST). Overnight ranges
-                are supported (e.g. 22:00 → 02:00).
-              </p>
+              {(form.availableSlots ?? []).length === 0 ? (
+                <p className="text-[11px] text-white/35">
+                  No schedules — available all day.
+                </p>
+              ) : (
+                (form.availableSlots ?? []).map((slot, index) => (
+                  <div
+                    key={`slot-${index}`}
+                    className="grid grid-cols-[1fr_1fr_auto] gap-2 items-end"
+                  >
+                    <div>
+                      <label className="text-[10px] font-bold text-white/40 uppercase tracking-wider">
+                        From
+                      </label>
+                      <Input
+                        type="time"
+                        value={slot.from || ""}
+                        onChange={(e) =>
+                          setForm((p) => {
+                            const next = [...(p.availableSlots ?? [])];
+                            next[index] = {
+                              ...next[index],
+                              from: e.target.value,
+                            };
+                            return { ...p, availableSlots: next };
+                          })
+                        }
+                        className="mt-1 bg-white/5 border-white/10 text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-white/40 uppercase tracking-wider">
+                        To
+                      </label>
+                      <Input
+                        type="time"
+                        value={slot.to || ""}
+                        onChange={(e) =>
+                          setForm((p) => {
+                            const next = [...(p.availableSlots ?? [])];
+                            next[index] = {
+                              ...next[index],
+                              to: e.target.value,
+                            };
+                            return { ...p, availableSlots: next };
+                          })
+                        }
+                        className="mt-1 bg-white/5 border-white/10 text-white"
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="border-white/10 text-white/70 h-10 w-10"
+                      onClick={() =>
+                        setForm((p) => ({
+                          ...p,
+                          availableSlots: (p.availableSlots ?? []).filter(
+                            (_, i) => i !== index,
+                          ),
+                        }))
+                      }
+                    >
+                      <Trash2 size={14} />
+                    </Button>
+                  </div>
+                ))
+              )}
             </div>
 
             <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-2">

@@ -51,10 +51,23 @@ export const CustomerStyleMenuCard = memo(function CustomerStyleMenuCard({
   isTogglingFeatured?: boolean;
 }) {
   const prep = item.preparationTime ?? 0;
-  const from = (item.availableFrom ?? "").trim();
-  const to = (item.availableTo ?? "").trim();
+  const slots =
+    item.availableSlots && item.availableSlots.length > 0
+      ? item.availableSlots
+          .map((s) => ({
+            from: (s.from ?? "").trim(),
+            to: (s.to ?? "").trim(),
+          }))
+          .filter((s) => s.from && s.to)
+      : (() => {
+          const from = (item.availableFrom ?? "").trim();
+          const to = (item.availableTo ?? "").trim();
+          return from && to ? [{ from, to }] : [];
+        })();
   const timeRange =
-    from && to ? `${from}–${to}` : null;
+    slots.length > 0
+      ? slots.map((s) => `${s.from}–${s.to}`).join(", ")
+      : null;
   const rating = ratingLabel(item);
   const grayscale = !item.isActive;
   const listPrice = displayPrice(item);

@@ -210,7 +210,7 @@ export default function PartnerDetailsPage() {
       queryClient.invalidateQueries({ queryKey: ["partners"] });
       toast.success(
         updated.allowOrdersFromAnywhere
-          ? "Partner can go online outside assigned zones"
+          ? "Partner can take assigned-zone orders from anywhere"
           : "Partner must stay inside assigned zones",
       );
     },
@@ -714,11 +714,11 @@ export default function PartnerDetailsPage() {
             <CardHeader>
               <CardTitle>Orders from anywhere</CardTitle>
               <CardDescription className="text-white/50">
-                Lets this partner go online outside assigned polygons without
-                auto-offline. They still only unlock restaurants in the zone
-                they are physically in, and only for zones you assign below.
-                Prefer assigning specific delivery zones instead of relying on
-                this flag.
+                Lets this partner go online outside assigned polygons and still
+                receive offers for restaurants in the zones you assign below
+                (used after no zone-local partner is available). While they are
+                standing inside a zone, they only unlock that zone — not other
+                assigned zones.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -734,12 +734,12 @@ export default function PartnerDetailsPage() {
                 />
                 <span className="text-sm">
                   <span className="block font-medium">
-                    Go online outside assigned zones
+                    Take orders from anywhere
                   </span>
                   <span className="block text-white/50 text-xs mt-1">
                     {partner.allowOrdersFromAnywhere
-                      ? "Enabled — still only serves the zone they are standing in"
-                      : "Disabled — must stay inside assigned zones to stay online"}
+                      ? "Enabled — can receive assigned-zone offers while outside polygons"
+                      : "Disabled — must be inside an assigned zone to stay online / receive offers"}
                   </span>
                 </span>
                 {allowAnywhereMutation.isPending && (

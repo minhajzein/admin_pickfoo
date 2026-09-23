@@ -23,6 +23,8 @@ export interface AdminMenuItem {
   isFeatured?: boolean;
   availableFrom?: string;
   availableTo?: string;
+  /** Multiple daily HH:mm windows; empty = all day. */
+  availableSlots?: { from: string; to: string }[];
   image?: string;
   ingredients?: string[];
   restaurants?: string[];
@@ -63,6 +65,8 @@ export interface AdminMenuItemInput {
   isFeatured?: boolean;
   availableFrom?: string;
   availableTo?: string;
+  /** Multiple daily HH:mm windows; empty = all day. */
+  availableSlots?: { from: string; to: string }[];
   image?: string;
   ingredients?: string[];
   restaurantTypes?: string[];
