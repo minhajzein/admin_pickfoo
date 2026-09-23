@@ -106,6 +106,7 @@ const emptyForm = (
   variants: [],
   isVeg: true,
   isActive: true,
+  isFeatured: false,
   availableFrom: "",
   availableTo: "",
   image: "",
@@ -523,6 +524,57 @@ export function RestaurantMenuPanel({
     },
   });
 
+  const toggleFeaturedMutation = useMutation({
+    mutationFn: ({
+      itemId,
+      isFeatured,
+    }: {
+      itemId: string;
+      isFeatured: boolean;
+    }) => updateRestaurantMenuItem(restaurantId, itemId, { isFeatured }),
+    onMutate: async ({ itemId, isFeatured }) => {
+      await queryClient.cancelQueries({
+        queryKey: ["restaurant-menu", restaurantId],
+      });
+      const previous = queryClient.getQueryData<AdminMenuItem[]>([
+        "restaurant-menu",
+        restaurantId,
+      ]);
+      queryClient.setQueryData<AdminMenuItem[]>(
+        ["restaurant-menu", restaurantId],
+        (current) =>
+          (current ?? []).map((item) =>
+            item._id === itemId ? { ...item, isFeatured } : item,
+          ),
+      );
+      return { previous };
+    },
+    onSuccess: (_data, variables) => {
+      toast.success(
+        variables.isFeatured
+          ? "Marked as featured"
+          : "Removed from featured",
+      );
+    },
+    onError: (err: unknown, _variables, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(
+          ["restaurant-menu", restaurantId],
+          context.previous,
+        );
+      }
+      const msg =
+        err && typeof err === "object" && "response" in err
+          ? (err as { response?: { data?: { message?: string } } }).response?.data
+              ?.message
+          : undefined;
+      toast.error(msg || "Failed to update featured");
+    },
+    onSettled: () => {
+      invalidateMenu();
+    },
+  });
+
   const deleteCategoryMutation = useMutation({
     mutationFn: (categoryId: string) => deleteCategory(categoryId),
     onSuccess: () => {
@@ -599,6 +651,7 @@ export function RestaurantMenuPanel({
             variants,
             isVeg: item.isVeg,
             isActive: item.isActive,
+            isFeatured: item.isFeatured ?? false,
             availableFrom: item.availableFrom || "",
             availableTo: item.availableTo || "",
             image: item.image || "",
@@ -1023,6 +1076,16 @@ export function RestaurantMenuPanel({
               isTogglingActive={
                 toggleActiveMutation.isPending &&
                 toggleActiveMutation.variables?.itemId === item._id
+              }
+              onToggleFeatured={(next) =>
+                toggleFeaturedMutation.mutate({
+                  itemId: item._id,
+                  isFeatured: next,
+                })
+              }
+              isTogglingFeatured={
+                toggleFeaturedMutation.isPending &&
+                toggleFeaturedMutation.variables?.itemId === item._id
               }
             />
           ))}
@@ -1731,6 +1794,44 @@ export function RestaurantMenuPanel({
                       Off
                     </button>
                   </div>
+                </div>
+
+                <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                  <label className="text-[10px] font-bold text-white/40 uppercase tracking-wider mb-2.5 block">
+                    Featured
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setForm((p) => ({ ...p, isFeatured: true }))
+                      }
+                      className={`py-2.5 rounded-xl text-[11px] font-black uppercase transition-colors ${
+                        form.isFeatured
+                          ? "bg-[#98E32F] text-[#013644]"
+                          : "bg-white/5 text-white/50 hover:text-white"
+                      }`}
+                    >
+                      Yes
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setForm((p) => ({ ...p, isFeatured: false }))
+                      }
+                      className={`py-2.5 rounded-xl text-[11px] font-black uppercase transition-colors ${
+                        !form.isFeatured
+                          ? "bg-[#98E32F] text-[#013644]"
+                          : "bg-white/5 text-white/50 hover:text-white"
+                      }`}
+                    >
+                      No
+                    </button>
+                  </div>
+                  <p className="mt-2 text-[10px] text-white/35 leading-snug">
+                    Needs at least 4 featured items to show on the restaurant
+                    menu.
+                  </p>
                 </div>
               </div>
             </div>

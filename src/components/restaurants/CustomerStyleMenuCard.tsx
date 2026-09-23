@@ -36,6 +36,8 @@ export const CustomerStyleMenuCard = memo(function CustomerStyleMenuCard({
   onDelete,
   onToggleActive,
   isTogglingActive = false,
+  onToggleFeatured,
+  isTogglingFeatured = false,
 }: {
   item: AdminMenuItem;
   restaurantName?: string;
@@ -45,6 +47,8 @@ export const CustomerStyleMenuCard = memo(function CustomerStyleMenuCard({
   onDelete?: () => void;
   onToggleActive?: (next: boolean) => void;
   isTogglingActive?: boolean;
+  onToggleFeatured?: (next: boolean) => void;
+  isTogglingFeatured?: boolean;
 }) {
   const prep = item.preparationTime ?? 0;
   const from = (item.availableFrom ?? "").trim();
@@ -55,6 +59,7 @@ export const CustomerStyleMenuCard = memo(function CustomerStyleMenuCard({
   const grayscale = !item.isActive;
   const listPrice = displayPrice(item);
   const dealPrice = displayOfferPrice(item, offerPrice);
+  const isFeatured = item.isFeatured === true;
 
   return (
     <div className="group flex flex-col rounded-[20px] bg-[#F5FFE5] overflow-hidden shadow-sm border border-black/5">
@@ -94,6 +99,21 @@ export const CustomerStyleMenuCard = memo(function CustomerStyleMenuCard({
           >
             <Clock size={9} />
             {timeRange}
+          </div>
+        )}
+
+        {isFeatured && (
+          <div
+            className={`absolute left-2 z-10 flex items-center gap-1 rounded-full bg-[#98E32F] px-1.5 py-0.5 text-[8px] font-extrabold text-[#013644] ${
+              prep > 0 && timeRange
+                ? "top-14"
+                : prep > 0 || timeRange
+                  ? "top-8"
+                  : "top-2"
+            }`}
+          >
+            <Star size={9} fill="currentColor" />
+            Featured
           </div>
         )}
 
@@ -227,6 +247,35 @@ export const CustomerStyleMenuCard = memo(function CustomerStyleMenuCard({
                 <Loader2 size={12} className="animate-spin" />
               ) : null}
               {item.isActive ? "Active" : "Off"}
+            </button>
+          </div>
+        )}
+
+        {onToggleFeatured && (
+          <div className="mt-1.5 flex items-center justify-between gap-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">
+              Featured
+            </span>
+            <button
+              type="button"
+              disabled={isTogglingFeatured}
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleFeatured(!isFeatured);
+              }}
+              className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide transition-colors disabled:opacity-60 ${
+                isFeatured
+                  ? "bg-[#013644] text-[#98E32F]"
+                  : "bg-neutral-200 text-neutral-600"
+              }`}
+              title={isFeatured ? "Remove from featured" : "Mark as featured"}
+            >
+              {isTogglingFeatured ? (
+                <Loader2 size={12} className="animate-spin" />
+              ) : (
+                <Star size={11} fill={isFeatured ? "currentColor" : "none"} />
+              )}
+              {isFeatured ? "Yes" : "No"}
             </button>
           </div>
         )}

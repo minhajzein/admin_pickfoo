@@ -19,6 +19,8 @@ export interface AdminMenuItem {
   categories?: string[];
   isVeg: boolean;
   isActive: boolean;
+  /** Highlighted in Featured strip when restaurant has ≥4 featured items. */
+  isFeatured?: boolean;
   availableFrom?: string;
   availableTo?: string;
   image?: string;
@@ -58,6 +60,7 @@ export interface AdminMenuItemInput {
   variants?: AdminMenuVariant[];
   isVeg: boolean;
   isActive: boolean;
+  isFeatured?: boolean;
   availableFrom?: string;
   availableTo?: string;
   image?: string;
