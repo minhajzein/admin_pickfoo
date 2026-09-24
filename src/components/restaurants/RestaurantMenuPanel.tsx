@@ -66,6 +66,9 @@ type MealType = "breakfast" | "lunch" | "dinner";
 
 const DEFAULT_COMMISSION_PERCENT = 12;
 
+const EMPTY_MENU_ITEMS: AdminMenuItem[] = [];
+const EMPTY_RESTAURANTS: RestaurantListItem[] = [];
+
 /** Yield past the next paint so click INP isn't charged for dialog mount. */
 function afterNextPaint(fn: () => void) {
   window.requestAnimationFrame(() => {
@@ -404,7 +407,7 @@ export function RestaurantMenuPanel({
     enabled: isCategoryModalOpen,
   });
 
-  const { data: importRestaurantOptions = [], isFetching: isImportSearchLoading } =
+  const { data: importRestaurantOptions = EMPTY_RESTAURANTS, isFetching: isImportSearchLoading } =
     useQuery({
       queryKey: ["menu-import-restaurants", debouncedImportSearch],
       queryFn: () =>
@@ -423,7 +426,7 @@ export function RestaurantMenuPanel({
   );
 
   const {
-    data: sourceMenuItems = [],
+    data: sourceMenuItemsData,
     isLoading: isSourceMenuLoading,
     isFetching: isSourceMenuFetching,
   } = useQuery({
@@ -438,13 +441,24 @@ export function RestaurantMenuPanel({
     enabled: isImportModalOpen && !!selectedSource?._id,
   });
 
+  const sourceMenuItems = sourceMenuItemsData ?? EMPTY_MENU_ITEMS;
+  const sourceMenuItemIdsKey = useMemo(
+    () => sourceMenuItems.map((item) => item._id).join(","),
+    [sourceMenuItems],
+  );
+
   useEffect(() => {
-    if (!selectedSource) {
-      setSelectedImportItemIds(new Set());
+    if (!selectedSource?._id) {
+      setSelectedImportItemIds((prev) => (prev.size === 0 ? prev : new Set()));
       return;
     }
-    setSelectedImportItemIds(new Set(sourceMenuItems.map((item) => item._id)));
-  }, [selectedSource, sourceMenuItems]);
+    // Select all source items when the source (or its menu) changes.
+    setSelectedImportItemIds(
+      sourceMenuItemIdsKey
+        ? new Set(sourceMenuItemIdsKey.split(","))
+        : new Set(),
+    );
+  }, [selectedSource?._id, sourceMenuItemIdsKey]);
 
   const categoryTreeRows = useMemo(() => {
     type Row = { cat: AdminCategory; level: number };
