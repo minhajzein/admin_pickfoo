@@ -428,7 +428,13 @@ export function RestaurantMenuPanel({
     isFetching: isSourceMenuFetching,
   } = useQuery({
     queryKey: ["restaurant-menu", selectedSource?._id],
-    queryFn: () => fetchRestaurantMenu(selectedSource!._id),
+    queryFn: () => {
+      const sourceId = selectedSource?._id;
+      if (!sourceId) {
+        return Promise.reject(new Error("Source restaurant is required"));
+      }
+      return fetchRestaurantMenu(sourceId);
+    },
     enabled: isImportModalOpen && !!selectedSource?._id,
   });
 

@@ -110,8 +110,9 @@ export async function uploadRestaurantImage(
 
 export type RestaurantListItem = Pick<
   Restaurant,
-  "_id" | "name" | "email" | "contactNumber" | "status"
+  "name" | "email" | "contactNumber" | "status"
 > & {
+  _id: string;
   address?: { city?: string; street?: string };
 };
 
