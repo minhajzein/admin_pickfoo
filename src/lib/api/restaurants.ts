@@ -107,3 +107,27 @@ export async function uploadRestaurantImage(
     throw new Error(getApiErrorMessage(err, "Upload failed"));
   }
 }
+
+export type RestaurantListItem = Pick<
+  Restaurant,
+  "_id" | "name" | "email" | "contactNumber" | "status"
+> & {
+  address?: { city?: string; street?: string };
+};
+
+export async function searchRestaurants(params?: {
+  search?: string;
+  page?: number;
+  limit?: number;
+  status?: string;
+}): Promise<RestaurantListItem[]> {
+  const { data } = await api.get("/restaurants", {
+    params: {
+      page: params?.page ?? 1,
+      limit: params?.limit ?? 20,
+      search: params?.search?.trim() || undefined,
+      status: params?.status || undefined,
+    },
+  });
+  return (data.data ?? []) as RestaurantListItem[];
+}

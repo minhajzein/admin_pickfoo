@@ -112,6 +112,32 @@ export async function deleteRestaurantMenuItem(
   await api.delete(`/restaurants/${restaurantId}/menu/${itemId}`);
 }
 
+export type ImportRestaurantMenuResult = {
+  imported: number;
+  skipped: number;
+  sourceCount: number;
+  items: AdminMenuItem[];
+};
+
+export async function importRestaurantMenu(
+  targetRestaurantId: string,
+  payload: {
+    sourceRestaurantId: string;
+    itemIds?: string[];
+    /** Default true — skip dishes whose name already exists on the target. */
+    skipExistingNames?: boolean;
+  },
+): Promise<{ message?: string; data: ImportRestaurantMenuResult }> {
+  const { data } = await api.post(
+    `/restaurants/${targetRestaurantId}/menu/import`,
+    payload,
+  );
+  return {
+    message: typeof data.message === "string" ? data.message : undefined,
+    data: data.data as ImportRestaurantMenuResult,
+  };
+}
+
 export async function fetchCategories(params?: {
   search?: string;
   limit?: number;

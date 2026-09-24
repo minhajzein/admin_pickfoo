@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import {
   Edit2,
   ImageIcon,
+  Import,
   Loader2,
   Plus,
   Search,
@@ -25,6 +26,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -40,6 +42,7 @@ import {
   deleteRestaurantMenuItem,
   fetchCategories,
   fetchRestaurantMenu,
+  importRestaurantMenu,
   type AdminCategory,
   type AdminMenuItem,
   type AdminMenuItemInput,
@@ -48,6 +51,10 @@ import {
   updateRestaurantMenuItem,
   uploadMenuImage,
 } from "@/lib/api/menu";
+import {
+  searchRestaurants,
+  type RestaurantListItem,
+} from "@/lib/api/restaurants";
 import { fetchCustomerOffers } from "@/lib/api/customer-offers";
 import { unitOfferPrice } from "@/lib/menuOfferPrice";
 import { CustomerStyleMenuCard } from "@/components/restaurants/CustomerStyleMenuCard";
@@ -311,12 +318,30 @@ export function RestaurantMenuPanel({
     linkedMenuItemCount?: number;
   } | null>(null);
 
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [importSearch, setImportSearch] = useState("");
+  const [debouncedImportSearch, setDebouncedImportSearch] = useState("");
+  const [selectedSource, setSelectedSource] =
+    useState<RestaurantListItem | null>(null);
+  const [skipExistingNames, setSkipExistingNames] = useState(true);
+  const [selectedImportItemIds, setSelectedImportItemIds] = useState<
+    Set<string>
+  >(new Set());
+  const [isImporting, setIsImporting] = useState(false);
+
   useEffect(() => {
     const t = window.setTimeout(() => {
       setDebouncedCategoryListSearch(categoryListSearch.trim());
     }, 250);
     return () => window.clearTimeout(t);
   }, [categoryListSearch]);
+
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      setDebouncedImportSearch(importSearch.trim());
+    }, 250);
+    return () => window.clearTimeout(t);
+  }, [importSearch]);
 
   const { data: menuItems = [], isLoading: isMenuLoading } = useQuery({
     queryKey: ["restaurant-menu", restaurantId],
@@ -378,6 +403,42 @@ export function RestaurantMenuPanel({
       }),
     enabled: isCategoryModalOpen,
   });
+
+  const { data: importRestaurantOptions = [], isFetching: isImportSearchLoading } =
+    useQuery({
+      queryKey: ["menu-import-restaurants", debouncedImportSearch],
+      queryFn: () =>
+        searchRestaurants({
+          search: debouncedImportSearch || undefined,
+          page: 1,
+          limit: 20,
+        }),
+      enabled: isImportModalOpen,
+      staleTime: 30_000,
+    });
+
+  const importCandidates = useMemo(
+    () => importRestaurantOptions.filter((r) => r._id !== restaurantId),
+    [importRestaurantOptions, restaurantId],
+  );
+
+  const {
+    data: sourceMenuItems = [],
+    isLoading: isSourceMenuLoading,
+    isFetching: isSourceMenuFetching,
+  } = useQuery({
+    queryKey: ["restaurant-menu", selectedSource?._id],
+    queryFn: () => fetchRestaurantMenu(selectedSource!._id),
+    enabled: isImportModalOpen && !!selectedSource?._id,
+  });
+
+  useEffect(() => {
+    if (!selectedSource) {
+      setSelectedImportItemIds(new Set());
+      return;
+    }
+    setSelectedImportItemIds(new Set(sourceMenuItems.map((item) => item._id)));
+  }, [selectedSource, sourceMenuItems]);
 
   const categoryTreeRows = useMemo(() => {
     type Row = { cat: AdminCategory; level: number };
@@ -481,6 +542,76 @@ export function RestaurantMenuPanel({
   };
   const invalidateCategories = () => {
     queryClient.invalidateQueries({ queryKey: ["menu-categories"] });
+  };
+
+  const resetImportModal = () => {
+    setImportSearch("");
+    setDebouncedImportSearch("");
+    setSelectedSource(null);
+    setSkipExistingNames(true);
+    setSelectedImportItemIds(new Set());
+    setIsImporting(false);
+  };
+
+  const openImportModal = () => {
+    resetImportModal();
+    setIsImportModalOpen(true);
+  };
+
+  const toggleImportItem = (itemId: string) => {
+    setSelectedImportItemIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(itemId)) next.delete(itemId);
+      else next.add(itemId);
+      return next;
+    });
+  };
+
+  const selectAllImportItems = () => {
+    setSelectedImportItemIds(new Set(sourceMenuItems.map((item) => item._id)));
+  };
+
+  const clearImportItemSelection = () => {
+    setSelectedImportItemIds(new Set());
+  };
+
+  const handleImportMenu = async () => {
+    if (!selectedSource) {
+      toast.error("Select a source restaurant");
+      return;
+    }
+    if (selectedImportItemIds.size === 0) {
+      toast.error("Select at least one menu item to import");
+      return;
+    }
+    setIsImporting(true);
+    try {
+      const result = await importRestaurantMenu(restaurantId, {
+        sourceRestaurantId: selectedSource._id,
+        itemIds: [...selectedImportItemIds],
+        skipExistingNames,
+      });
+      invalidateMenu();
+      toast.success(
+        result.message ||
+          `Imported ${result.data.imported} item(s)${
+            result.data.skipped > 0
+              ? ` (skipped ${result.data.skipped})`
+              : ""
+          }`,
+      );
+      setIsImportModalOpen(false);
+      resetImportModal();
+    } catch (err: unknown) {
+      const msg =
+        err && typeof err === "object" && "response" in err
+          ? (err as { response?: { data?: { message?: string } } }).response?.data
+              ?.message
+          : undefined;
+      toast.error(msg || "Failed to import menu");
+    } finally {
+      setIsImporting(false);
+    }
   };
 
   const deleteItemMutation = useMutation({
@@ -1089,6 +1220,15 @@ export function RestaurantMenuPanel({
           </p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            className="border-white/10 text-white hover:bg-white/5"
+            onClick={openImportModal}
+          >
+            <Import size={16} className="mr-2" />
+            Import menu
+          </Button>
           <Button
             type="button"
             variant="outline"
@@ -2052,6 +2192,220 @@ export function RestaurantMenuPanel({
           </DialogFooter>
           </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Import menu dialog */}
+      <Dialog
+        open={isImportModalOpen}
+        onOpenChange={(open) => {
+          setIsImportModalOpen(open);
+          if (!open) resetImportModal();
+        }}
+      >
+        <DialogContent className="bg-[#002833] border-white/10 text-white max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Import menu</DialogTitle>
+            <DialogDescription className="text-white/40">
+              Copy dishes from another restaurant (e.g. a branch) into{" "}
+              {restaurantName || "this restaurant"}. Items are cloned so each
+              location can edit independently.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-white/70">Source restaurant</Label>
+              <div className="relative">
+                <Search
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30"
+                  size={16}
+                />
+                <Input
+                  value={importSearch}
+                  onChange={(e) => setImportSearch(e.target.value)}
+                  placeholder="Search restaurants..."
+                  className="pl-10 bg-white/5 border-white/10 text-white"
+                />
+              </div>
+              {selectedSource ? (
+                <div className="flex items-center justify-between gap-2 rounded-xl border border-[#98E32F]/30 bg-[#98E32F]/10 px-3 py-2">
+                  <div className="min-w-0">
+                    <p className="font-medium text-white truncate">
+                      {selectedSource.name}
+                    </p>
+                    <p className="text-xs text-white/40 truncate">
+                      {[selectedSource.address?.city, selectedSource.email]
+                        .filter(Boolean)
+                        .join(" · ") || "Selected source"}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="shrink-0 text-white/50 hover:text-white"
+                    onClick={() => setSelectedSource(null)}
+                  >
+                    <X size={16} />
+                  </Button>
+                </div>
+              ) : (
+                <div className="max-h-40 overflow-y-auto rounded-xl border border-white/10 divide-y divide-white/5">
+                  {isImportSearchLoading ? (
+                    <div className="flex items-center justify-center gap-2 py-6 text-white/40 text-sm">
+                      <Loader2 className="animate-spin" size={16} />
+                      Searching...
+                    </div>
+                  ) : importCandidates.length === 0 ? (
+                    <p className="py-6 text-center text-sm text-white/40">
+                      No restaurants found
+                    </p>
+                  ) : (
+                    importCandidates.map((r) => (
+                      <button
+                        key={r._id}
+                        type="button"
+                        className="w-full text-left px-3 py-2.5 hover:bg-white/5 transition-colors"
+                        onClick={() => setSelectedSource(r)}
+                      >
+                        <p className="font-medium text-white truncate">
+                          {r.name}
+                        </p>
+                        <p className="text-xs text-white/40 truncate">
+                          {[r.address?.city, r.email].filter(Boolean).join(" · ")}
+                        </p>
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+
+            {selectedSource && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <Label className="text-white/70">
+                    Items to import
+                    {!isSourceMenuLoading && (
+                      <span className="ml-1 text-white/35 font-normal">
+                        ({selectedImportItemIds.size}/{sourceMenuItems.length})
+                      </span>
+                    )}
+                  </Label>
+                  <div className="flex gap-1">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs text-white/50 hover:text-white"
+                      onClick={selectAllImportItems}
+                      disabled={sourceMenuItems.length === 0}
+                    >
+                      All
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs text-white/50 hover:text-white"
+                      onClick={clearImportItemSelection}
+                      disabled={selectedImportItemIds.size === 0}
+                    >
+                      None
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="max-h-52 overflow-y-auto rounded-xl border border-white/10 divide-y divide-white/5">
+                  {isSourceMenuLoading || isSourceMenuFetching ? (
+                    <div className="flex items-center justify-center gap-2 py-8 text-white/40 text-sm">
+                      <Loader2 className="animate-spin" size={16} />
+                      Loading menu...
+                    </div>
+                  ) : sourceMenuItems.length === 0 ? (
+                    <p className="py-8 text-center text-sm text-white/40">
+                      This restaurant has no menu items
+                    </p>
+                  ) : (
+                    sourceMenuItems.map((item) => {
+                      const checked = selectedImportItemIds.has(item._id);
+                      return (
+                        <label
+                          key={item._id}
+                          className="flex items-start gap-3 px-3 py-2.5 cursor-pointer hover:bg-white/5"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleImportItem(item._id)}
+                            className="mt-1 accent-[#98E32F]"
+                          />
+                          <span className="min-w-0 flex-1">
+                            <span className="block font-medium text-white truncate">
+                              {item.name}
+                            </span>
+                            <span className="block text-xs text-white/40 truncate">
+                              {menuItemCategories(item).join(", ") ||
+                                "Uncategorized"}{" "}
+                              · ₹{item.price}
+                            </span>
+                          </span>
+                        </label>
+                      );
+                    })
+                  )}
+                </div>
+
+                <label className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={skipExistingNames}
+                    onChange={(e) => setSkipExistingNames(e.target.checked)}
+                    className="mt-0.5 accent-[#98E32F]"
+                  />
+                  <span className="text-sm text-white/70">
+                    Skip items that already exist here (same name)
+                  </span>
+                </label>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2 sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              className="border-white/10 text-white hover:bg-white/5"
+              onClick={() => setIsImportModalOpen(false)}
+              disabled={isImporting}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              className="bg-[#98E32F] text-[#013644] hover:bg-[#86c926] font-bold"
+              onClick={handleImportMenu}
+              disabled={
+                isImporting ||
+                !selectedSource ||
+                selectedImportItemIds.size === 0
+              }
+            >
+              {isImporting ? (
+                <>
+                  <Loader2 className="mr-2 animate-spin" size={16} />
+                  Importing...
+                </>
+              ) : (
+                <>
+                  <Import size={16} className="mr-2" />
+                  Import {selectedImportItemIds.size || ""} item
+                  {selectedImportItemIds.size === 1 ? "" : "s"}
+                </>
+              )}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
