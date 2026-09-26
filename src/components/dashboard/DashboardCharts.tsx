@@ -26,6 +26,7 @@ import { Loader2 } from "lucide-react";
 
 const ORDERS_COLOR = "#ef4444";
 const REVENUE_COLOR = "#3b82f6";
+const COMMISSION_COLOR = "#98E32F";
 const BAR_COLOR = "#f59e0b";
 const SHARE_COLORS = [
   "#f97316",
@@ -93,6 +94,7 @@ export function DashboardCharts() {
     () =>
       (data?.daily ?? []).map((row) => ({
         ...row,
+        commission: Number(row.commission) || 0,
         label: formatDayLabel(row.date),
       })),
     [data?.daily],
@@ -126,7 +128,15 @@ export function DashboardCharts() {
     );
   }
 
-  const empty = !daily.some((d) => d.orders > 0 || d.revenue > 0);
+  const empty = !daily.some(
+    (d) => d.orders > 0 || d.revenue > 0 || d.commission > 0,
+  );
+
+  const seriesLabel = (key: unknown) => {
+    if (key === "orders") return "Orders";
+    if (key === "commission") return "Commission (₹)";
+    return "Revenue (₹)";
+  };
 
   return (
     <div className="space-y-6">
@@ -175,7 +185,7 @@ export function DashboardCharts() {
                 tick={{ fill: "rgba(255,255,255,0.45)", fontSize: 11 }}
                 tickFormatter={(v) => moneyFmt.format(Number(v))}
                 label={{
-                  value: "Revenue ₹",
+                  value: "₹",
                   angle: 90,
                   position: "insideRight",
                   fill: "rgba(255,255,255,0.45)",
@@ -192,7 +202,7 @@ export function DashboardCharts() {
                           style={{ background: String(p.color) }}
                         />
                         <span>
-                          {p.dataKey === "orders" ? "Orders" : "Revenue (₹)"}:{" "}
+                          {seriesLabel(p.dataKey)}:{" "}
                           {p.dataKey === "orders"
                             ? Number(p.value ?? 0)
                             : moneyExact.format(Number(p.value ?? 0))}
@@ -204,9 +214,7 @@ export function DashboardCharts() {
               />
               <Legend
                 wrapperStyle={{ color: "rgba(255,255,255,0.7)", fontSize: 12 }}
-                formatter={(value) =>
-                  value === "orders" ? "Orders" : "Revenue (₹)"
-                }
+                formatter={(value) => seriesLabel(value)}
               />
               <Area
                 yAxisId="revenue"
@@ -234,6 +242,16 @@ export function DashboardCharts() {
                 stroke={REVENUE_COLOR}
                 strokeWidth={2.5}
                 dot={{ r: 3, fill: REVENUE_COLOR, strokeWidth: 0 }}
+                activeDot={{ r: 5 }}
+              />
+              <Line
+                yAxisId="revenue"
+                type="monotone"
+                dataKey="commission"
+                name="commission"
+                stroke={COMMISSION_COLOR}
+                strokeWidth={2.5}
+                dot={{ r: 3, fill: COMMISSION_COLOR, strokeWidth: 0 }}
                 activeDot={{ r: 5 }}
               />
             </ComposedChart>
