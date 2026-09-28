@@ -37,6 +37,7 @@ import {
   Gift,
   Ticket,
   IndianRupee,
+  Layers,
   Loader2,
 } from "lucide-react";
 import { io } from "socket.io-client";
@@ -66,6 +67,7 @@ const NAV_ITEMS: Array<{
   { name: "Re-engagement pushes", icon: Bell, href: "/reengage" },
   { name: "Coupons & vouchers", icon: Ticket, href: "/coupons" },
   { name: "Delivery charges", icon: IndianRupee, href: "/delivery-charges" },
+  { name: "Dispatch settings", icon: Layers, href: "/dispatch-settings" },
   { name: "Gigs", icon: ClipboardList, href: "/gigs" },
   { name: "Monitor", icon: Activity, href: "/monitor" },
   { name: "Users", icon: Users, href: "/users" },

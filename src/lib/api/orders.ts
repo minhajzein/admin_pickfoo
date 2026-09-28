@@ -54,6 +54,25 @@ export interface AdminOrderRow {
     reason?: string | null;
     heldAt?: string | null;
   } | null;
+  batch?: AdminOrderBatchSummary | null;
+}
+
+/** Double order link: `primary` is the first order, `secondary` the added one. */
+export interface AdminOrderBatchSummary {
+  role: "primary" | "secondary" | string;
+  kind?: "same_restaurant" | "cross_restaurant" | string | null;
+  payoutPercent?: number | null;
+  mode?: "pre_pickup" | "on_route" | string | null;
+  sameDropOff?: boolean;
+  groupId: string;
+  linkedOrders: Array<{
+    id: string;
+    pickfooId?: string | null;
+    status?: string;
+    progress?: string | null;
+    restaurantName?: string | null;
+    role?: string | null;
+  }>;
 }
 
 export interface AdminOrdersResponse {
@@ -247,6 +266,7 @@ export interface AdminOrderDetail {
     updatedAt?: string | null;
   };
   assignmentVersion: number;
+  batch?: AdminOrderBatchSummary | null;
   createdAt?: string | null;
   updatedAt?: string | null;
 }

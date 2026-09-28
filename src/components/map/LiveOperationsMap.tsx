@@ -169,14 +169,25 @@ function LiveOperationsMap({
                   );
                 }}
               >
-                <PhotoMarker
-                  src={partner.profilePhotoUrl}
-                  alt={partner.fullName}
-                  fallback={partner.fullName.charAt(0)}
-                  borderClassName={
-                    partner.onDuty ? "border-sky-400" : "border-[#98E32F]"
-                  }
-                />
+                <div className="relative">
+                  <PhotoMarker
+                    src={partner.profilePhotoUrl}
+                    alt={partner.fullName}
+                    fallback={partner.fullName.charAt(0)}
+                    borderClassName={
+                      (partner.activeOrderCount ?? 0) > 1
+                        ? "border-amber-400"
+                        : partner.onDuty
+                          ? "border-sky-400"
+                          : "border-[#98E32F]"
+                    }
+                  />
+                  {(partner.activeOrderCount ?? 0) > 1 ? (
+                    <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-400 px-1 text-[10px] font-bold text-[#013644] shadow">
+                      ×{partner.activeOrderCount}
+                    </span>
+                  ) : null}
+                </div>
               </Marker>
             ))
           : null}
@@ -241,11 +252,13 @@ function PartnerPopup({ partner }: { partner: LiveMapPartnerMarker }) {
   return (
     <PopupCard title={partner.fullName} subtitle={partner.phone}>
       <p>
-        {partner.onDuty
-          ? "On delivery"
-          : partner.isOnline
-            ? "Online"
-            : "Offline"}
+        {(partner.activeOrderCount ?? 0) > 1
+          ? `Double order (${partner.activeOrderCount} orders)`
+          : partner.onDuty
+            ? "On delivery"
+            : partner.isOnline
+              ? "Online"
+              : "Offline"}
       </p>
       <p>Priority level {partner.priorityLevel}</p>
       {partner.zones.length ? (

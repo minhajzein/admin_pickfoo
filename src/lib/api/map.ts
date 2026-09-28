@@ -7,6 +7,8 @@ export interface LiveMapPartnerMarker {
   profilePhotoUrl: string;
   isOnline: boolean;
   onDuty: boolean;
+  /** Orders the rider currently holds (2 = double order). */
+  activeOrderCount?: number;
   priorityLevel: number;
   lng: number;
   lat: number;
@@ -37,6 +39,7 @@ export interface LiveMapFeed {
   summary: {
     partnersOnline: number;
     partnersOnDuty: number;
+    partnersWithDoubleOrder: number;
     partnersMapped: number;
     partnersMissingLocation: number;
     restaurantsMapped: number;
@@ -65,6 +68,7 @@ export async function fetchLiveMapFeed(params?: {
     summary: {
       partnersOnline: data.summary?.partnersOnline ?? 0,
       partnersOnDuty: data.summary?.partnersOnDuty ?? 0,
+      partnersWithDoubleOrder: data.summary?.partnersWithDoubleOrder ?? 0,
       partnersMapped: data.summary?.partnersMapped ?? 0,
       partnersMissingLocation: data.summary?.partnersMissingLocation ?? 0,
       restaurantsMapped: data.summary?.restaurantsMapped ?? 0,

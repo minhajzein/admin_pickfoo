@@ -117,6 +117,7 @@ const emptyForm = (
   isVeg: true,
   isActive: true,
   isFeatured: false,
+  notBatchable: false,
   pause: null,
   inactiveUntil: null,
   availableFrom: "",
@@ -853,6 +854,7 @@ export function RestaurantMenuPanel({
             isVeg: item.isVeg,
             isActive: item.isActive,
             isFeatured: item.isFeatured ?? false,
+            notBatchable: item.notBatchable ?? false,
             pause:
               !item.isActive && item.inactiveUntil
                 ? ("today" as const)
@@ -2180,6 +2182,44 @@ export function RestaurantMenuPanel({
                   <p className="mt-2 text-[10px] text-white/35 leading-snug">
                     Needs at least 4 featured items to show on the restaurant
                     menu.
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                  <label className="text-[10px] font-bold text-white/40 uppercase tracking-wider mb-2.5 block">
+                    Time-sensitive (no double orders)
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setForm((p) => ({ ...p, notBatchable: true }))
+                      }
+                      className={`py-2.5 rounded-xl text-[11px] font-black uppercase transition-colors ${
+                        form.notBatchable
+                          ? "bg-[#98E32F] text-[#013644]"
+                          : "bg-white/5 text-white/50 hover:text-white"
+                      }`}
+                    >
+                      Yes
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setForm((p) => ({ ...p, notBatchable: false }))
+                      }
+                      className={`py-2.5 rounded-xl text-[11px] font-black uppercase transition-colors ${
+                        !form.notBatchable
+                          ? "bg-[#98E32F] text-[#013644]"
+                          : "bg-white/5 text-white/50 hover:text-white"
+                      }`}
+                    >
+                      No
+                    </button>
+                  </div>
+                  <p className="mt-2 text-[10px] text-white/35 leading-snug">
+                    Ice cream, cold drinks and similar. Orders with this item
+                    are always delivered alone.
                   </p>
                 </div>
               </div>

@@ -800,6 +800,30 @@ export default function OrdersPage() {
                               Pending start preparing
                             </Badge>
                           ) : null}
+                          {row.batch ? (
+                            <div className="flex flex-wrap items-center gap-1">
+                              <Badge
+                                variant="outline"
+                                className="w-fit border-[#98E32F]/40 bg-[#98E32F]/10 text-[10px] uppercase tracking-wide text-[#98E32F]"
+                              >
+                                Double order ·{" "}
+                                {row.batch.role === "secondary" ? "2nd" : "1st"}
+                              </Badge>
+                              {row.batch.linkedOrders.map((linked) => {
+                                const linkedRef =
+                                  linked.pickfooId?.trim() || linked.id;
+                                return (
+                                  <Link
+                                    key={linked.id}
+                                    href={`/orders/${encodeURIComponent(linkedRef)}`}
+                                    className="text-[10px] text-white/50 hover:text-[#98E32F] hover:underline"
+                                  >
+                                    + {linkedRef}
+                                  </Link>
+                                );
+                              })}
+                            </div>
+                          ) : null}
                         </div>
                       </TableCell>
                       <TableCell className="max-w-45 text-white/80">

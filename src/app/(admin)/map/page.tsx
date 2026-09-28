@@ -83,7 +83,11 @@ export default function LiveMapPage() {
         <SummaryCard
           title="Partners on map"
           value={summary?.partnersMapped ?? 0}
-          hint={`${summary?.partnersOnline ?? 0} online · ${summary?.partnersOnDuty ?? 0} on delivery`}
+          hint={`${summary?.partnersOnline ?? 0} online · ${summary?.partnersOnDuty ?? 0} on delivery${
+            summary?.partnersWithDoubleOrder
+              ? ` · ${summary.partnersWithDoubleOrder} double`
+              : ""
+          }`}
           icon={<Bike className="h-4 w-4 text-[#98E32F]" />}
         />
         <SummaryCard

@@ -61,6 +61,17 @@ export async function updatePartnerAllowOrdersFromAnywhere(
   return data.data;
 }
 
+export async function updatePartnerAllowBatchedOrders(
+  partnerId: string,
+  allowBatchedOrders: boolean,
+): Promise<Partner> {
+  const { data } = await api.patch(
+    `/partners/${partnerId}/allow-batched-orders`,
+    { allowBatchedOrders },
+  );
+  return data.data;
+}
+
 /** Link partner to one restaurant (dedicated), or pass null to return to platform fleet. */
 export async function updatePartnerRestaurantLink(
   partnerId: string,

@@ -258,6 +258,10 @@ export interface Partner {
    * Order offers still only unlock the zone they are physically in.
    */
   allowOrdersFromAnywhere?: boolean;
+  /** Per-partner switch for double orders (defaults to true when unset). */
+  allowBatchedOrders?: boolean;
+  /** Double-order assignments held alongside currentAssignmentOrderId. */
+  batchOrderIds?: string[];
   /** Zone the partner is currently online inside (from live GPS). */
   activeZoneId?: string | DeliveryZoneSummary | null;
   /**

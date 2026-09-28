@@ -21,6 +21,7 @@ import {
   updatePartnerDetails,
   updatePartnerPriorityLevel,
   updatePartnerAllowOrdersFromAnywhere,
+  updatePartnerAllowBatchedOrders,
   updatePartnerRestaurantLink,
   updatePartnerSecurityDeposit,
   updatePartnerZones,
@@ -257,6 +258,21 @@ export default function PartnerDetailsPage() {
     },
     onError: () =>
       toast.error("Failed to update take-orders-from-anywhere setting"),
+  });
+
+  const allowBatchedMutation = useMutation({
+    mutationFn: (allowBatchedOrders: boolean) =>
+      updatePartnerAllowBatchedOrders(String(partnerId), allowBatchedOrders),
+    onSuccess: (updated) => {
+      queryClient.invalidateQueries({ queryKey: ["partner", partnerId] });
+      queryClient.invalidateQueries({ queryKey: ["partners"] });
+      toast.success(
+        updated.allowBatchedOrders === false
+          ? "Double orders disabled for this partner"
+          : "Double orders enabled for this partner",
+      );
+    },
+    onError: () => toast.error("Failed to update double orders setting"),
   });
 
   const restaurantLinkMutation = useMutation({
@@ -899,6 +915,43 @@ export default function PartnerDetailsPage() {
                   </span>
                 </span>
                 {allowAnywhereMutation.isPending && (
+                  <Loader2 className="ml-auto h-4 w-4 shrink-0 animate-spin text-white/50" />
+                )}
+              </label>
+            </CardContent>
+          </Card>
+
+          <Card className="border-white/5 bg-[#002833] text-white">
+            <CardHeader>
+              <CardTitle>Double orders</CardTitle>
+              <CardDescription className="text-white/50">
+                When double orders are enabled in Dispatch settings, this partner
+                can be offered a second order before picking up the first.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-white/5 px-3 py-3 hover:bg-white/5">
+                <input
+                  type="checkbox"
+                  checked={partner.allowBatchedOrders !== false}
+                  disabled={allowBatchedMutation.isPending}
+                  onChange={(e) => allowBatchedMutation.mutate(e.target.checked)}
+                  className="mt-1 accent-[#98E32F]"
+                />
+                <span className="text-sm">
+                  <span className="block font-medium">Allow double orders</span>
+                  <span className="block text-white/50 text-xs mt-1">
+                    {partner.allowBatchedOrders !== false
+                      ? "Enabled — may carry two orders at once"
+                      : "Disabled — always one order at a time"}
+                  </span>
+                  {(partner.batchOrderIds?.length ?? 0) > 0 && (
+                    <span className="block text-[#98E32F] text-xs mt-1">
+                      Currently carrying a double order
+                    </span>
+                  )}
+                </span>
+                {allowBatchedMutation.isPending && (
                   <Loader2 className="ml-auto h-4 w-4 shrink-0 animate-spin text-white/50" />
                 )}
               </label>

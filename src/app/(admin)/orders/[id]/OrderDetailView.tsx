@@ -965,6 +965,52 @@ export default function OrderDetailPage() {
                   value={order.deliveryPartner.decision.status}
                 />
               ) : null}
+              {order.batch ? (
+                <div className="mt-3 rounded-lg border border-[#98E32F]/30 bg-[#98E32F]/5 p-3 text-sm">
+                  <p className="font-medium text-[#98E32F]">
+                    Double order ·{" "}
+                    {order.batch.role === "secondary"
+                      ? "second order"
+                      : "first order"}
+                  </p>
+                  <p className="mt-1 text-xs text-white/50">
+                    {order.batch.kind === "cross_restaurant"
+                      ? "Nearby restaurant"
+                      : "Same restaurant"}
+                    {order.batch.mode === "on_route" ? " · added on route" : ""}
+                    {order.batch.sameDropOff ? " · same drop-off" : ""}
+                    {order.batch.role === "secondary" &&
+                    typeof order.batch.payoutPercent === "number"
+                      ? ` · rider paid ${order.batch.payoutPercent}% of delivery fee`
+                      : ""}
+                  </p>
+                  {order.batch.linkedOrders.length ? (
+                    <ul className="mt-2 space-y-1">
+                      {order.batch.linkedOrders.map((linked) => {
+                        const linkedRef =
+                          linked.pickfooId?.trim() || linked.id;
+                        return (
+                          <li key={linked.id} className="text-xs">
+                            <Link
+                              href={`/orders/${encodeURIComponent(linkedRef)}`}
+                              className="text-white hover:text-[#98E32F] hover:underline"
+                            >
+                              {linkedRef}
+                            </Link>
+                            <span className="text-white/45">
+                              {linked.restaurantName
+                                ? ` · ${linked.restaurantName}`
+                                : ""}
+                              {linked.status ? ` · ${linked.status}` : ""}
+                              {linked.progress ? ` · ${linked.progress}` : ""}
+                            </span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : null}
+                </div>
+              ) : null}
             </>
           ) : (
             <p className="py-2 text-sm text-white/40">No partner assigned.</p>
@@ -1779,6 +1825,8 @@ export default function OrderDetailPage() {
               Sends a live offer to the partner app (pending accept). Does not
               accept or start preparing for the restaurant — kitchen status stays
               as-is. Auto-dispatch stays stopped so the offer is not reassigned.
+              Picking a rider who is already carrying an order sends this as a
+              double order at the second-order payout %.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
@@ -1804,13 +1852,21 @@ export default function OrderDetailPage() {
                       : p.employmentType === "restaurant"
                         ? "dedicated"
                         : null;
+                  const isCurrent = p._id === order.deliveryPartner?.id;
+                  const carrying =
+                    (p.currentAssignmentOrderId ? 1 : 0) +
+                    (p.batchOrderIds?.length ?? 0);
+                  const isFull = !isCurrent && carrying >= 2;
+                  const willBatch = !isCurrent && carrying === 1;
                   return (
-                  <option key={p._id} value={p._id}>
+                  <option key={p._id} value={p._id} disabled={isFull}>
                     {p.fullName}
                     {p.phone ? ` · ${p.phone}` : ""}
                     {p.isOnline ? " · online" : ""}
                     {p.onDuty ? " · on duty" : ""}
                     {dedicatedName ? ` · ${dedicatedName}` : ""}
+                    {willBatch ? " · busy → double order" : ""}
+                    {isFull ? " · full (2 orders)" : ""}
                   </option>
                   );
                 })}

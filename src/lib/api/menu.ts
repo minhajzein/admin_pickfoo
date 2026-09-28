@@ -23,6 +23,8 @@ export interface AdminMenuItem {
   inactiveUntil?: string | null;
   /** Highlighted in Featured strip when restaurant has ≥4 featured items. */
   isFeatured?: boolean;
+  /** Time-sensitive (ice cream, cold drinks): orders with it are never combined into a double order. */
+  notBatchable?: boolean;
   availableFrom?: string;
   availableTo?: string;
   /** Multiple daily HH:mm windows; empty = all day. */
@@ -65,6 +67,7 @@ export interface AdminMenuItemInput {
   isVeg: boolean;
   isActive: boolean;
   isFeatured?: boolean;
+  notBatchable?: boolean;
   /** 'today' = off until next IST midnight; omit for permanent off. */
   pause?: "today" | null;
   inactiveUntil?: string | null;
