@@ -107,6 +107,7 @@ const emptyForm = (
   name: "",
   description: "",
   price: 0,
+  offerPrice: null,
   category: "",
   categories: [],
   type: "lunch",
@@ -193,6 +194,14 @@ function validateForm(
     if (!variant.name?.trim()) return "Each variant needs a name";
     if (!Number.isFinite(variant.price) || variant.price <= 0) {
       return `Variant "${variant.name}" needs an original price so final is > 0`;
+    }
+  }
+  if (form.offerPrice != null && (form.variants ?? []).length === 0) {
+    if (!Number.isFinite(form.offerPrice) || form.offerPrice <= 0) {
+      return "Offer price must be greater than 0";
+    }
+    if (form.offerPrice >= form.price) {
+      return "Offer price must be lower than the final price";
     }
   }
   if (!form.mealTypes || form.mealTypes.length === 0) {
@@ -844,6 +853,7 @@ export function RestaurantMenuPanel({
             name: item.name,
             description: item.description,
             price: item.price,
+            offerPrice: item.offerPrice ?? null,
             category: cats[0] ?? item.category ?? "",
             categories: cats,
             type: item.type || "lunch",
@@ -1072,6 +1082,10 @@ export function RestaurantMenuPanel({
       type: (form.mealTypes?.[0] as MealType | undefined) ?? form.type ?? "lunch",
       mealTypes: form.mealTypes ?? [form.type ?? "lunch"],
       variants: (form.variants ?? []).filter((v) => v.name.trim()),
+      offerPrice:
+        (form.variants ?? []).filter((v) => v.name.trim()).length > 0
+          ? null
+          : (form.offerPrice ?? null),
       ingredients: form.ingredients ?? [],
       image: form.image || undefined,
       restaurantTypes: form.restaurantTypes ?? ["restaurant"],
@@ -1565,6 +1579,49 @@ export function RestaurantMenuPanel({
                     className="mt-1 bg-[#98E32F]/10 border-[#98E32F]/30 text-[#98E32F] font-semibold"
                   />
                 </div>
+              </div>
+              <div className="border-t border-white/10 pt-3">
+                <div className="flex items-end gap-3">
+                  <div className="w-40">
+                    <label className="text-[10px] font-bold text-white/40 uppercase tracking-wider">
+                      Offer price (₹)
+                    </label>
+                    <Input
+                      type="number"
+                      min={0}
+                      step="1"
+                      disabled={(form.variants ?? []).length > 0}
+                      value={form.offerPrice ?? ""}
+                      onChange={(e) =>
+                        setForm((p) => ({
+                          ...p,
+                          offerPrice:
+                            e.target.value === "" ? null : Number(e.target.value),
+                        }))
+                      }
+                      placeholder="Optional"
+                      className="mt-1 bg-black/20 border-white/10 text-white"
+                    />
+                  </div>
+                  {form.offerPrice != null &&
+                  form.price > 0 &&
+                  form.offerPrice > 0 &&
+                  form.offerPrice < form.price ? (
+                    <p className="pb-2 text-xs text-[#98E32F]">
+                      {Math.round((1 - form.offerPrice / form.price) * 100)}% off ·
+                      customers pay ₹{form.offerPrice} instead of ₹{form.price}
+                    </p>
+                  ) : form.offerPrice != null && form.offerPrice >= form.price ? (
+                    <p className="pb-2 text-xs text-red-400">
+                      Must be lower than the final price
+                    </p>
+                  ) : null}
+                </div>
+                <p className="mt-1.5 text-[10px] text-white/35">
+                  {(form.variants ?? []).length > 0
+                    ? "Offer price isn't available for items with variants."
+                    : "Leave empty for no offer. Customers are charged this price at checkout."}
+                </p>
               </div>
             </div>
 

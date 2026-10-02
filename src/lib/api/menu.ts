@@ -57,6 +57,8 @@ export interface AdminMenuItemInput {
   name: string;
   description: string;
   price: number;
+  /** Sale price customers pay instead of [price]; null = no offer. Not used with variants. */
+  offerPrice?: number | null;
   category: string;
   categories?: string[];
   type: "breakfast" | "lunch" | "dinner";
