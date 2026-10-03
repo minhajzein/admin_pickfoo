@@ -30,6 +30,7 @@ import {
 import { OfferPrice, offerFoodTotal } from "@/components/ui/OfferPrice";
 import {
   canRedispatchPickupOrder,
+  partnerAcceptedBeforePickup,
   cancelSourceLabel,
   fetchDispatchOrders,
   isPaidAwaitingPrep,
@@ -184,6 +185,8 @@ function redispatchReasonLabel(reason?: string): string {
       return "No eligible partner is available right now.";
     case "Partner already accepted this order":
       return "Partner already accepted this order.";
+    case "Partner already picked up this order":
+      return "Partner already picked up this order — it can't be redispatched.";
     default:
       return reason || "Could not assign a new partner.";
   }
@@ -398,7 +401,14 @@ export default function OrdersPage() {
   const redispatchMutation = useMutation({
     mutationFn: (row: AdminOrderRow) => {
       const orderRef = row.pickfooId?.trim() || row.id;
-      return redispatchOrder(orderRef, "Admin triggered redispatch");
+      const accepted = partnerAcceptedBeforePickup(row);
+      return redispatchOrder(
+        orderRef,
+        accepted
+          ? "Admin redispatched accepted order"
+          : "Admin triggered redispatch",
+        accepted,
+      );
     },
     onMutate: (row) => {
       setRedispatchingRef(row.pickfooId?.trim() || row.id);
@@ -454,6 +464,9 @@ export default function OrdersPage() {
   const confirmAssigned = confirmRow
     ? confirmRow.deliveryPartnerName || confirmRow.assignedPartner
     : null;
+  const confirmAccepted = confirmRow
+    ? partnerAcceptedBeforePickup(confirmRow)
+    : false;
 
   return (
     <div className="space-y-4">
@@ -975,13 +988,24 @@ export default function OrdersPage() {
       >
         <DialogContent className="border-white/10 bg-[#002833] text-white sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Redispatch order?</DialogTitle>
+            <DialogTitle>
+              {confirmAccepted ? "Redispatch accepted order?" : "Redispatch order?"}
+            </DialogTitle>
             <DialogDescription className="text-white/55">
-              {confirmAssigned
-                ? `This will withdraw the current offer from ${confirmAssigned} on order ${confirmLabel} and find another partner.`
-                : `This will find another delivery partner for order ${confirmLabel}.`}
+              {confirmAccepted
+                ? `${confirmAssigned || "A partner"} has already accepted order ${confirmLabel}. They will be removed from this order and it will be offered to another partner.`
+                : confirmAssigned
+                  ? `This will withdraw the current offer from ${confirmAssigned} on order ${confirmLabel} and find another partner.`
+                  : `This will find another delivery partner for order ${confirmLabel}.`}
             </DialogDescription>
           </DialogHeader>
+          {confirmAccepted ? (
+            <p className="rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-200">
+              {confirmRow?.partnerDeliveryProgress === "arrived_at_restaurant"
+                ? "The partner is already at the restaurant. Call them before redispatching so they don't wait for the food."
+                : "The partner may already be on the way to the restaurant. Let them know before redispatching."}
+            </p>
+          ) : null}
           <DialogFooter className="gap-2 sm:justify-end">
             <Button
               type="button"

@@ -322,10 +322,13 @@ export interface RedispatchOrderResponse {
 
 export async function redispatchOrder(
   orderRef: string,
-  reason?: string
+  reason?: string,
+  /** Required to pull an order back from a partner who already accepted it. */
+  allowAccepted?: boolean,
 ): Promise<RedispatchOrderResponse> {
   const { data } = await api.post(`/dispatch/orders/${encodeURIComponent(orderRef)}/redispatch`, {
     reason: reason?.trim() || undefined,
+    allowAccepted: allowAccepted === true || undefined,
   });
   return data;
 }
@@ -551,14 +554,22 @@ export function orderStatusLabel(row: {
   return status || "—";
 }
 
+/** Partner accepted but hasn't picked up yet — admin may still redispatch (with confirmation). */
+function partnerAcceptedBeforePickup(row: AdminOrderRow): boolean {
+  const progress = row.partnerDeliveryProgress?.trim() || "";
+  return progress === "accepted" || progress === "arrived_at_restaurant";
+}
+
 function canRedispatchPickupOrder(row: AdminOrderRow): boolean {
   if (row.orderType !== "pickup") return false;
   if (row.paymentStatus === "refunded") return false;
   if (row.status !== "preparing" && row.status !== "ready") return false;
 
-  // Hide once a partner has accepted (or progressed further).
+  // Hide once the partner has picked up (or progressed further).
   const progress = row.partnerDeliveryProgress?.trim() || "";
-  if (progress && progress !== "pending_accept") return false;
+  if (progress && progress !== "pending_accept" && !partnerAcceptedBeforePickup(row)) {
+    return false;
+  }
 
   return true;
 }
@@ -637,4 +648,9 @@ function cancelSourceLabel(input: {
   return null;
 }
 
-export { canRedispatchPickupOrder, isPaidAwaitingPrep, cancelSourceLabel };
+export {
+  canRedispatchPickupOrder,
+  partnerAcceptedBeforePickup,
+  isPaidAwaitingPrep,
+  cancelSourceLabel,
+};
