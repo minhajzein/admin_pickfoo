@@ -3,12 +3,13 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Bell, Loader2, Plus } from "lucide-react";
+import { Bell, Loader2, Plus, Send, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Table,
   TableBody,
@@ -22,8 +23,12 @@ import {
   fetchPushCopy,
   fetchReengageAnalytics,
   fetchReengageSettings,
+  previewManualPush,
+  sendManualPush,
   updatePushCopy,
   updateReengageSettings,
+  type ManualPushAudience,
+  type ManualPushTarget,
   type PushCopyRow,
 } from "@/lib/api/reengage";
 import { getApiErrorMessage } from "@/lib/axios";
@@ -39,6 +44,181 @@ const CATEGORIES = [
   "winback_never_ordered",
   "winback_lapsed",
 ];
+
+const MANUAL_AUDIENCES: { value: ManualPushAudience; label: string }[] = [
+  { value: "all", label: "All customers" },
+  { value: "never_ordered", label: "Never ordered" },
+  { value: "ordered", label: "Ordered at least once" },
+  { value: "lapsed", label: "Lapsed (no order in N days)" },
+  { value: "specific", label: "Specific customers (phone / email)" },
+];
+
+const TITLE_MAX = 80;
+const BODY_MAX = 180;
+
+function ManualPushCard({ defaultLapsedDays }: { defaultLapsedDays: number }) {
+  const queryClient = useQueryClient();
+  const [audience, setAudience] = useState<ManualPushAudience>("all");
+  const [lapsedDays, setLapsedDays] = useState<number | "">("");
+  const [identifiers, setIdentifiers] = useState("");
+  const [title, setTitle] = useState("");
+  const [body, setBody] = useState("");
+  const [preview, setPreview] = useState<{ recipients: number; devices: number } | null>(null);
+
+  const target = (): ManualPushTarget => ({
+    audience,
+    lapsedAfterDays: audience === "lapsed" ? Number(lapsedDays || defaultLapsedDays) : undefined,
+    identifiers:
+      audience === "specific"
+        ? identifiers.split(/[\s,;]+/).map((s) => s.trim()).filter(Boolean)
+        : undefined,
+  });
+
+  const previewMut = useMutation({
+    mutationFn: () => previewManualPush(target()),
+    onSuccess: setPreview,
+    onError: (err) => toast.error(getApiErrorMessage(err, "Failed to count recipients")),
+  });
+
+  const sendMut = useMutation({
+    mutationFn: () => sendManualPush({ ...target(), title: title.trim(), body: body.trim() }),
+    onSuccess: async (res) => {
+      toast.success(
+        `Delivered to ${res.delivered} of ${res.targeted} customers` +
+          (res.failed ? ` (${res.failed} device failures)` : ""),
+      );
+      setTitle("");
+      setBody("");
+      setPreview(null);
+      await queryClient.invalidateQueries({ queryKey: ["reengage-analytics"] });
+    },
+    onError: (err) => toast.error(getApiErrorMessage(err, "Failed to send push")),
+  });
+
+  const resetPreview = () => setPreview(null);
+  const canSend = title.trim() !== "" && body.trim() !== "" && !sendMut.isPending;
+
+  const onSend = () => {
+    const who = MANUAL_AUDIENCES.find((a) => a.value === audience)?.label ?? audience;
+    const count = preview ? ` (${preview.recipients} customers)` : "";
+    if (!window.confirm(`Send "${title.trim()}" to ${who}${count} now?`)) return;
+    sendMut.mutate();
+  };
+
+  return (
+    <Card className="border-white/10 bg-[#013644]">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-white">
+          <Send size={18} /> Send push manually
+        </CardTitle>
+        <p className="text-sm text-white/60">
+          Sent immediately, ignoring slots and quiet hours. Counts toward each customer&apos;s
+          daily cap.
+        </p>
+      </CardHeader>
+      <CardContent className="grid gap-3 md:grid-cols-2">
+        <div>
+          <Label className="text-white/70">Audience</Label>
+          <select
+            className="h-10 w-full rounded-md bg-black/20 px-3 text-white"
+            value={audience}
+            onChange={(e) => {
+              setAudience(e.target.value as ManualPushAudience);
+              resetPreview();
+            }}
+          >
+            {MANUAL_AUDIENCES.map((a) => (
+              <option key={a.value} value={a.value}>
+                {a.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        {audience === "lapsed" ? (
+          <div>
+            <Label className="text-white/70">No order in last (days)</Label>
+            <Input
+              type="number"
+              min={1}
+              placeholder={String(defaultLapsedDays)}
+              value={lapsedDays}
+              onChange={(e) => {
+                setLapsedDays(e.target.value === "" ? "" : Number(e.target.value));
+                resetPreview();
+              }}
+            />
+          </div>
+        ) : (
+          <div className="hidden md:block" />
+        )}
+        {audience === "specific" ? (
+          <div className="md:col-span-2">
+            <Label className="text-white/70">Phone numbers or emails</Label>
+            <Textarea
+              rows={3}
+              placeholder="9876543210, someone@example.com"
+              value={identifiers}
+              onChange={(e) => {
+                setIdentifiers(e.target.value);
+                resetPreview();
+              }}
+            />
+          </div>
+        ) : null}
+        <div className="md:col-span-2">
+          <Label className="text-white/70">
+            Title ({title.length}/{TITLE_MAX})
+          </Label>
+          <Input
+            maxLength={TITLE_MAX}
+            placeholder="Hungry? 🍕"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+          />
+        </div>
+        <div className="md:col-span-2">
+          <Label className="text-white/70">
+            Message ({body.length}/{BODY_MAX})
+          </Label>
+          <Textarea
+            rows={3}
+            maxLength={BODY_MAX}
+            placeholder="Your favourites are just a tap away."
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+          />
+        </div>
+        <div className="flex flex-wrap items-center gap-3 md:col-span-2">
+          <Button
+            variant="outline"
+            onClick={() => previewMut.mutate()}
+            disabled={previewMut.isPending}
+          >
+            {previewMut.isPending ? (
+              <Loader2 className="animate-spin" size={16} />
+            ) : (
+              <Users size={16} />
+            )}
+            Check recipients
+          </Button>
+          {preview ? (
+            <span className="text-sm text-white/80">
+              {preview.recipients} customers · {preview.devices} devices
+            </span>
+          ) : null}
+          <Button
+            onClick={onSend}
+            disabled={!canSend}
+            className="ml-auto bg-[#98E32F] text-[#013644] hover:bg-[#98E32F]/90"
+          >
+            {sendMut.isPending ? <Loader2 className="animate-spin" size={16} /> : <Send size={16} />}
+            Send now
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function ReengagePage() {
   const queryClient = useQueryClient();
@@ -154,6 +334,8 @@ export default function ReengagePage() {
           <CardContent className="text-2xl font-semibold text-white">{totals.converted}</CardContent>
         </Card>
       </div>
+
+      <ManualPushCard defaultLapsedDays={settingsQuery.data?.lapsedAfterDays ?? 7} />
 
       <Card className="border-white/10 bg-[#013644]">
         <CardHeader>

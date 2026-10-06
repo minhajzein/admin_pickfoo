@@ -88,6 +88,35 @@ export async function updateReengageSettings(
   return data.data as ReengageSettings;
 }
 
+export type ManualPushAudience = "all" | "never_ordered" | "ordered" | "lapsed" | "specific";
+
+export interface ManualPushTarget {
+  audience: ManualPushAudience;
+  lapsedAfterDays?: number;
+  identifiers?: string[];
+}
+
+export interface ManualPushResult {
+  targeted: number;
+  delivered: number;
+  sent: number;
+  failed: number;
+}
+
+export async function previewManualPush(
+  target: ManualPushTarget,
+): Promise<{ recipients: number; devices: number }> {
+  const { data } = await api.post("/reengage/manual/preview", target);
+  return data.data as { recipients: number; devices: number };
+}
+
+export async function sendManualPush(
+  input: ManualPushTarget & { title: string; body: string },
+): Promise<ManualPushResult> {
+  const { data } = await api.post("/reengage/manual/send", input);
+  return data.data as ManualPushResult;
+}
+
 export async function fetchReengageAnalytics(): Promise<PushAnalyticsRow[]> {
   const { data } = await api.get("/reengage/analytics");
   return (data.data || []) as PushAnalyticsRow[];
