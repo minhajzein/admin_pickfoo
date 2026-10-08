@@ -50,6 +50,7 @@ import { toast } from "sonner";
 import { ListPagination } from "@/components/ui/list-pagination";
 import { DEFAULT_PAGE_SIZE, parsePaginatedResponse } from "@/lib/pagination";
 import { visibleRefetchInterval } from "@/lib/query-live";
+import { rangeForPreset, toYmdIst } from "@/lib/date-presets";
 import { adminShellUi } from "@/components/admin/admin-shell-ui";
 import { useRouter } from "next/navigation";
 
@@ -95,57 +96,6 @@ const DATE_PRESETS: Array<{ id: DatePreset; label: string }> = [
 
 const selectClassName =
   "h-9 w-full rounded-md border border-white/15 bg-black/20 px-3 text-sm text-white outline-none focus-visible:border-[#98E32F]/50";
-
-function toYmd(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-function startOfLocalDay(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
-}
-
-/** Monday as start of week (local calendar). */
-function startOfWeekMonday(d: Date): Date {
-  const day = d.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  return startOfLocalDay(
-    new Date(d.getFullYear(), d.getMonth(), d.getDate() + diff),
-  );
-}
-
-function rangeForPreset(preset: DatePreset): { from?: string; to?: string } {
-  const now = new Date();
-  const today = startOfLocalDay(now);
-
-  switch (preset) {
-    case "all":
-      return {};
-    case "today":
-      return { from: toYmd(today), to: toYmd(today) };
-    case "yesterday": {
-      const y = new Date(today);
-      y.setDate(y.getDate() - 1);
-      return { from: toYmd(y), to: toYmd(y) };
-    }
-    case "this_week": {
-      const start = startOfWeekMonday(today);
-      return { from: toYmd(start), to: toYmd(today) };
-    }
-    case "this_month": {
-      const start = new Date(today.getFullYear(), today.getMonth(), 1);
-      return { from: toYmd(start), to: toYmd(today) };
-    }
-    case "this_year": {
-      const start = new Date(today.getFullYear(), 0, 1);
-      return { from: toYmd(start), to: toYmd(today) };
-    }
-    default:
-      return {};
-  }
-}
 
 function formatMoney(value?: number | null): string {
   if (value == null || !Number.isFinite(value)) return "—";
@@ -353,7 +303,7 @@ export default function OrdersPage() {
         setCustomFrom("");
         setCustomTo("");
       } else if (!customFrom && !customTo) {
-        const today = toYmd(startOfLocalDay(new Date()));
+        const today = toYmdIst();
         setCustomFrom(today);
         setCustomTo(today);
       }
