@@ -15,7 +15,7 @@ const LiveOperationsMap = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="flex h-[min(72vh,760px)] min-h-[420px] items-center justify-center rounded-xl border border-white/10 bg-black/20 text-white/50">
+      <div className="flex h-[min(72vh,760px)] min-h-105 items-center justify-center rounded-xl border border-white/10 bg-black/20 text-white/50">
         <Loader2 className="h-8 w-8 animate-spin text-[#98E32F]" />
       </div>
     ),
@@ -148,7 +148,7 @@ export default function LiveMapPage() {
               Set `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN` to render the live map.
             </div>
           ) : isLoading ? (
-            <div className="flex h-[min(72vh,760px)] min-h-[420px] items-center justify-center rounded-xl border border-white/10 bg-black/20 text-white/50">
+            <div className="flex h-[min(72vh,760px)] min-h-105 items-center justify-center rounded-xl border border-white/10 bg-black/20 text-white/50">
               <Loader2 className="h-8 w-8 animate-spin text-[#98E32F]" />
             </div>
           ) : (

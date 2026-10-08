@@ -160,7 +160,7 @@ export default function OrderRouteMap({
   if (!origin || !destination) {
     if (isLoading) {
       return (
-        <div className="flex h-[320px] items-center justify-center text-white/50">
+        <div className="flex h-80 items-center justify-center text-white/50">
           <Loader2 className="h-7 w-7 animate-spin text-[#98E32F]" />
         </div>
       );
@@ -187,7 +187,7 @@ export default function OrderRouteMap({
           </p>
         </div>
       </div>
-      <div className="relative h-[320px] overflow-hidden rounded-lg border border-white/10">
+      <div className="relative h-80 overflow-hidden rounded-lg border border-white/10">
         <MapGL
           ref={mapRef}
           mapLib={mapboxMapLib}
