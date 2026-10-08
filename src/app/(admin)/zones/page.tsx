@@ -48,7 +48,7 @@ const ZoneMapEditor = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="flex h-[min(58vh,560px)] min-h-[320px] items-center justify-center rounded-xl border border-white/10 bg-black/20 text-white/50">
+      <div className="flex h-[min(58vh,560px)] min-h-80 items-center justify-center rounded-xl border border-white/10 bg-black/20 text-white/50">
         <Loader2 className="h-8 w-8 animate-spin text-[#98E32F]" />
       </div>
     ),
@@ -679,9 +679,9 @@ export default function ZonesPage() {
                   GeoJSON (Advanced).
                 </p>
               </div>
-              <div className="relative h-[min(58vh,560px)] min-h-[320px] w-full overflow-hidden rounded-xl border border-white/10 bg-black/30">
+              <div className="relative h-[min(58vh,560px)] min-h-80 w-full overflow-hidden rounded-xl border border-white/10 bg-black/30">
                 {!token ? (
-                  <div className="flex h-full min-h-[320px] flex-col items-center justify-center gap-2 p-6 text-center text-white/50">
+                  <div className="flex h-full min-h-80 flex-col items-center justify-center gap-2 p-6 text-center text-white/50">
                     <p>Set NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN to use the map.</p>
                   </div>
                 ) : (
@@ -723,7 +723,7 @@ export default function ZonesPage() {
                   <Textarea
                     value={geoText}
                     onChange={(e) => setGeoText(e.target.value)}
-                    className="min-h-[160px] border-white/10 bg-black/20 font-mono text-xs text-white"
+                    className="min-h-40 border-white/10 bg-black/20 font-mono text-xs text-white"
                     placeholder='{"type":"Polygon","coordinates":[...]}'
                   />
                   <Button
