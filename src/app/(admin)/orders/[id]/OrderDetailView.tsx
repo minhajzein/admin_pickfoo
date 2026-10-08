@@ -1029,7 +1029,19 @@ export default function OrderDetailPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <OrderRouteMap orderRef={order.pickfooId || order.id} />
+          <OrderRouteMap
+            orderRef={order.pickfooId || order.id}
+            fallbackOrigin={
+              order.restaurant?.lat != null && order.restaurant?.lng != null
+                ? { lat: order.restaurant.lat, lng: order.restaurant.lng }
+                : null
+            }
+            fallbackDestination={
+              order.deliveryLat != null && order.deliveryLng != null
+                ? { lat: order.deliveryLat, lng: order.deliveryLng }
+                : null
+            }
+          />
         </CardContent>
       </Card>
 

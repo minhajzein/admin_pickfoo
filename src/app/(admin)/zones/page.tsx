@@ -15,6 +15,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { useMapboxAccessToken } from "@/lib/mapbox-token-context";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -127,7 +128,7 @@ async function loadLsgGeometryByCode(
 }
 
 export default function ZonesPage() {
-  const token = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN ?? "";
+  const token = useMapboxAccessToken();
   const queryClient = useQueryClient();
 
   const { data: zones = [], isLoading } = useQuery({

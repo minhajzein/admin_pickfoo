@@ -176,14 +176,8 @@
   }
 }
 
-/* Mapbox: fill the relatively-positioned admin containers */
+/* Let Mapbox set the canvas pixel size. Forcing width/height here leaves a blank map. */
 .mapboxgl-map {
-  width: 100%;
-  height: 100%;
-}
-
-.mapboxgl-canvas-container,
-.mapboxgl-canvas {
   width: 100%;
   height: 100%;
 }

@@ -8,6 +8,7 @@ import Map, {
 } from "react-map-gl/mapbox";
 import { Loader2, MapPin, Search, Store } from "lucide-react";
 import { mapboxMapLib } from "@/lib/mapbox";
+import { useMapboxAccessToken } from "@/lib/mapbox-token-context";
 
 const WAYANAD = { longitude: 76.132, latitude: 11.685, zoom: 12 };
 
@@ -80,7 +81,7 @@ export function RestaurantLocationPicker({
   onChange: (point: RestaurantMapPoint) => void;
   onAddressHint?: (hint: RestaurantAddressHint) => void;
 }) {
-  const token = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN ?? "";
+  const token = useMapboxAccessToken();
   const mapRef = useRef<MapRef>(null);
   const hasPin = lat != null && lng != null && isValidPoint(lat, lng);
   const [query, setQuery] = useState("");

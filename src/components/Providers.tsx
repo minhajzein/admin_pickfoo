@@ -2,8 +2,15 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState } from 'react';
+import { MapboxTokenProvider } from '@/lib/mapbox-token-context';
 
-export default function Providers({ children }: { children: React.ReactNode }) {
+export default function Providers({
+  children,
+  mapboxToken = '',
+}: {
+  children: React.ReactNode;
+  mapboxToken?: string;
+}) {
   const [queryClient] = useState(
     () =>
       new QueryClient({
@@ -18,5 +25,9 @@ export default function Providers({ children }: { children: React.ReactNode }) {
       })
   );
 
-  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+  return (
+    <MapboxTokenProvider token={mapboxToken}>
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    </MapboxTokenProvider>
+  );
 }

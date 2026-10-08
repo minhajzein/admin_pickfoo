@@ -278,7 +278,7 @@ export interface AdminOrderRoute {
     type: "LineString";
     coordinates: [number, number][];
   };
-  provider: "google";
+  provider: "google" | "osrm";
   computedAt: string;
   origin: { lat: number; lng: number };
   destination: { lat: number; lng: number };

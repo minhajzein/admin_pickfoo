@@ -3,6 +3,7 @@
 import Map, { Marker, NavigationControl } from "react-map-gl/mapbox";
 import { ExternalLink, MapPin, Store } from "lucide-react";
 import { mapboxMapLib } from "@/lib/mapbox";
+import { useMapboxAccessToken } from "@/lib/mapbox-token-context";
 
 export function RestaurantLocationMap({
   lat,
@@ -15,7 +16,7 @@ export function RestaurantLocationMap({
   name: string;
   className?: string;
 }) {
-  const token = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN ?? "";
+  const token = useMapboxAccessToken();
   const valid =
     Number.isFinite(lat) &&
     Number.isFinite(lng) &&

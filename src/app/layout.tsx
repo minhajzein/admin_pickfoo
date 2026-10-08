@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import Providers from "@/components/Providers";
+import { readMapboxAccessToken } from "@/lib/mapbox-token";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -23,7 +24,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`dark ${inter.variable} ${inter.className}`}>
       <body className="min-h-dvh font-sans antialiased">
-        <Providers>{children}</Providers>
+        <Providers mapboxToken={readMapboxAccessToken()}>{children}</Providers>
       </body>
     </html>
   );

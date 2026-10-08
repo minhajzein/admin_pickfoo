@@ -11,11 +11,15 @@ import MapGL, {
 } from "react-map-gl/mapbox";
 import type { LineLayerSpecification } from "mapbox-gl";
 import { mapboxMapLib } from "@/lib/mapbox";
+import { useMapboxAccessToken } from "@/lib/mapbox-token-context";
 import { Loader2, MapPin, Store } from "lucide-react";
+import { getApiErrorMessage } from "@/lib/axios";
 import {
   fetchDispatchOrderRoute,
   type AdminOrderRoute,
 } from "@/lib/api/orders";
+
+type MapPoint = { lat: number; lng: number };
 
 function formatDuration(seconds: number): string {
   const minutes = Math.max(0, Math.round(seconds / 60));
@@ -73,8 +77,16 @@ function fitRoute(
   );
 }
 
-export default function OrderRouteMap({ orderRef }: { orderRef: string }) {
-  const token = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN ?? "";
+export default function OrderRouteMap({
+  orderRef,
+  fallbackOrigin = null,
+  fallbackDestination = null,
+}: {
+  orderRef: string;
+  fallbackOrigin?: MapPoint | null;
+  fallbackDestination?: MapPoint | null;
+}) {
+  const token = useMapboxAccessToken();
   const mapRef = useRef<MapRef>(null);
   const fittedRef = useRef("");
   const { data: route, isLoading, error } = useQuery({
@@ -84,28 +96,59 @@ export default function OrderRouteMap({ orderRef }: { orderRef: string }) {
     staleTime: 60_000,
     retry: 1,
   });
+  const origin = route?.origin ?? fallbackOrigin;
+  const destination = route?.destination ?? fallbackDestination;
+
+  const lineGeometry = useMemo(() => {
+    if (route) return route.geometry;
+    if (!origin || !destination) return null;
+    return {
+      type: "LineString" as const,
+      coordinates: [
+        [origin.lng, origin.lat],
+        [destination.lng, destination.lat],
+      ] as [number, number][],
+    };
+  }, [route, origin, destination]);
 
   const routeGeoJson = useMemo(
     () =>
-      route
+      lineGeometry
         ? {
             type: "Feature" as const,
             properties: {},
-            geometry: route.geometry,
+            geometry: lineGeometry,
           }
         : null,
-    [route],
+    [lineGeometry],
   );
 
+  const fitTarget = useMemo<AdminOrderRoute | null>(() => {
+    if (route) return route;
+    if (!origin || !destination || !lineGeometry) return null;
+    return {
+      distanceKm: 0,
+      durationSeconds: 0,
+      geometry: lineGeometry,
+      provider: "osrm",
+      computedAt: "fallback",
+      origin,
+      destination,
+      originSource: "order_snapshot",
+    };
+  }, [route, origin, destination, lineGeometry]);
+
   useEffect(() => {
-    if (!route || fittedRef.current === route.computedAt) return;
+    if (!fitTarget) return;
+    const fitKey = route?.computedAt ?? "fallback";
+    if (fittedRef.current === fitKey) return;
     const map = mapRef.current;
     if (!map) return;
     requestAnimationFrame(() => {
-      fitRoute(mapRef.current, route);
-      fittedRef.current = route.computedAt;
+      fitRoute(mapRef.current, fitTarget);
+      fittedRef.current = fitKey;
     });
-  }, [route]);
+  }, [fitTarget, route?.computedAt]);
 
   if (!token) {
     return (
@@ -114,18 +157,17 @@ export default function OrderRouteMap({ orderRef }: { orderRef: string }) {
       </p>
     );
   }
-  if (isLoading) {
-    return (
-      <div className="flex h-[320px] items-center justify-center text-white/50">
-        <Loader2 className="h-7 w-7 animate-spin text-[#98E32F]" />
-      </div>
-    );
-  }
-  if (!route) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : "The restaurant or customer map pin is unavailable.";
+  if (!origin || !destination) {
+    if (isLoading) {
+      return (
+        <div className="flex h-[320px] items-center justify-center text-white/50">
+          <Loader2 className="h-7 w-7 animate-spin text-[#98E32F]" />
+        </div>
+      );
+    }
+    const message = error
+      ? getApiErrorMessage(error, "The restaurant or customer map pin is unavailable.")
+      : "The restaurant or customer map pin is unavailable.";
     return <p className="py-8 text-center text-sm text-white/50">{message}</p>;
   }
 
@@ -135,13 +177,13 @@ export default function OrderRouteMap({ orderRef }: { orderRef: string }) {
         <div className="rounded-lg border border-white/10 bg-black/20 p-3">
           <p className="text-xs text-white/50">Driving distance</p>
           <p className="mt-1 text-xl font-semibold text-[#98E32F]">
-            {route.distanceKm.toFixed(2)} km
+            {route ? `${route.distanceKm.toFixed(2)} km` : "—"}
           </p>
         </div>
         <div className="rounded-lg border border-white/10 bg-black/20 p-3">
           <p className="text-xs text-white/50">Estimated drive</p>
           <p className="mt-1 text-xl font-semibold text-white">
-            {formatDuration(route.durationSeconds)}
+            {route ? formatDuration(route.durationSeconds) : "—"}
           </p>
         </div>
       </div>
@@ -151,15 +193,15 @@ export default function OrderRouteMap({ orderRef }: { orderRef: string }) {
           mapLib={mapboxMapLib}
           mapboxAccessToken={token}
           initialViewState={{
-            longitude: route.origin.lng,
-            latitude: route.origin.lat,
+            longitude: origin.lng,
+            latitude: origin.lat,
             zoom: 12,
           }}
           mapStyle="mapbox://styles/mapbox/streets-v12"
           style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
           onLoad={() => {
             mapRef.current?.resize();
-            fitRoute(mapRef.current, route);
+            if (fitTarget) fitRoute(mapRef.current, fitTarget);
           }}
         >
           <NavigationControl position="top-right" />
@@ -168,7 +210,7 @@ export default function OrderRouteMap({ orderRef }: { orderRef: string }) {
               <Layer {...routeLine} />
             </Source>
           ) : null}
-          <Marker longitude={route.origin.lng} latitude={route.origin.lat}>
+          <Marker longitude={origin.lng} latitude={origin.lat}>
             <span
               title="Restaurant"
               className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-[#98E32F] text-[#013644] shadow-lg"
@@ -176,7 +218,7 @@ export default function OrderRouteMap({ orderRef }: { orderRef: string }) {
               <Store className="h-4 w-4" />
             </span>
           </Marker>
-          <Marker longitude={route.destination.lng} latitude={route.destination.lat}>
+          <Marker longitude={destination.lng} latitude={destination.lat}>
             <span
               title="Customer delivery address"
               className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-red-500 text-white shadow-lg"
@@ -187,8 +229,11 @@ export default function OrderRouteMap({ orderRef }: { orderRef: string }) {
         </MapGL>
       </div>
       <p className="text-xs text-white/45">
-        Current driving route via OSRM. Distance is not a billing snapshot and may
-        change with road data.
+        {route
+          ? `Driving route${route.provider === "osrm" ? " via OSRM" : ""}. Distance is not a billing snapshot and may change with road data.`
+          : error
+            ? "Map pins are shown. The driving route could not be loaded."
+            : "Loading the driving route."}
       </p>
     </div>
   );

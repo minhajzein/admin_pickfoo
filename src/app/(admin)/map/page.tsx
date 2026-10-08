@@ -7,6 +7,7 @@ import { Bike, Loader2, MapPinned, RefreshCw, Store } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { fetchLiveMapFeed, type LiveMapPartnerWithoutLocation } from "@/lib/api/map";
+import { useMapboxAccessToken } from "@/lib/mapbox-token-context";
 import { visibleRefetchInterval } from "@/lib/query-live";
 
 const LiveOperationsMap = dynamic(
@@ -22,7 +23,7 @@ const LiveOperationsMap = dynamic(
 );
 
 export default function LiveMapPage() {
-  const token = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN ?? "";
+  const token = useMapboxAccessToken();
   const queryClient = useQueryClient();
   const [showPartners, setShowPartners] = useState(true);
   const [showRestaurants, setShowRestaurants] = useState(true);

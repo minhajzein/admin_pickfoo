@@ -99,9 +99,11 @@ function LiveOperationsMap({
   const handleMapLoad = useCallback(() => {
     mapRef.current?.resize();
   }, []);
-  const handleMapError = useCallback((event: { target: unknown; error?: { message?: string } }) => {
-    if (event.target) return;
-    setMapError(event.error?.message || "Map failed to initialize");
+  const handleMapError = useCallback((event: { error?: { message?: string } }) => {
+    const message = event.error?.message || "";
+    if (/token|unauthorized|forbidden|invalid maplib|failed to initialize/i.test(message)) {
+      setMapError(message);
+    }
   }, []);
 
   return (
