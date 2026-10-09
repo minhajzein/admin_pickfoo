@@ -830,7 +830,7 @@ export default function OrdersPage() {
                                   : ""}
                               </span>
                               {row.refundReason ? (
-                                <span className="whitespace-normal break-words opacity-80">
+                                <span className="whitespace-normal wrap-break-word opacity-80">
                                   {row.refundReason}
                                 </span>
                               ) : null}
