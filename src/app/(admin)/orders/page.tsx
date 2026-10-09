@@ -812,24 +812,28 @@ export default function OrdersPage() {
                           ) : null}
                           {row.paymentStatus ? (
                             <span
-                              className={
+                              className={`flex max-w-56 flex-col text-[11px] leading-snug ${
                                 isPartialRefundOrder(row)
-                                  ? "text-[11px] text-amber-200/90"
+                                  ? "text-amber-200/90"
                                   : row.paymentStatus === "paid"
-                                    ? "text-[11px] text-[#98E32F]/80"
+                                    ? "text-[#98E32F]/80"
                                     : row.paymentStatus === "refunded"
-                                      ? "text-[11px] text-sky-300/90"
-                                      : "text-[11px] text-white/40"
-                              }
+                                      ? "text-sky-300/90"
+                                      : "text-white/40"
+                              }`}
                             >
-                              payment: {paymentStatusLabel(row)}
-                              {isPartialRefundOrder(row) &&
-                              row.refundAmount != null
-                                ? ` (₹${Number(row.refundAmount).toFixed(2)})`
-                                : ""}
-                              {row.refundReason
-                                ? ` · ${row.refundReason}`
-                                : ""}
+                              <span>
+                                payment: {paymentStatusLabel(row)}
+                                {isPartialRefundOrder(row) &&
+                                row.refundAmount != null
+                                  ? ` (₹${Number(row.refundAmount).toFixed(2)})`
+                                  : ""}
+                              </span>
+                              {row.refundReason ? (
+                                <span className="whitespace-normal break-words opacity-80">
+                                  {row.refundReason}
+                                </span>
+                              ) : null}
                             </span>
                           ) : null}
                         </div>
