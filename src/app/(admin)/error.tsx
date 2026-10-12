@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { reloadOnceForChunkError } from "@/lib/chunk-reload";
 
 export default function AdminError({
   error,
@@ -12,6 +13,7 @@ export default function AdminError({
   reset: () => void;
 }) {
   useEffect(() => {
+    if (reloadOnceForChunkError(error)) return;
     console.error("[admin error]", error);
   }, [error]);
 

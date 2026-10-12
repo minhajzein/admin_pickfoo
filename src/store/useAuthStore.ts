@@ -13,6 +13,8 @@ interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
   isInitialized: boolean;
+  /** Session check failed for network reasons; the token may still be valid. */
+  connectionError: boolean;
   setAuth: (user: User | null, token?: string) => void;
   clearSession: () => void;
   logout: () => Promise<void>;
@@ -39,10 +41,13 @@ function clearLegacyPersistedAuth() {
   }
 }
 
+let initializeInFlight: Promise<void> | null = null;
+
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   isAuthenticated: false,
   isInitialized: false,
+  connectionError: false,
 
   clearSession: () => {
     if (typeof window !== 'undefined') {
@@ -50,7 +55,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       clearTokenCookie();
       clearLegacyPersistedAuth();
     }
-    set({ user: null, isAuthenticated: false, isInitialized: true });
+    set({ user: null, isAuthenticated: false, isInitialized: true, connectionError: false });
   },
 
   setAuth: (user, token) => {
@@ -62,6 +67,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       user,
       isAuthenticated: !!user && user.role === 'admin',
       isInitialized: true,
+      connectionError: false,
     });
   },
 
@@ -86,31 +92,41 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         : null;
 
     if (!token) {
-      set({ user: null, isAuthenticated: false, isInitialized: true });
+      // A stale cookie without a token would make proxy.ts bounce /login back to /.
+      clearTokenCookie();
+      set({ user: null, isAuthenticated: false, isInitialized: true, connectionError: false });
       return;
     }
 
-    try {
-      const response = await api.get('/auth/me', { timeout: 8000 });
-      const me = response.data?.user;
-      if (response.data?.success && me?.role === 'admin') {
-        set({
-          user: me,
-          isAuthenticated: true,
-          isInitialized: true,
-        });
-        return;
-      }
-      get().clearSession();
-    } catch (err) {
-      const status = axios.isAxiosError(err) ? err.response?.status : undefined;
-      // Expired or invalid token — wipe and send to login.
-      if (status === 401 || status === 403) {
+    if (initializeInFlight) return initializeInFlight;
+    initializeInFlight = (async () => {
+      try {
+        const response = await api.get('/auth/me', { timeout: 20000 });
+        const me = response.data?.user;
+        if (response.data?.success && me?.role === 'admin') {
+          set({
+            user: me,
+            isAuthenticated: true,
+            isInitialized: true,
+            connectionError: false,
+          });
+          return;
+        }
         get().clearSession();
-        return;
+      } catch (err) {
+        const status = axios.isAxiosError(err) ? err.response?.status : undefined;
+        // Expired or invalid token — wipe and send to login.
+        if (status === 401 || status === 403) {
+          get().clearSession();
+          return;
+        }
+        // Slow network / API down: keep the token and let the user retry.
+        // Redirecting to /login here loops with proxy.ts (cookie still set).
+        set({ user: null, isAuthenticated: false, isInitialized: true, connectionError: true });
+      } finally {
+        initializeInFlight = null;
       }
-      // API down (502) or network: don't keep a fake logged-in state.
-      set({ user: null, isAuthenticated: false, isInitialized: true });
-    }
+    })();
+    return initializeInFlight;
   },
 }));

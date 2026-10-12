@@ -7,6 +7,7 @@ import {
   useEffect,
   useLayoutEffect,
   useRef,
+  useState,
   type ComponentType,
   type ReactNode,
 } from "react";
@@ -109,6 +110,19 @@ const HOT_ROUTES = [
   "/map",
 ] as const;
 
+/** Skip speculative prefetch on slow or data-saver connections. */
+function connectionIsFast(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const conn = (
+    navigator as Navigator & {
+      connection?: { effectiveType?: string; saveData?: boolean };
+    }
+  ).connection;
+  if (!conn) return true;
+  if (conn.saveData) return false;
+  return !conn.effectiveType || conn.effectiveType === "4g";
+}
+
 function NavPendingIcon({
   icon: Icon,
 }: {
@@ -116,9 +130,9 @@ function NavPendingIcon({
 }) {
   const { pending } = useLinkStatus();
   if (pending) {
-    return <Loader2 size={22} className="min-w-[22px] animate-spin" />;
+    return <Loader2 size={22} className="min-w-5.5 animate-spin" />;
   }
-  return <Icon size={22} className="min-w-[22px]" />;
+  return <Icon size={22} className="min-w-5.5" />;
 }
 
 const NavItemButton = memo(function NavItemButton({
@@ -139,7 +153,7 @@ const NavItemButton = memo(function NavItemButton({
   return (
     <Link
       href={href}
-      prefetch
+      prefetch={false}
       onPointerEnter={() => onPrefetch(href)}
       onClick={() => {
         adminShellUi.closeMobile();
@@ -158,7 +172,7 @@ const NavItemButton = memo(function NavItemButton({
       </div>
       <span
         className={`overflow-hidden whitespace-nowrap text-sm font-bold tracking-tight ${
-          expanded ? "ml-4 max-w-[200px] opacity-100" : "ml-0 max-w-0 opacity-0"
+          expanded ? "ml-4 max-w-50 opacity-100" : "ml-0 max-w-0 opacity-0"
         }`}
       >
         {name}
@@ -177,7 +191,15 @@ function AdminSidebar({ onLogout }: { onLogout: () => void }) {
     adminShellUi.setPendingHref(null);
   }, [pathname]);
 
+  // A failed navigation never changes pathname; don't leave the bar spinning.
   useEffect(() => {
+    if (!pendingHref) return;
+    const timer = window.setTimeout(() => adminShellUi.setPendingHref(null), 15_000);
+    return () => window.clearTimeout(timer);
+  }, [pendingHref]);
+
+  useEffect(() => {
+    if (!connectionIsFast()) return;
     const timer = window.setTimeout(() => {
       for (const href of HOT_ROUTES) {
         try {
@@ -192,6 +214,7 @@ function AdminSidebar({ onLogout }: { onLogout: () => void }) {
 
   const prefetchRoute = useCallback(
     (href: string) => {
+      if (!connectionIsFast()) return;
       try {
         router.prefetch(href);
       } catch {
@@ -204,7 +227,7 @@ function AdminSidebar({ onLogout }: { onLogout: () => void }) {
   return (
     <>
       {pendingHref ? (
-        <div className="pointer-events-none fixed top-0 left-0 right-0 z-[70] h-0.5 bg-white/10">
+        <div className="pointer-events-none fixed top-0 left-0 right-0 z-70 h-0.5 bg-white/10">
           <div className="h-full w-2/5 animate-pulse bg-[#98E32F]" />
         </div>
       ) : null}
@@ -295,12 +318,12 @@ function AdminSidebar({ onLogout }: { onLogout: () => void }) {
             <div
               className={`flex items-center justify-center ${expanded ? "w-auto" : "w-full"}`}
             >
-              <LogOut size={22} className="min-w-[22px]" />
+              <LogOut size={22} className="min-w-5.5" />
             </div>
             <span
               className={`overflow-hidden whitespace-nowrap font-medium ${
                 expanded
-                  ? "ml-4 max-w-[200px] opacity-100"
+                  ? "ml-4 max-w-50 opacity-100"
                   : "ml-0 max-w-0 opacity-0"
               }`}
             >
@@ -350,7 +373,7 @@ function AdminHeader({
             Super Admin
           </p>
         </div>
-        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-[#98E32F] to-[#7dbb26] font-bold text-[#013644]">
+        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-linear-to-br from-[#98E32F] to-[#7dbb26] font-bold text-[#013644]">
           {userName[0]}
         </div>
       </div>
@@ -361,7 +384,10 @@ function AdminHeader({
 function useAdminRealtime(enabled: boolean) {
   const router = useRouter();
   const routerRef = useRef(router);
-  routerRef.current = router;
+
+  useEffect(() => {
+    routerRef.current = router;
+  }, [router]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -544,10 +570,17 @@ export default function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { user, isAuthenticated, isInitialized, logout, initialize } =
-    useAuthStore();
+  const {
+    user,
+    isAuthenticated,
+    isInitialized,
+    connectionError,
+    logout,
+    initialize,
+  } = useAuthStore();
   const router = useRouter();
   const pathname = usePathname();
+  const [retrying, setRetrying] = useState(false);
 
   useEffect(() => {
     if (!isInitialized) {
@@ -556,11 +589,19 @@ export default function AdminLayout({
   }, [isInitialized, initialize]);
 
   useLayoutEffect(() => {
-    if (!isInitialized) return;
+    if (!isInitialized || connectionError) return;
     if (!isAuthenticated || user?.role !== "admin") {
       router.replace("/login");
     }
-  }, [isInitialized, isAuthenticated, user, router]);
+  }, [isInitialized, connectionError, isAuthenticated, user, router]);
+
+  // Retry the session check by itself once the browser is back online.
+  useEffect(() => {
+    if (!connectionError) return;
+    const onOnline = () => void initialize();
+    window.addEventListener("online", onOnline);
+    return () => window.removeEventListener("online", onOnline);
+  }, [connectionError, initialize]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -578,6 +619,28 @@ export default function AdminLayout({
           <div className="h-12 w-12 animate-spin rounded-full border-t-2 border-b-2 border-[#98E32F]" />
           <p className="text-sm text-white/50">Loading admin…</p>
         </div>
+      </div>
+    );
+  }
+
+  if (connectionError) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-[#013644] px-4 text-center text-white">
+        <p className="text-lg font-semibold">Can&apos;t reach the Pickfoo server</p>
+        <p className="max-w-sm text-sm text-white/60">
+          Your connection is slow or the server is busy. You are still signed in.
+        </p>
+        <button
+          type="button"
+          disabled={retrying}
+          onClick={() => {
+            setRetrying(true);
+            void initialize().finally(() => setRetrying(false));
+          }}
+          className="rounded-lg bg-[#98E32F] px-4 py-2 text-sm font-bold text-[#013644] disabled:opacity-60"
+        >
+          {retrying ? "Retrying…" : "Retry"}
+        </button>
       </div>
     );
   }

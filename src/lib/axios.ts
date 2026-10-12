@@ -7,7 +7,7 @@ const defaultBase = 'https://api.pickfoo.in/admin/api/v1';
 const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL || defaultBase,
   withCredentials: true,
-  timeout: 10000,
+  timeout: 30000,
   // Intentionally no global Content-Type. A default of application/json makes
   // Axios JSON-serialize FormData, so multer never sees "file" and returns 400.
 });
