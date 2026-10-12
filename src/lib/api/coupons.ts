@@ -20,6 +20,9 @@ export interface AdminCoupon {
   restaurantIds: string[];
   menuItemIds: string[];
   categoryNames: string[];
+  /** Empty = every customer. */
+  customerIds: string[];
+  customers?: CouponCustomerOption[];
   startsAt: string | null;
   endsAt: string | null;
   isActive: boolean;
@@ -27,6 +30,13 @@ export interface AdminCoupon {
   usagePerUser: number;
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface CouponCustomerOption {
+  id: string;
+  name: string;
+  phone: string;
+  email: string;
 }
 
 export interface CouponOfferOption {
@@ -70,6 +80,7 @@ export type CouponPayload = {
   restaurantIds?: string[];
   menuItemIds?: string[];
   categoryNames?: string[];
+  customerIds?: string[];
   isActive?: boolean;
   usageLimit?: number;
   usagePerUser?: number;
@@ -137,6 +148,14 @@ export async function searchCouponMenuItems(params?: {
   sp.set("limit", "30");
   const { data } = await api.get(`/coupons/link-options/menu-items?${sp}`);
   return data.data as CouponMenuItemOption[];
+}
+
+export async function searchCouponCustomers(search: string): Promise<CouponCustomerOption[]> {
+  const sp = new URLSearchParams();
+  if (search.trim()) sp.set("search", search.trim());
+  sp.set("limit", "25");
+  const { data } = await api.get(`/coupons/link-options/customers?${sp}`);
+  return data.data as CouponCustomerOption[];
 }
 
 export async function searchCouponCategories(search: string): Promise<CouponCategoryOption[]> {

@@ -33,12 +33,14 @@ import {
   deleteCoupon,
   fetchCoupons,
   searchCouponCategories,
+  searchCouponCustomers,
   searchCouponMenuItems,
   searchCouponOffers,
   searchCouponRestaurants,
   updateCoupon,
   type AdminCoupon,
   type CouponCategoryOption,
+  type CouponCustomerOption,
   type CouponKind,
   type CouponMenuItemOption,
   type CouponOfferOption,
@@ -59,12 +61,27 @@ type FormState = {
   restaurantIds: string[];
   menuItemIds: string[];
   categoryNames: string[];
+  onlyCustomers: boolean;
+  customers: CouponCustomerOption[];
   usageLimit: number;
   usagePerUser: number;
   startsAt: string;
   endsAt: string;
   isActive: boolean;
 };
+
+function customerLabel(c: CouponCustomerOption) {
+  const name = c.name || "Customer";
+  const contact = c.phone || c.email;
+  return contact ? `${name} · ${contact}` : name;
+}
+
+function audienceLabel(row: AdminCoupon) {
+  const count = row.customerIds?.length ?? 0;
+  if (count === 0) return "Everyone";
+  if (count === 1 && row.customers?.[0]) return customerLabel(row.customers[0]);
+  return `${count} customers`;
+}
 
 const emptyForm = (): FormState => ({
   code: "",
@@ -77,6 +94,8 @@ const emptyForm = (): FormState => ({
   restaurantIds: [],
   menuItemIds: [],
   categoryNames: [],
+  onlyCustomers: false,
+  customers: [],
   usageLimit: 0,
   usagePerUser: 0,
   startsAt: "",
@@ -97,6 +116,16 @@ function formFromRow(row: AdminCoupon): FormState {
     restaurantIds: row.restaurantIds || [],
     menuItemIds: row.menuItemIds || [],
     categoryNames: row.categoryNames || [],
+    onlyCustomers: (row.customerIds?.length ?? 0) > 0,
+    customers:
+      row.customers && row.customers.length > 0
+        ? row.customers
+        : (row.customerIds || []).map((id) => ({
+            id,
+            name: `Customer ${id.slice(-6)}`,
+            phone: "",
+            email: "",
+          })),
     usageLimit: row.usageLimit,
     usagePerUser: row.usagePerUser,
     startsAt: row.startsAt ? row.startsAt.slice(0, 16) : "",
@@ -129,6 +158,8 @@ export default function CouponsPage() {
   const [dishOptions, setDishOptions] = useState<CouponMenuItemOption[]>([]);
   const [categorySearch, setCategorySearch] = useState("");
   const [categoryOptions, setCategoryOptions] = useState<CouponCategoryOption[]>([]);
+  const [customerSearch, setCustomerSearch] = useState("");
+  const [customerOptions, setCustomerOptions] = useState<CouponCustomerOption[]>([]);
 
   const { data, isLoading } = useQuery({
     queryKey: ["admin-coupons", page, kindFilter],
@@ -157,6 +188,9 @@ export default function CouponsPage() {
       if (form.scope === "categories" && form.categoryNames.length === 0) {
         throw new Error("Select at least one category");
       }
+      if (form.onlyCustomers && form.customers.length === 0) {
+        throw new Error("Select at least one customer");
+      }
       const payload = {
         code: form.code.trim().toUpperCase(),
         kind: form.kind,
@@ -167,6 +201,7 @@ export default function CouponsPage() {
         restaurantIds: form.scope === "restaurants" ? form.restaurantIds : [],
         menuItemIds: form.scope === "items" ? form.menuItemIds : [],
         categoryNames: form.scope === "categories" ? form.categoryNames : [],
+        customerIds: form.onlyCustomers ? form.customers.map((c) => c.id) : [],
         isActive: form.isActive,
         usageLimit: form.usageLimit,
         usagePerUser: form.usagePerUser,
@@ -225,6 +260,14 @@ export default function CouponsPage() {
     }
   }
 
+  async function runCustomerSearch() {
+    try {
+      setCustomerOptions(await searchCouponCustomers(customerSearch));
+    } catch {
+      toast.error("Customer search failed");
+    }
+  }
+
   async function runCategorySearch() {
     try {
       setCategoryOptions(await searchCouponCategories(categorySearch));
@@ -251,6 +294,8 @@ export default function CouponsPage() {
     setDishFilterRestaurantId("");
     setCategorySearch("");
     setCategoryOptions([]);
+    setCustomerSearch("");
+    setCustomerOptions([]);
     setOpen(true);
   }
 
@@ -276,6 +321,8 @@ export default function CouponsPage() {
     setCategoryOptions(
       (row.categoryNames || []).map((name) => ({ id: name, name, image: "" })),
     );
+    setCustomerSearch("");
+    setCustomerOptions([]);
     setOpen(true);
   }
 
@@ -336,6 +383,7 @@ export default function CouponsPage() {
                     <TableHead>Title</TableHead>
                     <TableHead>Offer</TableHead>
                     <TableHead>Applies to</TableHead>
+                    <TableHead>Customers</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
@@ -353,6 +401,9 @@ export default function CouponsPage() {
                       </TableCell>
                       <TableCell className="text-xs text-white/60">
                         {scopeLabel(row.scope)}
+                      </TableCell>
+                      <TableCell className="text-xs text-white/60">
+                        {audienceLabel(row)}
                       </TableCell>
                       <TableCell>
                         <Badge variant={row.isActive ? "default" : "secondary"}>
@@ -742,6 +793,84 @@ export default function CouponsPage() {
                           }
                         >
                           {c.name}
+                        </button>
+                      ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2 rounded-md border border-white/10 p-3">
+              <Label>Who can use this code</Label>
+              <select
+                className="h-10 w-full rounded-md border border-white/15 bg-transparent px-3 text-sm"
+                value={form.onlyCustomers ? "customers" : "all"}
+                onChange={(e) =>
+                  setForm({ ...form, onlyCustomers: e.target.value === "customers" })
+                }
+              >
+                <option className="bg-[#013644]" value="all">
+                  All customers
+                </option>
+                <option className="bg-[#013644]" value="customers">
+                  Specific customers only
+                </option>
+              </select>
+              <p className="text-xs text-white/50">
+                Restricted codes are only listed in the cart for the selected customers, and nobody
+                else can redeem them. The linked offer&apos;s audience segment also applies.
+              </p>
+
+              {form.onlyCustomers && (
+                <div className="space-y-2 pt-1">
+                  <div className="flex gap-2">
+                    <Input
+                      value={customerSearch}
+                      onChange={(e) => setCustomerSearch(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          void runCustomerSearch();
+                        }
+                      }}
+                      placeholder="Search by name, phone or email"
+                    />
+                    <Button type="button" variant="outline" onClick={() => void runCustomerSearch()}>
+                      Search
+                    </Button>
+                  </div>
+                  {form.customers.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {form.customers.map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          className="rounded border border-[#98E32F] bg-[#98E32F] px-2 py-1 text-xs text-[#013644]"
+                          onClick={() =>
+                            setForm((f) => ({
+                              ...f,
+                              customers: f.customers.filter((x) => x.id !== c.id),
+                            }))
+                          }
+                        >
+                          {customerLabel(c)} ×
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex flex-wrap gap-2">
+                    {customerOptions
+                      .filter((c) => !form.customers.some((x) => x.id === c.id))
+                      .map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          className="rounded border border-white/20 px-2 py-1 text-xs text-white"
+                          onClick={() =>
+                            setForm((f) => ({ ...f, customers: [...f.customers, c] }))
+                          }
+                        >
+                          {customerLabel(c)}
                         </button>
                       ))}
                   </div>

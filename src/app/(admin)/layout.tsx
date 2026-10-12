@@ -39,6 +39,8 @@ import {
   IndianRupee,
   Layers,
   Loader2,
+  BarChart3,
+  Radio,
 } from "lucide-react";
 import { io } from "socket.io-client";
 import { toast } from "sonner";
@@ -54,6 +56,8 @@ const NAV_ITEMS: Array<{
   icon: ComponentType<{ size?: number; className?: string }>;
 }> = [
   { name: "Dashboard", icon: LayoutDashboard, href: "/" },
+  { name: "Insights", icon: BarChart3, href: "/insights" },
+  { name: "Live users", icon: Radio, href: "/live-users" },
   { name: "Restaurants", icon: Store, href: "/restaurants" },
   { name: "Banners", icon: ImageIcon, href: "/banners" },
   { name: "Home Videos", icon: Clapperboard, href: "/home-videos" },
