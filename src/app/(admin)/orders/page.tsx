@@ -953,6 +953,13 @@ export default function OrdersPage() {
                   : `This will find another delivery partner for order ${confirmLabel}.`}
             </DialogDescription>
           </DialogHeader>
+          {confirmRow?.orderType === "delivery" ? (
+            <p className="rounded-lg border border-sky-400/30 bg-sky-400/10 px-3 py-2 text-xs text-sky-200">
+              The restaurant chose self-delivery for this order. Redispatching
+              moves it to Pickfoo dispatch — the restaurant&apos;s own partners
+              are still offered first.
+            </p>
+          ) : null}
           {confirmAccepted ? (
             <p className="rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-200">
               {confirmRow?.partnerDeliveryProgress === "arrived_at_restaurant"

@@ -555,13 +555,21 @@ export function orderStatusLabel(row: {
 }
 
 /** Partner accepted but hasn't picked up yet — admin may still redispatch (with confirmation). */
-function partnerAcceptedBeforePickup(row: AdminOrderRow): boolean {
+function partnerAcceptedBeforePickup(
+  row: Pick<AdminOrderRow, "partnerDeliveryProgress">,
+): boolean {
   const progress = row.partnerDeliveryProgress?.trim() || "";
   return progress === "accepted" || progress === "arrived_at_restaurant";
 }
 
-function canRedispatchPickupOrder(row: AdminOrderRow): boolean {
-  if (row.orderType !== "pickup") return false;
+/** Restaurant self-delivery orders switch to Pickfoo dispatch when admin redispatches/assigns. */
+function canRedispatchPickupOrder(
+  row: Pick<
+    AdminOrderRow,
+    "orderType" | "paymentStatus" | "status" | "partnerDeliveryProgress"
+  >,
+): boolean {
+  if (row.orderType !== "pickup" && row.orderType !== "delivery") return false;
   if (row.paymentStatus === "refunded") return false;
   if (row.status !== "preparing" && row.status !== "ready") return false;
 

@@ -39,6 +39,7 @@ import { raiseCustomerOrderFromRefs } from "@/lib/api/customer-payments";
 import {
   assignOrderPartner,
   adjustOrderRefundDeductions,
+  canRedispatchPickupOrder,
   cancelSourceLabel,
   fetchDispatchOrder,
   isPaidAwaitingPrep,
@@ -47,7 +48,9 @@ import {
   markOrderPickedUp,
   markOrderRefunded,
   orderStatusLabel,
+  partnerAcceptedBeforePickup,
   paymentStatusLabel,
+  redispatchOrder,
   resumeOrderDispatch,
   stopOrderDispatch,
   type AdminOrderDetail,
@@ -75,6 +78,7 @@ import {
   PauseCircle,
   Phone,
   PlayCircle,
+  RefreshCw,
   Store,
   Undo2,
   User,
@@ -207,6 +211,7 @@ export default function OrderDetailPage() {
   const [pickupOpen, setPickupOpen] = useState(false);
   const [deliverOpen, setDeliverOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
+  const [redispatchOpen, setRedispatchOpen] = useState(false);
   const [pickupPartnerId, setPickupPartnerId] = useState("");
   const [deliverPartnerId, setDeliverPartnerId] = useState("");
   const [assignPartnerId, setAssignPartnerId] = useState("");
@@ -532,6 +537,44 @@ export default function OrderDetailPage() {
     },
   });
 
+  const redispatchProgress = order?.deliveryPartner?.progress || "";
+  const redispatchAccepted = partnerAcceptedBeforePickup({
+    partnerDeliveryProgress: redispatchProgress,
+  });
+  const redispatchMutation = useMutation({
+    mutationFn: () =>
+      redispatchOrder(
+        orderRef,
+        redispatchAccepted
+          ? "Admin redispatched accepted order"
+          : "Admin triggered redispatch",
+        redispatchAccepted,
+      ),
+    onSuccess: (result) => {
+      setRedispatchOpen(false);
+      invalidateOrder();
+      if (result.redispatched && result.partner) {
+        toast.success(`Redispatched to ${result.partner.fullName}`, {
+          description: result.partner.phone,
+        });
+        return;
+      }
+      toast.warning("Redispatch completed without a new partner", {
+        description: result.reason || "No eligible partner is available right now.",
+      });
+    },
+    onError: (err: unknown) => {
+      const msg =
+        err && typeof err === "object" && "response" in err
+          ? (err as { response?: { data?: { message?: string } } }).response
+              ?.data?.message
+          : err instanceof Error
+            ? err.message
+            : undefined;
+      toast.error(msg || "Failed to redispatch order");
+    },
+  });
+
   if (isLoading) {
     return (
       <div className="space-y-4">
@@ -623,17 +666,26 @@ export default function OrderDetailPage() {
     ["confirmed", "preparing", "ready"].includes(order.status) &&
     !dispatchHeld;
   const canResumeDispatch =
-    order.orderType === "pickup" &&
     order.paymentStatus !== "refunded" &&
     ["confirmed", "preparing", "ready"].includes(order.status) &&
     dispatchHeld;
+  const isRestaurantDelivery = order.orderType === "delivery";
   // Assign only after restaurant starts preparing — never invent accept/prep.
+  // Self-delivery orders switch to Pickfoo dispatch on assign.
   const canAssignPartner =
-    order.orderType === "pickup" &&
+    (order.orderType === "pickup" || isRestaurantDelivery) &&
     order.paymentStatus !== "refunded" &&
     ["preparing", "ready"].includes(order.status) &&
     (!order.deliveryPartner?.progress ||
       order.deliveryPartner.progress === "pending_accept");
+  const canRedispatch =
+    !dispatchHeld &&
+    canRedispatchPickupOrder({
+      orderType: order.orderType,
+      paymentStatus: order.paymentStatus,
+      status: order.status,
+      partnerDeliveryProgress: order.deliveryPartner?.progress,
+    });
 
   return (
     <div className="space-y-6">
@@ -749,6 +801,22 @@ export default function OrderDetailPage() {
               >
                 <Hand className="mr-1 h-3.5 w-3.5" />
                 Assign partner
+              </Button>
+            ) : null}
+            {canRedispatch ? (
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-[#98E32F]/40 text-[#98E32F] hover:bg-[#98E32F]/10"
+                disabled={redispatchMutation.isPending}
+                onClick={() => setRedispatchOpen(true)}
+              >
+                {redispatchMutation.isPending ? (
+                  <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <RefreshCw className="mr-1 h-3.5 w-3.5" />
+                )}
+                Redispatch
               </Button>
             ) : null}
             {canMarkPickedUp ? (
@@ -1841,6 +1909,12 @@ export default function OrderDetailPage() {
               double order at the second-order payout %.
             </DialogDescription>
           </DialogHeader>
+          {isRestaurantDelivery ? (
+            <p className="rounded-lg border border-sky-400/30 bg-sky-400/10 px-3 py-2 text-xs text-sky-200">
+              The restaurant chose self-delivery for this order. Assigning a
+              partner moves it to Pickfoo dispatch.
+            </p>
+          ) : null}
           <div className="space-y-2">
             <Label className="text-white/50">Partner</Label>
             {partnersLoading ? (
@@ -1907,6 +1981,64 @@ export default function OrderDetailPage() {
                 <Hand className="mr-2 h-4 w-4" />
               )}
               Assign & send offer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={redispatchOpen}
+        onOpenChange={(open) => {
+          if (!redispatchMutation.isPending) setRedispatchOpen(open);
+        }}
+      >
+        <DialogContent className="border-white/10 bg-[#002833] text-white sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-white">
+              {redispatchAccepted ? "Redispatch accepted order?" : "Redispatch order?"}
+            </DialogTitle>
+            <DialogDescription className="text-white/55">
+              {redispatchAccepted
+                ? `${order.deliveryPartner?.name || "A partner"} has already accepted order ${title}. They will be removed from this order and it will be offered to another partner.`
+                : order.deliveryPartner?.name
+                  ? `This will withdraw the order from ${order.deliveryPartner.name} on ${title} and find another partner.`
+                  : `This will find a delivery partner for order ${title}.`}
+            </DialogDescription>
+          </DialogHeader>
+          {isRestaurantDelivery ? (
+            <p className="rounded-lg border border-sky-400/30 bg-sky-400/10 px-3 py-2 text-xs text-sky-200">
+              The restaurant chose self-delivery for this order. Redispatching
+              moves it to Pickfoo dispatch — the restaurant&apos;s own partners
+              are still offered first.
+            </p>
+          ) : null}
+          {redispatchAccepted ? (
+            <p className="rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-200">
+              {redispatchProgress === "arrived_at_restaurant"
+                ? "The partner is already at the restaurant. Call them before redispatching so they don't wait for the food."
+                : "The partner may already be on the way to the restaurant. Let them know before redispatching."}
+            </p>
+          ) : null}
+          <DialogFooter className="gap-2 sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              className="border-white/10"
+              onClick={() => setRedispatchOpen(false)}
+              disabled={redispatchMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              className="bg-[#98E32F] text-[#013644] hover:bg-[#86c926]"
+              disabled={redispatchMutation.isPending}
+              onClick={() => redispatchMutation.mutate()}
+            >
+              {redispatchMutation.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : null}
+              Confirm redispatch
             </Button>
           </DialogFooter>
         </DialogContent>
