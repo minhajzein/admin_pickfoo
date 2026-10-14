@@ -50,7 +50,7 @@ export default function LiveUsersPage() {
   const { data, isLoading, isError, isFetching, refetch } = useQuery({
     queryKey: ["live-users", windowMinutes],
     queryFn: () => fetchLiveUsers(windowMinutes),
-    refetchInterval: visibleRefetchInterval(30_000),
+    refetchInterval: visibleRefetchInterval(5_000),
   });
 
   const users = useMemo(
@@ -67,7 +67,7 @@ export default function LiveUsersPage() {
           <p className="mt-2 max-w-2xl text-sm text-white/60">
             Customers with the Pickfoo app open right now, and where they are in the app
             (device GPS when location is allowed, otherwise their delivery or browse location).
-            Refreshes every 30 seconds.
+            Updates as soon as the app checks in, about every 12 seconds, and again every 5 seconds.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">

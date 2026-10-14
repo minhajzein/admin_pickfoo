@@ -56,6 +56,7 @@ import {
   type AdminOrderDetail,
 } from "@/lib/api/orders";
 import { fetchPartners } from "@/lib/api/partners";
+import { visibleRefetchInterval } from "@/lib/query-live";
 import {
   buildRefundSettlementPayload,
   emptyRefundSettlementState,
@@ -220,6 +221,7 @@ export default function OrderDetailPage() {
     queryKey: ["orders", "dispatch-order", orderRef],
     queryFn: () => fetchDispatchOrder(orderRef),
     enabled: !!orderRef,
+    refetchInterval: visibleRefetchInterval(5_000),
   });
 
   const { data: refundPreview, isLoading: refundPreviewLoading } = useQuery({

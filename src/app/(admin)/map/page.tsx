@@ -37,7 +37,7 @@ export default function LiveMapPage() {
         onlineOnly,
         activeRestaurantsOnly,
       }),
-    refetchInterval: visibleRefetchInterval(30_000),
+    refetchInterval: visibleRefetchInterval(5_000),
   });
 
   useEffect(() => {
@@ -64,7 +64,7 @@ export default function LiveMapPage() {
           <h1 className="text-3xl font-bold tracking-tight">Live map</h1>
           <p className="mt-2 max-w-2xl text-sm text-white/60">
             Active restaurants and delivery partners with saved map coordinates.
-            Markers refresh every 30 seconds and after dispatch updates.
+            Partner pins move as soon as a location arrives. Restaurant open or closed state updates immediately. A full refresh also runs every 5 seconds.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">

@@ -14,6 +14,7 @@ import {
 import Image from "next/image";
 import Link, { useLinkStatus } from "next/link";
 import { useRouter, usePathname } from "next/navigation";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@/store/useAuthStore";
 import {
   LayoutDashboard,
@@ -44,6 +45,7 @@ import {
   Radio,
 } from "lucide-react";
 import { io } from "socket.io-client";
+import type { LiveMapFeed } from "@/lib/api/map";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
 import {
@@ -381,13 +383,72 @@ function AdminHeader({
   );
 }
 
+function refreshOrders(queryClient: QueryClient) {
+  void queryClient.invalidateQueries({ queryKey: ["orders"] });
+}
+
+function refreshLiveUsers(queryClient: QueryClient) {
+  void queryClient.invalidateQueries({ queryKey: ["live-users"] });
+}
+
+function refreshLiveMap(queryClient: QueryClient) {
+  void queryClient.invalidateQueries({ queryKey: ["live-map"] });
+}
+
+function patchPartnerOnLiveMap(
+  queryClient: QueryClient,
+  data: {
+    partnerId?: string;
+    lat?: number;
+    lng?: number;
+  },
+) {
+  const partnerId = String(data.partnerId || "").trim();
+  const lat = Number(data.lat);
+  const lng = Number(data.lng);
+  if (!partnerId || !Number.isFinite(lat) || !Number.isFinite(lng)) {
+    refreshLiveMap(queryClient);
+    return;
+  }
+  let found = false;
+  queryClient.setQueriesData<LiveMapFeed>({ queryKey: ["live-map"] }, (current) => {
+    if (!current) return current;
+    const index = current.partners.findIndex((row) => row.id === partnerId);
+    if (index < 0) return current;
+    found = true;
+    const partners = current.partners.slice();
+    partners[index] = { ...partners[index], lat, lng };
+    return {
+      ...current,
+      partners,
+      refreshedAt: new Date().toISOString(),
+    };
+  });
+  if (!found) {
+    const now = Date.now();
+    if (now - mapMissRefreshAt > 5_000) {
+      mapMissRefreshAt = now;
+      refreshLiveMap(queryClient);
+    }
+  }
+}
+
+let mapMissRefreshAt = 0;
+let liveUsersRefreshAt = 0;
+
 function useAdminRealtime(enabled: boolean) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const routerRef = useRef(router);
+  const queryClientRef = useRef(queryClient);
 
   useEffect(() => {
     routerRef.current = router;
   }, [router]);
+
+  useEffect(() => {
+    queryClientRef.current = queryClient;
+  }, [queryClient]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -399,6 +460,9 @@ function useAdminRealtime(enabled: boolean) {
     const socket = io(socketUrl, {
       path: socketPath,
       withCredentials: true,
+      reconnection: true,
+      reconnectionDelay: 400,
+      reconnectionDelayMax: 2000,
     });
 
     socket.on("connect", () => {
@@ -445,6 +509,8 @@ function useAdminRealtime(enabled: boolean) {
             detail: { type: "assigned", payload: data },
           }),
         );
+        refreshOrders(queryClientRef.current);
+        refreshLiveMap(queryClientRef.current);
       },
     );
 
@@ -460,6 +526,7 @@ function useAdminRealtime(enabled: boolean) {
             detail: { type: "no-partner", payload: data },
           }),
         );
+        refreshOrders(queryClientRef.current);
       },
     );
 
@@ -471,6 +538,8 @@ function useAdminRealtime(enabled: boolean) {
             detail: { type: "released", payload: data },
           }),
         );
+        refreshOrders(queryClientRef.current);
+        refreshLiveMap(queryClientRef.current);
       },
     );
 
@@ -487,6 +556,7 @@ function useAdminRealtime(enabled: boolean) {
             detail: data,
           }),
         );
+        refreshLiveMap(queryClientRef.current);
       },
     );
 
@@ -501,6 +571,7 @@ function useAdminRealtime(enabled: boolean) {
             onClick: () => routerRef.current.push("/orders"),
           },
         });
+        refreshOrders(queryClientRef.current);
       },
     );
 
@@ -510,6 +581,7 @@ function useAdminRealtime(enabled: boolean) {
         window.dispatchEvent(
           new CustomEvent("admin:order-status-updated", { detail: data }),
         );
+        refreshOrders(queryClientRef.current);
       },
     );
 
@@ -524,8 +596,20 @@ function useAdminRealtime(enabled: boolean) {
             onClick: () => routerRef.current.push("/orders"),
           },
         });
+        refreshOrders(queryClientRef.current);
       },
     );
+
+    socket.on("map:partner-location", (data: { partnerId?: string; lat?: number; lng?: number }) => {
+      patchPartnerOnLiveMap(queryClientRef.current, data);
+    });
+
+    socket.on("live-users:presence", () => {
+      const now = Date.now();
+      if (now - liveUsersRefreshAt < 1_500) return;
+      liveUsersRefreshAt = now;
+      refreshLiveUsers(queryClientRef.current);
+    });
 
     socket.on("support:message", (data: unknown) => {
       window.dispatchEvent(

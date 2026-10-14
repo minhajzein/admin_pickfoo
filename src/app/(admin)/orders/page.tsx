@@ -344,7 +344,7 @@ export default function OrdersPage() {
     queryKey: ["orders", "dispatch-orders", page, filters],
     queryFn: () =>
       fetchDispatchOrders({ page, limit: DEFAULT_PAGE_SIZE, ...filters }),
-    refetchInterval: visibleRefetchInterval(30_000),
+    refetchInterval: visibleRefetchInterval(5_000),
     placeholderData: keepPreviousData,
   });
 
