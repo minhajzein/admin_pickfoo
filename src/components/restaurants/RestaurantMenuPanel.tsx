@@ -56,7 +56,7 @@ import {
   type RestaurantListItem,
 } from "@/lib/api/restaurants";
 import { fetchCustomerOffers } from "@/lib/api/customer-offers";
-import { unitOfferPrice } from "@/lib/menuOfferPrice";
+import { menuOfferHighlight } from "@/lib/menuOfferPrice";
 import { CustomerStyleMenuCard } from "@/components/restaurants/CustomerStyleMenuCard";
 import { OfferPrice } from "@/components/ui/OfferPrice";
 import { CategorySearchField, categoryParentId, categoryParentName } from "@/components/restaurants/CategorySearchField";
@@ -388,21 +388,20 @@ export function RestaurantMenuPanel({
     },
   });
 
-  const offerPriceByItemId = useMemo(() => {
-    const map = new Map<string, number>();
+  const highlightByItemId = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof menuOfferHighlight>>();
     for (const item of menuItems) {
-      const list =
-        item.variants && item.variants.length > 0
-          ? Math.min(...item.variants.map((v) => v.price))
-          : item.price;
-      const offer = unitOfferPrice({
-        listPrice: list,
-        menuItemId: item._id,
-        restaurantId,
-        offers: restaurantOffers,
-        explicitOfferPrice: item.offerPrice,
-      });
-      if (offer != null) map.set(item._id, offer);
+      map.set(
+        item._id,
+        menuOfferHighlight({
+          menuItemId: item._id,
+          price: item.price,
+          variants: item.variants,
+          restaurantId,
+          offers: restaurantOffers,
+          explicitOfferPrice: item.offerPrice,
+        }),
+      );
     }
     return map;
   }, [menuItems, restaurantId, restaurantOffers]);
@@ -1319,7 +1318,11 @@ export function RestaurantMenuPanel({
               key={item._id}
               item={item}
               restaurantName={restaurantName}
-              offerPrice={offerPriceByItemId.get(item._id) ?? item.offerPrice}
+              offerPrice={
+                highlightByItemId.get(item._id)?.offerPrice ?? item.offerPrice
+              }
+              listPrice={highlightByItemId.get(item._id)?.listPrice}
+              variantLabel={highlightByItemId.get(item._id)?.variantName}
               onEdit={() => openEdit(item)}
               onDelete={() =>
                 setDeleteTarget({
@@ -2031,9 +2034,12 @@ export function RestaurantMenuPanel({
                             {item.name}
                           </p>
                           <OfferPrice
-                            price={item.price}
+                            price={
+                              highlightByItemId.get(item._id)?.listPrice ?? item.price
+                            }
                             offerPrice={
-                              offerPriceByItemId.get(item._id) ?? item.offerPrice
+                              highlightByItemId.get(item._id)?.offerPrice ??
+                              item.offerPrice
                             }
                             tone="dark"
                             size="sm"

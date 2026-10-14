@@ -324,6 +324,7 @@ type FormState = {
   scope: CustomerOfferScope;
   restaurantIds: string[];
   menuItemIds: string[];
+  scopedMenuItems: { menuItemId: string; variantName: string }[];
   buyMenuItemId: string;
   buyQty: number;
   getMenuItemId: string;
@@ -418,6 +419,7 @@ function applyAudiencePreset(
       // First-order-at-restaurant only makes sense for specific restaurants.
       scope: "restaurants",
       menuItemIds: [],
+      scopedMenuItems: [],
       usagePerUser: 1,
     };
   }
@@ -462,6 +464,8 @@ function offerSourceFromForm(form: FormState): OfferPriceSource {
     restaurantIds: form.restaurantIds,
     buyMenuItemId: form.buyMenuItemId || null,
     getMenuItemId: form.getMenuItemId || null,
+    buyVariantName: form.buyVariantName,
+    getVariantName: form.getVariantName,
     getDiscountType: form.getDiscountType,
     getDiscountValue: form.getDiscountValue,
     comboRestaurantId: form.comboRestaurantId || null,
@@ -471,6 +475,14 @@ function offerSourceFromForm(form: FormState): OfferPriceSource {
       name: c.name,
       variantName: c.variantName || "",
     })),
+    scopedMenuItems:
+      form.scope === "items"
+        ? form.menuItemIds.map((id) => ({
+            menuItemId: id,
+            variantName:
+              form.scopedMenuItems.find((s) => s.menuItemId === id)?.variantName || "",
+          }))
+        : [],
   };
 }
 
@@ -478,13 +490,15 @@ function dishOfferPreview(
   form: FormState,
   dish: OfferMenuItemOption,
   listPrice = dish.price,
+  variantName = "",
 ): number | null {
   return unitOfferPrice({
     listPrice,
     menuItemId: dish.id,
+    variantName,
     restaurantId: form.comboRestaurantId || form.restaurantIds[0],
     offers: [offerSourceFromForm(form)],
-    explicitOfferPrice: dish.offerPrice,
+    explicitOfferPrice: variantName ? null : dish.offerPrice,
   });
 }
 
@@ -514,6 +528,56 @@ function addOrIncrementComboItem(
   ];
 }
 
+function VariantNameField({
+  label,
+  value,
+  variants,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  variants: { name: string; price: number }[];
+  onChange: (value: string) => void;
+}) {
+  const known = variants.some((v) => v.name === value);
+  if (variants.length === 0) {
+    return (
+      <div className="grid gap-2">
+        <Label>{label}</Label>
+        <Input
+          placeholder="Exact variant name, or blank for any"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      </div>
+    );
+  }
+  return (
+    <div className="grid gap-2">
+      <Label>{label}</Label>
+      <select
+        className="h-10 rounded-md border border-white/15 bg-transparent px-3 text-sm text-white"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      >
+        <option className="bg-[#013644]" value="">
+          Any variant
+        </option>
+        {!known && value ? (
+          <option className="bg-[#013644]" value={value}>
+            {value}
+          </option>
+        ) : null}
+        {variants.map((v) => (
+          <option key={v.name} className="bg-[#013644]" value={v.name}>
+            {v.name} · ₹{v.price}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 const emptyForm = (): FormState => ({
   title: "",
   subtitle: "",
@@ -529,6 +593,7 @@ const emptyForm = (): FormState => ({
   scope: "all",
   restaurantIds: [],
   menuItemIds: [],
+  scopedMenuItems: [],
   buyMenuItemId: "",
   buyQty: 1,
   getMenuItemId: "",
@@ -577,6 +642,11 @@ function formFromOffer(row: AdminCustomerOffer): FormState {
     scope: row.scope,
     restaurantIds: row.restaurantIds,
     menuItemIds: row.menuItemIds,
+    scopedMenuItems: row.menuItemIds.map((id) => ({
+      menuItemId: id,
+      variantName:
+        row.scopedMenuItems?.find((s) => s.menuItemId === id)?.variantName || "",
+    })),
     buyMenuItemId: row.buyMenuItemId || "",
     buyQty: row.buyQty,
     getMenuItemId: row.getMenuItemId || "",
@@ -626,6 +696,14 @@ function payloadFromForm(form: FormState, forecastSnapshot?: Record<string, unkn
     ...form,
     restaurantIds: form.scope === "restaurants" ? form.restaurantIds : [],
     menuItemIds: form.scope === "items" ? form.menuItemIds : [],
+    scopedMenuItems:
+      form.scope === "items"
+        ? form.menuItemIds.map((id) => ({
+            menuItemId: id,
+            variantName:
+              form.scopedMenuItems.find((s) => s.menuItemId === id)?.variantName || "",
+          }))
+        : [],
     buyMenuItemId: form.buyMenuItemId || null,
     getMenuItemId: form.getMenuItemId || null,
     comboRestaurantId: form.comboRestaurantId || null,
@@ -847,7 +925,7 @@ export default function CustomerOffersPage() {
     setOpen(true);
   }
 
-  function openEdit(row: AdminCustomerOffer) {
+  async function openEdit(row: AdminCustomerOffer) {
     if (row.type === "free_delivery") {
       toast.error("Free delivery offers have been removed");
       return;
@@ -859,12 +937,29 @@ export default function CustomerOffersPage() {
     setDishOptions([]);
     setRestoSearch("");
     setDishSearch("");
+    setOpen(true);
+    const dishIds = [
+      ...new Set(
+        [
+          ...row.menuItemIds,
+          row.buyMenuItemId || "",
+          row.getMenuItemId || "",
+          ...row.comboItems.map((c) => c.menuItemId),
+        ].filter(Boolean),
+      ),
+    ];
+    if (dishIds.length > 0) {
+      try {
+        setDishOptions(await searchOfferMenuItems({ ids: dishIds }));
+      } catch {
+        // Variant lists load on the next dish search.
+      }
+    }
     setPreviewAssumptions({
       sampleCartAmount: Math.max(row.minOrderAmount || 0, 499),
       sampleDeliveryFee: 40,
       expectedOrderCount: 100,
     });
-    setOpen(true);
   }
 
   function save() {
@@ -1084,6 +1179,7 @@ export default function CustomerOffersPage() {
                       scope,
                       restaurantIds: scope === "restaurants" ? form.restaurantIds : [],
                       menuItemIds: scope === "items" ? form.menuItemIds : [],
+                      scopedMenuItems: scope === "items" ? form.scopedMenuItems : [],
                     });
                     if (scope !== "items") setDishFilterRestaurantId("");
                     if (scope !== "restaurants") setRestoSearch("");
@@ -1106,7 +1202,7 @@ export default function CustomerOffersPage() {
                   {form.scope === "restaurants" &&
                     "Offer only applies when ordering from the selected restaurants."}
                   {form.scope === "items" &&
-                    "Discount only applies to the selected dishes in the cart."}
+                    "Discount only applies to the selected dishes. Choose one variant when the deal is for a single size."}
                 </p>
               </div>
             )}
@@ -1461,26 +1557,24 @@ export default function CustomerOffersPage() {
                   {form.getVariantName ? ` (${form.getVariantName})` : ""}
                 </p>
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="grid gap-2">
-                    <Label>Buy variant (optional)</Label>
-                    <Input
-                      placeholder="Exact variant name"
-                      value={form.buyVariantName}
-                      onChange={(e) =>
-                        setForm({ ...form, buyVariantName: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label>Get variant (optional)</Label>
-                    <Input
-                      placeholder="Exact variant name"
-                      value={form.getVariantName}
-                      onChange={(e) =>
-                        setForm({ ...form, getVariantName: e.target.value })
-                      }
-                    />
-                  </div>
+                  <VariantNameField
+                    label="Buy variant (optional)"
+                    value={form.buyVariantName}
+                    variants={
+                      dishOptions.find((d) => d.id === form.buyMenuItemId)?.variants || []
+                    }
+                    onChange={(buyVariantName) => setForm({ ...form, buyVariantName })}
+                  />
+                  <VariantNameField
+                    label="Get variant (optional)"
+                    value={form.getVariantName}
+                    variants={
+                      dishOptions.find(
+                        (d) => d.id === (form.getMenuItemId || form.buyMenuItemId),
+                      )?.variants || []
+                    }
+                    onChange={(getVariantName) => setForm({ ...form, getVariantName })}
+                  />
                 </div>
               </div>
             )}
@@ -2051,27 +2145,91 @@ export default function CustomerOffersPage() {
                   </Button>
                 </div>
                 {form.menuItemIds.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
+                  <div className="space-y-2">
                     {form.menuItemIds.map((id) => {
-                      const name =
-                        dishOptions.find((d) => d.id === id)?.name || `Dish ${id.slice(-6)}`;
+                      const dish = dishOptions.find((d) => d.id === id);
+                      const name = dish?.name || `Dish ${id.slice(-6)}`;
+                      const variants = dish?.variants ?? [];
+                      const variantName =
+                        form.scopedMenuItems.find((s) => s.menuItemId === id)?.variantName ||
+                        "";
+                      const known = variants.some((v) => v.name === variantName);
+                      const listPrice = variantName
+                        ? (variants.find((v) => v.name === variantName)?.price ??
+                          dish?.price ??
+                          0)
+                        : variants.length
+                          ? Math.min(...variants.map((v) => v.price))
+                          : (dish?.price ?? 0);
                       return (
-                        <button
+                        <div
                           key={id}
-                          type="button"
-                          className="rounded border border-[#98E32F] bg-[#98E32F] px-2 py-1 text-xs text-[#013644]"
-                          onClick={() =>
-                            setForm((f) => ({
-                              ...f,
-                              menuItemIds: f.menuItemIds.filter((x) => x !== id),
-                            }))
-                          }
-                          title="Remove"
+                          className="flex flex-wrap items-center gap-2 rounded border border-[#98E32F]/50 bg-[#98E32F]/10 px-2 py-1.5"
                         >
-                          {name} ×
-                        </button>
+                          <span className="text-xs font-semibold text-[#98E32F]">{name}</span>
+                          {variants.length > 0 ? (
+                            <select
+                              className="h-7 rounded border border-white/20 bg-transparent px-2 text-[11px] text-white"
+                              value={variantName}
+                              onChange={(e) => {
+                                const next = e.target.value;
+                                setForm((f) => ({
+                                  ...f,
+                                  scopedMenuItems: [
+                                    ...f.scopedMenuItems.filter((s) => s.menuItemId !== id),
+                                    { menuItemId: id, variantName: next },
+                                  ],
+                                }));
+                              }}
+                            >
+                              <option className="bg-[#013644]" value="">
+                                All variants
+                              </option>
+                              {!known && variantName ? (
+                                <option className="bg-[#013644]" value={variantName}>
+                                  {variantName}
+                                </option>
+                              ) : null}
+                              {variants.map((v) => (
+                                <option key={v.name} className="bg-[#013644]" value={v.name}>
+                                  {v.name} · ₹{v.price}
+                                </option>
+                              ))}
+                            </select>
+                          ) : variantName ? (
+                            <span className="text-[11px] text-white/70">{variantName}</span>
+                          ) : null}
+                          {dish ? (
+                            <OfferPrice
+                              price={listPrice}
+                              offerPrice={dishOfferPreview(form, dish, listPrice, variantName)}
+                              tone="dark"
+                              size="sm"
+                            />
+                          ) : null}
+                          <button
+                            type="button"
+                            className="ml-auto text-xs text-red-300"
+                            onClick={() =>
+                              setForm((f) => ({
+                                ...f,
+                                menuItemIds: f.menuItemIds.filter((x) => x !== id),
+                                scopedMenuItems: f.scopedMenuItems.filter(
+                                  (s) => s.menuItemId !== id,
+                                ),
+                              }))
+                            }
+                          >
+                            Remove
+                          </button>
+                        </div>
                       );
                     })}
+                    <p className="text-[11px] text-white/45">
+                      All variants applies the offer to every size. A chosen variant is the
+                      only size customers see discounted on the menu card, dish page,
+                      restaurant menu, and search.
+                    </p>
                   </div>
                 )}
                 <div className="flex flex-wrap gap-2">
@@ -2086,12 +2244,20 @@ export default function CustomerOffersPage() {
                           setForm((f) => ({
                             ...f,
                             menuItemIds: [...f.menuItemIds, d.id],
+                            scopedMenuItems: [
+                              ...f.scopedMenuItems.filter((s) => s.menuItemId !== d.id),
+                              { menuItemId: d.id, variantName: "" },
+                            ],
                           }))
                         }
                       >
                         <span>{d.name}</span>
                         <OfferPrice
-                          price={d.price}
+                          price={
+                            d.variants?.length
+                              ? Math.min(...d.variants.map((v) => v.price))
+                              : d.price
+                          }
                           offerPrice={dishOfferPreview(form, d)}
                           tone="dark"
                           size="sm"

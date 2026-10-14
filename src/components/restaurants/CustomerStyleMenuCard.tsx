@@ -32,6 +32,8 @@ export const CustomerStyleMenuCard = memo(function CustomerStyleMenuCard({
   item,
   restaurantName,
   offerPrice,
+  listPrice: listPriceOverride,
+  variantLabel,
   onEdit,
   onDelete,
   onSetAvailability,
@@ -43,6 +45,10 @@ export const CustomerStyleMenuCard = memo(function CustomerStyleMenuCard({
   restaurantName?: string;
   /** Derived unit offer price for this dish (when lower than list price). */
   offerPrice?: number | null;
+  /** Catalog price the offer is compared against. Defaults to the cheapest variant. */
+  listPrice?: number;
+  /** Shown when the offer applies to one variant. */
+  variantLabel?: string;
   onEdit?: () => void;
   onDelete?: () => void;
   onSetAvailability?: (next: {
@@ -73,7 +79,7 @@ export const CustomerStyleMenuCard = memo(function CustomerStyleMenuCard({
       : null;
   const rating = ratingLabel(item);
   const grayscale = !item.isActive;
-  const listPrice = displayPrice(item);
+  const listPrice = listPriceOverride ?? displayPrice(item);
   const dealPrice = displayOfferPrice(item, offerPrice);
   const isFeatured = item.isFeatured === true;
   const isOffToday =
@@ -221,12 +227,19 @@ export const CustomerStyleMenuCard = memo(function CustomerStyleMenuCard({
           </p>
         )}
         <div className="flex items-end justify-between gap-2 mt-0.5">
-          <OfferPrice
-            price={listPrice}
-            offerPrice={dealPrice}
-            tone="light"
-            size="lg"
-          />
+          <div className="min-w-0">
+            {variantLabel ? (
+              <p className="text-[10px] font-extrabold text-[#2E7D32] leading-none mb-0.5">
+                {variantLabel}
+              </p>
+            ) : null}
+            <OfferPrice
+              price={listPrice}
+              offerPrice={dealPrice}
+              tone="light"
+              size="lg"
+            />
+          </div>
           <div className="flex gap-1 sm:hidden">
             {onEdit && (
               <button

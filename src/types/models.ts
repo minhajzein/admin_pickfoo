@@ -441,6 +441,11 @@ export interface AdminCustomerOfferComboItem {
   variantName?: string;
 }
 
+export interface AdminScopedMenuItem {
+  menuItemId: string;
+  variantName?: string;
+}
+
 export interface AdminOfferAudienceRules {
   lifecycle: AudienceLifecycle;
   lapsedAfterDays: number;
@@ -488,6 +493,7 @@ export interface AdminCustomerOffer {
   scope: CustomerOfferScope;
   restaurantIds: string[];
   menuItemIds: string[];
+  scopedMenuItems?: AdminScopedMenuItem[];
   buyMenuItemId: string | null;
   buyQty: number;
   getMenuItemId: string | null;

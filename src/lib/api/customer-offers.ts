@@ -192,12 +192,14 @@ export async function searchOfferRestaurants(search: string) {
 export async function searchOfferMenuItems(params: {
   search?: string;
   restaurantId?: string;
+  ids?: string[];
 }) {
   const { data } = await api.get("/customer-offers/link-options/menu-items", {
     params: {
       search: params.search || undefined,
       restaurantId: params.restaurantId || undefined,
-      limit: 30,
+      ids: params.ids?.length ? params.ids.join(",") : undefined,
+      limit: params.ids?.length ? Math.min(params.ids.length, 40) : 30,
     },
   });
   return (data.data ?? []) as OfferMenuItemOption[];
