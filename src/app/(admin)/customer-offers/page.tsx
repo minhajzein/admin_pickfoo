@@ -179,11 +179,19 @@ function OfferImpactPreviewPanel({
             </div>
             <div className="rounded border border-white/10 p-2">
               <p className="text-white/50">Funding</p>
-              <p className="text-sm font-semibold capitalize text-white">
-                {(preview?.fundingLabel || "none").replace(/-/g, " ")}
+              <p className="text-sm font-semibold text-white">
+                {preview?.fundingLabel === "platform-funded"
+                  ? "Platform wallet"
+                  : preview?.fundingLabel === "restaurant-funded"
+                    ? "Restaurant wallet"
+                    : preview?.fundingLabel === "shared-funded"
+                      ? "Split"
+                      : preview?.fundingLabel === "cashback-only"
+                        ? "Cashback only"
+                        : "None"}
               </p>
               <p className="text-white/40">
-                Comm {inr(per.offerFunding.commission)} · Menu{" "}
+                Platform wallet {inr(per.offerFunding.commission)} · Restaurant wallet{" "}
                 {inr(per.offerFunding.menuItem)}
               </p>
             </div>
@@ -820,10 +828,10 @@ export default function CustomerOffersPage() {
 
   const fundingHint = useMemo(() => {
     if (form.fundingSource === "commission")
-      return "Platform commission absorbs the discount. Customer still sees the offer price / checkout discount.";
+      return "The discount is paid from the platform wallet. The customer still sees the offer price.";
     if (form.fundingSource === "menu_item")
-      return "Restaurant item payout is reduced by the discount.";
-    return "Split the discount between platform commission and restaurant item amount.";
+      return "The discount is paid from the restaurant wallet.";
+    return "Split the discount by percentage between the platform wallet and the restaurant wallet.";
   }, [form.fundingSource]);
 
   const previewPayload = useMemo(
@@ -993,7 +1001,7 @@ export default function CustomerOffersPage() {
         <div>
           <h1 className="text-2xl font-semibold text-white">Customer offers</h1>
           <p className="mt-1 text-sm text-white/60">
-            Flat, percent, buy-and-get, combo, cashback, and who pays: commission, menu item, or both.
+            Flat, percent, buy-and-get, combo, cashback, and who pays: platform wallet, restaurant wallet, or a split.
           </p>
         </div>
         <Button onClick={openCreate} className="bg-[#98E32F] text-[#013644] hover:bg-[#98E32F]/90">
@@ -1825,21 +1833,38 @@ export default function CustomerOffersPage() {
               <select
                 className="h-10 rounded-md border border-white/15 bg-transparent px-3 text-sm text-white"
                 value={form.fundingSource}
-                onChange={(e) =>
+                onChange={(e) => {
+                  const fundingSource = e.target.value as OfferFundingSource;
+                  if (fundingSource !== "both") {
+                    setForm({ ...form, fundingSource });
+                    return;
+                  }
+                  const alreadySplit =
+                    form.fundingShareMode === "percent" &&
+                    form.commissionShare > 0 &&
+                    form.menuItemShare > 0 &&
+                    Math.abs(form.commissionShare + form.menuItemShare - 100) < 0.01;
+                  if (alreadySplit) {
+                    setForm({ ...form, fundingSource, fundingShareMode: "percent" });
+                    return;
+                  }
                   setForm({
                     ...form,
-                    fundingSource: e.target.value as OfferFundingSource,
-                  })
-                }
+                    fundingSource,
+                    fundingShareMode: "percent",
+                    commissionShare: 50,
+                    menuItemShare: 50,
+                  });
+                }}
               >
                 <option className="bg-[#013644]" value="commission">
-                  Deduct from commission
+                  From platform wallet
                 </option>
                 <option className="bg-[#013644]" value="menu_item">
-                  Deduct from menu item (restaurant)
+                  Restaurant wallet
                 </option>
                 <option className="bg-[#013644]" value="both">
-                  Split between both
+                  Split
                 </option>
               </select>
               <p className="text-xs text-white/50">{fundingHint}</p>
@@ -1954,63 +1979,30 @@ export default function CustomerOffersPage() {
               </div>
             </div>
 
-            {form.fundingSource === "both" && (
+            {form.fundingSource === "both" && form.fundingShareMode === "amount" && (
               <div className="space-y-3">
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 gap-3">
                   <div className="grid gap-2">
-                    <Label>Share mode</Label>
-                    <select
-                      className="h-10 rounded-md border border-white/15 bg-transparent px-3 text-sm text-white"
-                      value={form.fundingShareMode}
-                      onChange={(e) =>
-                        setForm({
-                          ...form,
-                          fundingShareMode: e.target.value as OfferFundingShareMode,
-                        })
-                      }
-                    >
-                      <option className="bg-[#013644]" value="percent">
-                        Percent
-                      </option>
-                      <option className="bg-[#013644]" value="amount">
-                        Amount ₹
-                      </option>
-                    </select>
-                  </div>
-                  <div className="grid gap-2">
-                    <Label>
-                      Commission share
-                      {form.fundingShareMode === "amount"
-                        ? ` (max ${inr(maxCommissionShareAmount)})`
-                        : " %"}
-                    </Label>
+                    <Label>Platform wallet ₹ (max {inr(maxCommissionShareAmount)})</Label>
                     <Input
                       type="number"
+                      min={0}
                       value={form.commissionShare}
-                      max={
-                        form.fundingShareMode === "amount"
-                          ? maxCommissionShareAmount || undefined
-                          : 100
-                      }
+                      max={maxCommissionShareAmount || undefined}
                       onChange={(e) => {
-                        let next = Number(e.target.value);
-                        if (form.fundingShareMode === "amount") {
-                          next = Math.min(
-                            Math.max(0, next),
-                            maxCommissionShareAmount || next,
-                          );
-                        }
+                        const next = Math.min(
+                          Math.max(0, Number(e.target.value)),
+                          maxCommissionShareAmount || Number(e.target.value),
+                        );
                         setForm({ ...form, commissionShare: next });
                       }}
                     />
                   </div>
                   <div className="grid gap-2">
-                    <Label>
-                      Menu item share
-                      {form.fundingShareMode === "amount" ? " ₹" : " %"}
-                    </Label>
+                    <Label>Restaurant wallet ₹</Label>
                     <Input
                       type="number"
+                      min={0}
                       value={form.menuItemShare}
                       onChange={(e) =>
                         setForm({ ...form, menuItemShare: Number(e.target.value) })
@@ -2019,12 +2011,62 @@ export default function CustomerOffersPage() {
                   </div>
                 </div>
                 <p className="text-xs text-white/55">
-                  From platform commission you can choose up to{" "}
+                  This offer was saved as fixed amounts. Platform wallet can cover up to{" "}
+                  <span className="font-semibold text-[#98E32F]">
+                    {inr(maxCommissionShareAmount)}
+                  </span>
+                  . The rest comes from the restaurant wallet.
+                </p>
+              </div>
+            )}
+
+            {form.fundingSource === "both" && form.fundingShareMode !== "amount" && (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="grid gap-2">
+                    <Label>Platform wallet %</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={form.commissionShare}
+                      onChange={(e) => {
+                        const next = Math.min(100, Math.max(0, Number(e.target.value) || 0));
+                        setForm({
+                          ...form,
+                          fundingShareMode: "percent",
+                          commissionShare: next,
+                          menuItemShare: Math.round((100 - next) * 100) / 100,
+                        });
+                      }}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>Restaurant wallet %</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={form.menuItemShare}
+                      onChange={(e) => {
+                        const next = Math.min(100, Math.max(0, Number(e.target.value) || 0));
+                        setForm({
+                          ...form,
+                          fundingShareMode: "percent",
+                          menuItemShare: next,
+                          commissionShare: Math.round((100 - next) * 100) / 100,
+                        });
+                      }}
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-white/55">
+                  The two percentages always total 100%. Platform wallet can safely cover up to{" "}
                   <span className="font-semibold text-[#98E32F]">
                     {inr(maxCommissionShareAmount)}
                   </span>{" "}
-                  of this discount ({commissionPct}% restaurant commission).
-                  Remaining is restaurant-funded.
+                  of this discount ({commissionPct}% restaurant commission). The rest is paid from
+                  the restaurant wallet.
                 </p>
               </div>
             )}
