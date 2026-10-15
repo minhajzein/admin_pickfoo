@@ -7,6 +7,21 @@ import {
 
 export type CouponKind = "coupon" | "voucher";
 export type CouponScope = "all" | "restaurants" | "items" | "categories";
+export type CouponDiscountType = "flat" | "percent";
+export type CouponFundingSource = "commission" | "menu_item" | "both";
+export type CouponAudience = "all" | "segment";
+export type CouponLifecycle = "all" | "new" | "returning" | "lapsed";
+export type CouponRestaurantAffinity = "any" | "has_ordered" | "never_ordered";
+
+export interface CouponAudienceRules {
+  lifecycle: CouponLifecycle;
+  lapsedAfterDays: number;
+  minOrderCount: number;
+  maxOrderCount: number;
+  minAov: number;
+  maxAov: number;
+  restaurantAffinity: CouponRestaurantAffinity;
+}
 
 export interface AdminCoupon {
   id: string;
@@ -16,6 +31,13 @@ export interface AdminCoupon {
   description: string;
   offerId: string;
   offerTitle?: string;
+  discountType: CouponDiscountType;
+  discountValue: number;
+  maxDiscountAmount: number;
+  minOrderAmount: number;
+  fundingSource: CouponFundingSource;
+  commissionShare: number;
+  menuItemShare: number;
   scope: CouponScope;
   restaurantIds: string[];
   menuItemIds: string[];
@@ -23,6 +45,8 @@ export interface AdminCoupon {
   /** Empty = every customer. */
   customerIds: string[];
   customers?: CouponCustomerOption[];
+  audience: CouponAudience;
+  audienceRules: CouponAudienceRules;
   startsAt: string | null;
   endsAt: string | null;
   isActive: boolean;
@@ -75,12 +99,22 @@ export type CouponPayload = {
   kind: CouponKind;
   title: string;
   description?: string;
-  offerId: string;
+  offerId?: string;
+  discountType?: CouponDiscountType;
+  discountValue?: number;
+  maxDiscountAmount?: number;
+  minOrderAmount?: number;
+  fundingSource?: CouponFundingSource;
+  fundingShareMode?: "percent" | "amount";
+  commissionShare?: number;
+  menuItemShare?: number;
   scope?: CouponScope;
   restaurantIds?: string[];
   menuItemIds?: string[];
   categoryNames?: string[];
   customerIds?: string[];
+  audience?: CouponAudience;
+  audienceRules?: CouponAudienceRules;
   isActive?: boolean;
   usageLimit?: number;
   usagePerUser?: number;

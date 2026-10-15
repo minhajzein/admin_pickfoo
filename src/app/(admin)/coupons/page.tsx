@@ -40,8 +40,13 @@ import {
   updateCoupon,
   type AdminCoupon,
   type CouponCategoryOption,
+  type CouponAudienceRules,
   type CouponCustomerOption,
+  type CouponDiscountType,
+  type CouponFundingSource,
   type CouponKind,
+  type CouponLifecycle,
+  type CouponRestaurantAffinity,
   type CouponMenuItemOption,
   type CouponOfferOption,
   type CouponRestaurantOption,
@@ -50,6 +55,77 @@ import {
 import { ListPagination } from "@/components/ui/list-pagination";
 import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 
+type CustomerSpec =
+  | "everyone"
+  | "new"
+  | "returning"
+  | "lapsed"
+  | "first_at_restaurant"
+  | "specific"
+  | "custom";
+
+const defaultAudienceRules = (): CouponAudienceRules => ({
+  lifecycle: "all",
+  lapsedAfterDays: 30,
+  minOrderCount: 0,
+  maxOrderCount: 0,
+  minAov: 0,
+  maxAov: 0,
+  restaurantAffinity: "any",
+});
+
+function customerSpecFromRow(row: AdminCoupon): CustomerSpec {
+  if ((row.customerIds?.length ?? 0) > 0) return "specific";
+  const rules = { ...defaultAudienceRules(), ...(row.audienceRules || {}) };
+  if (!row.audience || row.audience === "all") return "everyone";
+  const hasExtra =
+    rules.minOrderCount > 0 ||
+    rules.maxOrderCount > 0 ||
+    rules.minAov > 0 ||
+    rules.maxAov > 0;
+  if (!hasExtra && rules.lifecycle === "all" && rules.restaurantAffinity === "never_ordered") {
+    return "first_at_restaurant";
+  }
+  if (hasExtra || rules.restaurantAffinity !== "any") return "custom";
+  if (rules.lifecycle === "new") return "new";
+  if (rules.lifecycle === "returning") return "returning";
+  if (rules.lifecycle === "lapsed") return "lapsed";
+  return "custom";
+}
+
+function audiencePayload(form: FormState): {
+  audience: "all" | "segment";
+  audienceRules: CouponAudienceRules;
+  customerIds: string[];
+} {
+  if (form.customerSpec === "specific") {
+    return {
+      audience: "all",
+      audienceRules: defaultAudienceRules(),
+      customerIds: form.customers.map((c) => c.id),
+    };
+  }
+  if (form.customerSpec === "everyone") {
+    return { audience: "all", audienceRules: defaultAudienceRules(), customerIds: [] };
+  }
+  const rules = defaultAudienceRules();
+  if (form.customerSpec === "new") rules.lifecycle = "new";
+  else if (form.customerSpec === "returning") rules.lifecycle = "returning";
+  else if (form.customerSpec === "lapsed") {
+    rules.lifecycle = "lapsed";
+    rules.lapsedAfterDays = Math.max(1, form.audienceRules.lapsedAfterDays || 30);
+  } else if (form.customerSpec === "first_at_restaurant") {
+    rules.restaurantAffinity = "never_ordered";
+  } else {
+    return {
+      audience: "segment",
+      audienceRules: form.audienceRules,
+      customerIds: [],
+    };
+  }
+  return { audience: "segment", audienceRules: rules, customerIds: [] };
+}
+
 type FormState = {
   code: string;
   kind: CouponKind;
@@ -57,11 +133,19 @@ type FormState = {
   description: string;
   offerId: string;
   offerTitle: string;
+  discountType: CouponDiscountType;
+  discountValue: number;
+  maxDiscountAmount: number;
+  minOrderAmount: number;
+  fundingSource: CouponFundingSource;
+  commissionShare: number;
+  menuItemShare: number;
   scope: CouponScope;
   restaurantIds: string[];
   menuItemIds: string[];
   categoryNames: string[];
-  onlyCustomers: boolean;
+  customerSpec: CustomerSpec;
+  audienceRules: CouponAudienceRules;
   customers: CouponCustomerOption[];
   usageLimit: number;
   usagePerUser: number;
@@ -78,9 +162,16 @@ function customerLabel(c: CouponCustomerOption) {
 
 function audienceLabel(row: AdminCoupon) {
   const count = row.customerIds?.length ?? 0;
-  if (count === 0) return "Everyone";
   if (count === 1 && row.customers?.[0]) return customerLabel(row.customers[0]);
-  return `${count} customers`;
+  if (count > 1) return `${count} customers`;
+  if (count === 1) return "1 customer";
+  const spec = customerSpecFromRow(row);
+  if (spec === "new") return "New customers";
+  if (spec === "returning") return "Returning";
+  if (spec === "lapsed") return "Lapsed";
+  if (spec === "first_at_restaurant") return "First order here";
+  if (spec === "custom") return "Custom segment";
+  return "Everyone";
 }
 
 const emptyForm = (): FormState => ({
@@ -90,11 +181,19 @@ const emptyForm = (): FormState => ({
   description: "",
   offerId: "",
   offerTitle: "",
+  discountType: "flat",
+  discountValue: 0,
+  maxDiscountAmount: 0,
+  minOrderAmount: 0,
+  fundingSource: "commission",
+  commissionShare: 50,
+  menuItemShare: 50,
   scope: "all",
   restaurantIds: [],
   menuItemIds: [],
   categoryNames: [],
-  onlyCustomers: false,
+  customerSpec: "everyone",
+  audienceRules: defaultAudienceRules(),
   customers: [],
   usageLimit: 0,
   usagePerUser: 0,
@@ -112,11 +211,19 @@ function formFromRow(row: AdminCoupon): FormState {
     description: row.description,
     offerId: row.offerId,
     offerTitle: row.offerTitle || "",
+    discountType: row.discountType || "flat",
+    discountValue: row.discountValue || 0,
+    maxDiscountAmount: row.maxDiscountAmount || 0,
+    minOrderAmount: row.minOrderAmount || 0,
+    fundingSource: row.fundingSource || "commission",
+    commissionShare: row.commissionShare ?? 50,
+    menuItemShare: row.menuItemShare ?? 50,
     scope: row.scope || "all",
     restaurantIds: row.restaurantIds || [],
     menuItemIds: row.menuItemIds || [],
     categoryNames: row.categoryNames || [],
-    onlyCustomers: (row.customerIds?.length ?? 0) > 0,
+    customerSpec: customerSpecFromRow(row),
+    audienceRules: { ...defaultAudienceRules(), ...(row.audienceRules || {}) },
     customers:
       row.customers && row.customers.length > 0
         ? row.customers
@@ -178,7 +285,12 @@ export default function CouponsPage() {
     mutationFn: async () => {
       if (!form.code.trim()) throw new Error("Code is required");
       if (!form.title.trim()) throw new Error("Title is required");
-      if (!form.offerId) throw new Error("Select a linked offer");
+      if (!form.offerId && !(form.discountValue > 0)) {
+        throw new Error("Enter a discount, or link a customer offer");
+      }
+      if (!form.offerId && form.discountType === "percent" && form.discountValue > 100) {
+        throw new Error("Percent discount cannot exceed 100");
+      }
       if (form.scope === "restaurants" && form.restaurantIds.length === 0) {
         throw new Error("Select at least one restaurant");
       }
@@ -188,7 +300,7 @@ export default function CouponsPage() {
       if (form.scope === "categories" && form.categoryNames.length === 0) {
         throw new Error("Select at least one category");
       }
-      if (form.onlyCustomers && form.customers.length === 0) {
+      if (form.customerSpec === "specific" && form.customers.length === 0) {
         throw new Error("Select at least one customer");
       }
       const payload = {
@@ -197,11 +309,29 @@ export default function CouponsPage() {
         title: form.title.trim(),
         description: form.description.trim(),
         offerId: form.offerId,
+        discountType: form.discountType,
+        discountValue: form.discountValue,
+        maxDiscountAmount: form.discountType === "percent" ? form.maxDiscountAmount : 0,
+        minOrderAmount: form.minOrderAmount,
+        fundingSource: form.fundingSource,
+        fundingShareMode: "percent" as const,
+        commissionShare:
+          form.fundingSource === "commission"
+            ? 100
+            : form.fundingSource === "menu_item"
+              ? 0
+              : form.commissionShare,
+        menuItemShare:
+          form.fundingSource === "menu_item"
+            ? 100
+            : form.fundingSource === "commission"
+              ? 0
+              : form.menuItemShare,
         scope: form.scope,
         restaurantIds: form.scope === "restaurants" ? form.restaurantIds : [],
         menuItemIds: form.scope === "items" ? form.menuItemIds : [],
         categoryNames: form.scope === "categories" ? form.categoryNames : [],
-        customerIds: form.onlyCustomers ? form.customers.map((c) => c.id) : [],
+        ...audiencePayload(form),
         isActive: form.isActive,
         usageLimit: form.usageLimit,
         usagePerUser: form.usagePerUser,
@@ -337,8 +467,8 @@ export default function CouponsPage() {
         <div>
           <h1 className="text-2xl font-bold text-white">Coupons & vouchers</h1>
           <p className="text-sm text-white/60">
-            Link a code to a customer offer, and optionally limit it to restaurants, dishes, or
-            categories.
+            Create a code with its own discount, or link it to a customer offer. Limit it to
+            restaurants, dishes, or categories when you need to.
           </p>
         </div>
         <Button onClick={openCreate} className="bg-[#98E32F] text-[#013644]">
@@ -397,7 +527,11 @@ export default function CouponsPage() {
                       <TableCell className="capitalize text-white/80">{row.kind}</TableCell>
                       <TableCell className="text-white">{row.title}</TableCell>
                       <TableCell className="text-sm text-white/80">
-                        {row.offerTitle || row.offerId}
+                        {row.offerId
+                          ? row.offerTitle || row.offerId
+                          : row.discountType === "percent"
+                            ? `${row.discountValue || 0}% off`
+                            : `₹${row.discountValue || 0} off`}
                       </TableCell>
                       <TableCell className="text-xs text-white/60">
                         {scopeLabel(row.scope)}
@@ -491,10 +625,153 @@ export default function CouponsPage() {
               />
             </div>
 
+            {!form.offerId && (
+              <div className="space-y-3 rounded-md border border-white/10 p-3">
+                <Label>Discount</Label>
+                <p className="text-xs text-white/50">
+                  Applied at checkout when the customer enters this code. Leave this out only if you
+                  link an offer below.
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="grid gap-2">
+                    <Label>Type</Label>
+                    <select
+                      className="h-10 rounded-md border border-white/15 bg-transparent px-3 text-sm"
+                      value={form.discountType}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          discountType: e.target.value as CouponDiscountType,
+                        })
+                      }
+                    >
+                      <option className="bg-[#013644]" value="flat">
+                        Flat ₹ off
+                      </option>
+                      <option className="bg-[#013644]" value="percent">
+                        Percent off
+                      </option>
+                    </select>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>{form.discountType === "percent" ? "Percent" : "Amount ₹"}</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={form.discountType === "percent" ? 100 : undefined}
+                      value={form.discountValue}
+                      onChange={(e) =>
+                        setForm({ ...form, discountValue: Math.max(0, Number(e.target.value) || 0) })
+                      }
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  {form.discountType === "percent" && (
+                    <div className="grid gap-2">
+                      <Label>Max discount ₹ (0 = no cap)</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        value={form.maxDiscountAmount}
+                        onChange={(e) =>
+                          setForm({
+                            ...form,
+                            maxDiscountAmount: Math.max(0, Number(e.target.value) || 0),
+                          })
+                        }
+                      />
+                    </div>
+                  )}
+                  <div className="grid gap-2">
+                    <Label>Min order ₹ (0 = none)</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={form.minOrderAmount}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          minOrderAmount: Math.max(0, Number(e.target.value) || 0),
+                        })
+                      }
+                    />
+                  </div>
+                </div>
+                <div className="grid gap-2">
+                  <Label>Who pays the discount?</Label>
+                  <select
+                    className="h-10 rounded-md border border-white/15 bg-transparent px-3 text-sm"
+                    value={form.fundingSource}
+                    onChange={(e) => {
+                      const fundingSource = e.target.value as CouponFundingSource;
+                      setForm({
+                        ...form,
+                        fundingSource,
+                        ...(fundingSource === "both" &&
+                        form.commissionShare + form.menuItemShare !== 100
+                          ? { commissionShare: 50, menuItemShare: 50 }
+                          : {}),
+                      });
+                    }}
+                  >
+                    <option className="bg-[#013644]" value="commission">
+                      From platform wallet
+                    </option>
+                    <option className="bg-[#013644]" value="menu_item">
+                      Restaurant wallet
+                    </option>
+                    <option className="bg-[#013644]" value="both">
+                      Split
+                    </option>
+                  </select>
+                </div>
+                {form.fundingSource === "both" && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="grid gap-2">
+                      <Label>Platform wallet %</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={form.commissionShare}
+                        onChange={(e) => {
+                          const next = Math.min(100, Math.max(0, Number(e.target.value) || 0));
+                          setForm({
+                            ...form,
+                            commissionShare: next,
+                            menuItemShare: Math.round((100 - next) * 100) / 100,
+                          });
+                        }}
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label>Restaurant wallet %</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={form.menuItemShare}
+                        onChange={(e) => {
+                          const next = Math.min(100, Math.max(0, Number(e.target.value) || 0));
+                          setForm({
+                            ...form,
+                            menuItemShare: next,
+                            commissionShare: Math.round((100 - next) * 100) / 100,
+                          });
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="space-y-2 rounded-md border border-white/10 p-3">
-              <Label>Linked customer offer</Label>
+              <Label>Linked customer offer (optional)</Label>
               <p className="text-xs text-white/50">
-                Required. The code unlocks this offer&apos;s discount at checkout.
+                If you link an offer, checkout uses that offer&apos;s discount instead of the amount
+                above.
               </p>
               <div className="flex gap-2">
                 <Input
@@ -585,7 +862,7 @@ export default function CouponsPage() {
                 </option>
               </select>
               <p className="text-xs text-white/50">
-                Optional extra limit for this code, on top of the linked offer.
+                Optional limit for this code.
               </p>
 
               {form.scope === "restaurants" && (
@@ -801,27 +1078,188 @@ export default function CouponsPage() {
             </div>
 
             <div className="space-y-2 rounded-md border border-white/10 p-3">
-              <Label>Who can use this code</Label>
+              <Label>Customers</Label>
               <select
                 className="h-10 w-full rounded-md border border-white/15 bg-transparent px-3 text-sm"
-                value={form.onlyCustomers ? "customers" : "all"}
-                onChange={(e) =>
-                  setForm({ ...form, onlyCustomers: e.target.value === "customers" })
-                }
+                value={form.customerSpec}
+                onChange={(e) => {
+                  const customerSpec = e.target.value as CustomerSpec;
+                  setForm({
+                    ...form,
+                    customerSpec,
+                    ...(customerSpec === "first_at_restaurant" && form.usagePerUser === 0
+                      ? { usagePerUser: 1 }
+                      : {}),
+                  });
+                }}
               >
-                <option className="bg-[#013644]" value="all">
+                <option className="bg-[#013644]" value="everyone">
                   All customers
                 </option>
-                <option className="bg-[#013644]" value="customers">
+                <option className="bg-[#013644]" value="new">
+                  New customers (0 orders)
+                </option>
+                <option className="bg-[#013644]" value="returning">
+                  Returning customers
+                </option>
+                <option className="bg-[#013644]" value="lapsed">
+                  Lapsed customers
+                </option>
+                <option className="bg-[#013644]" value="first_at_restaurant">
+                  First order at this restaurant
+                </option>
+                <option className="bg-[#013644]" value="specific">
                   Specific customers only
+                </option>
+                <option className="bg-[#013644]" value="custom">
+                  Custom segment
                 </option>
               </select>
               <p className="text-xs text-white/50">
-                Restricted codes are only listed in the cart for the selected customers, and nobody
-                else can redeem them. The linked offer&apos;s audience segment also applies.
+                Checkout only accepts the code for customers in this group. A linked offer can
+                narrow it further.
               </p>
+              {form.customerSpec === "lapsed" && (
+                <div className="grid gap-2">
+                  <Label>Lapsed after (days)</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={form.audienceRules.lapsedAfterDays}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        audienceRules: {
+                          ...form.audienceRules,
+                          lapsedAfterDays: Math.max(1, Number(e.target.value) || 30),
+                        },
+                      })
+                    }
+                  />
+                </div>
+              )}
+              {form.customerSpec === "first_at_restaurant" && (
+                <p className="text-xs text-white/50">
+                  The customer has no delivered order at the restaurant in this cart. If you limit
+                  the code to restaurants, it only works at those restaurants. Usage per user is
+                  set to 1.
+                </p>
+              )}
+              {form.customerSpec === "custom" && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="grid gap-2">
+                    <Label>Lifecycle</Label>
+                    <select
+                      className="h-10 rounded-md border border-white/15 bg-transparent px-3 text-sm"
+                      value={form.audienceRules.lifecycle}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          audienceRules: {
+                            ...form.audienceRules,
+                            lifecycle: e.target.value as CouponLifecycle,
+                          },
+                        })
+                      }
+                    >
+                      <option className="bg-[#013644]" value="all">Any</option>
+                      <option className="bg-[#013644]" value="new">New</option>
+                      <option className="bg-[#013644]" value="returning">Returning</option>
+                      <option className="bg-[#013644]" value="lapsed">Lapsed</option>
+                    </select>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>Restaurant history</Label>
+                    <select
+                      className="h-10 rounded-md border border-white/15 bg-transparent px-3 text-sm"
+                      value={form.audienceRules.restaurantAffinity}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          audienceRules: {
+                            ...form.audienceRules,
+                            restaurantAffinity: e.target.value as CouponRestaurantAffinity,
+                          },
+                        })
+                      }
+                    >
+                      <option className="bg-[#013644]" value="any">Any</option>
+                      <option className="bg-[#013644]" value="has_ordered">Has ordered here</option>
+                      <option className="bg-[#013644]" value="never_ordered">Never ordered here</option>
+                    </select>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>Min orders</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={form.audienceRules.minOrderCount}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          audienceRules: {
+                            ...form.audienceRules,
+                            minOrderCount: Math.max(0, Number(e.target.value) || 0),
+                          },
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>Max orders (0 = none)</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={form.audienceRules.maxOrderCount}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          audienceRules: {
+                            ...form.audienceRules,
+                            maxOrderCount: Math.max(0, Number(e.target.value) || 0),
+                          },
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>Min average order ₹</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={form.audienceRules.minAov}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          audienceRules: {
+                            ...form.audienceRules,
+                            minAov: Math.max(0, Number(e.target.value) || 0),
+                          },
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>Max average order ₹ (0 = none)</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={form.audienceRules.maxAov}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          audienceRules: {
+                            ...form.audienceRules,
+                            maxAov: Math.max(0, Number(e.target.value) || 0),
+                          },
+                        })
+                      }
+                    />
+                  </div>
+                </div>
+              )}
 
-              {form.onlyCustomers && (
+              {form.customerSpec === "specific" && (
                 <div className="space-y-2 pt-1">
                   <div className="flex gap-2">
                     <Input
