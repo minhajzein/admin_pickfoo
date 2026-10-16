@@ -84,6 +84,7 @@ const KIND_TABS: Array<{ id: PlatformLedgerKind; label: string }> = [
   { id: "restaurant_withdrawal", label: "Restaurant withdrawals" },
   { id: "partner_payout", label: "Partner payouts" },
   { id: "expense", label: "Expenses" },
+  { id: "wallet_transfer", label: "Restaurant transfers" },
 ];
 
 const EXPENSE_TAGS: Array<{ id: PlatformExpenseTag; label: string }> = [
@@ -274,6 +275,8 @@ function kindLabel(kind: Exclude<PlatformLedgerKind, "all">) {
       return "Partner payout";
     case "expense":
       return "Expense";
+    case "wallet_transfer":
+      return "Restaurant transfer";
   }
 }
 
@@ -773,6 +776,13 @@ export default function RevenuePage() {
           hint={`Restaurants ${formatMoney(wallet?.restaurant.availableBalance)} · Partners ${formatMoney(wallet?.partner.availableBalance)}`}
           loading={isWalletLoading}
           icon={<Wallet size={14} className="text-[#98E32F]" />}
+        />
+        <MiniStat
+          label="Platform wallet"
+          value={formatMoney(wallet?.platform?.retainedBalance)}
+          hint={`${wallet?.platform?.transferCount ?? 0} transfers from restaurants`}
+          loading={isWalletLoading}
+          icon={<Wallet size={14} className="text-sky-300" />}
         />
         <MiniStat
           label="Payout pending"

@@ -25,9 +25,11 @@ import {
   fetchRestaurantLedger,
   fetchRestaurantLedgerTransactions,
   fetchRestaurantLedgerWithdrawals,
+  transferRestaurantLedger,
   type LedgerTxType,
   type RestaurantLedgerTransaction,
 } from "@/lib/api/restaurant-ledger";
+import { fetchPartners } from "@/lib/api/partners";
 import {
   updateWithdrawalStatus,
   type AdminWithdrawal,
@@ -51,6 +53,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Table,
   TableBody,
@@ -285,6 +288,17 @@ export default function RestaurantLedgerPage() {
   const istNow = useMemo(() => currentIstYearMonth(), []);
   const [reportYear, setReportYear] = useState(String(istNow.year));
   const [reportMonth, setReportMonth] = useState(String(istNow.month));
+  const [transferOpen, setTransferOpen] = useState(false);
+  const [transferAmount, setTransferAmount] = useState("");
+  const [transferReason, setTransferReason] = useState("");
+  const [transferTo, setTransferTo] = useState<"partner" | "platform">(
+    "platform",
+  );
+  const [partnerQuery, setPartnerQuery] = useState("");
+  const [selectedPartner, setSelectedPartner] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
 
   const pdfMutation = useMutation({
     mutationFn: (restaurantName?: string) =>
@@ -303,6 +317,62 @@ export default function RestaurantLedgerPage() {
       toast.error(
         typeof msg === "string" ? msg : "Could not download restaurant PDF",
       );
+    },
+  });
+
+  const partnerSearch = useQuery({
+    queryKey: ["ledger-partner-search", partnerQuery],
+    queryFn: () =>
+      fetchPartners({
+        search: partnerQuery.trim(),
+        status: "verified",
+        page: 1,
+        limit: 8,
+      }),
+    enabled:
+      transferOpen && transferTo === "partner" && partnerQuery.trim().length >= 2,
+  });
+
+  const transferMutation = useMutation({
+    mutationFn: () =>
+      transferRestaurantLedger(restaurantId, {
+        amount: Number(transferAmount),
+        reason: transferReason.trim(),
+        destination: transferTo,
+        partnerId: transferTo === "partner" ? selectedPartner?.id : undefined,
+      }),
+    onSuccess: (result) => {
+      const partnerId = selectedPartner?.id;
+      toast.success(result.notes || "Amount deducted");
+      setTransferOpen(false);
+      setTransferAmount("");
+      setTransferReason("");
+      setPartnerQuery("");
+      setSelectedPartner(null);
+      queryClient.invalidateQueries({
+        queryKey: ["restaurant-ledger", restaurantId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["restaurant-ledger-tx", restaurantId],
+      });
+      if (partnerId) {
+        queryClient.invalidateQueries({
+          queryKey: ["partner-ledger", partnerId],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["partner-ledger-tx", partnerId],
+        });
+      }
+      queryClient.invalidateQueries({ queryKey: ["platform-ledger"] });
+      queryClient.invalidateQueries({ queryKey: ["platform-ledger-wallet"] });
+    },
+    onError: (err: unknown) => {
+      const msg =
+        err && typeof err === "object" && "response" in err
+          ? (err as { response?: { data?: { message?: string } } }).response
+              ?.data?.message
+          : undefined;
+      toast.error(typeof msg === "string" ? msg : "Could not deduct this amount");
     },
   });
 
@@ -560,6 +630,14 @@ export default function RestaurantLedgerPage() {
               Settings
             </Button>
           </Link>
+          <Button
+            size="sm"
+            variant="outline"
+            className="border-red-400/40 text-red-200 hover:bg-red-500/10"
+            onClick={() => setTransferOpen(true)}
+          >
+            Deduct & transfer
+          </Button>
           <Link href="/withdrawals">
             <Button
               size="sm"
@@ -1235,6 +1313,144 @@ export default function RestaurantLedgerPage() {
                 <Loader2 className="animate-spin h-4 w-4" />
               ) : (
                 "Confirm"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={transferOpen} onOpenChange={setTransferOpen}>
+        <DialogContent className="border-white/10 bg-[#013644] text-white sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Deduct from restaurant wallet</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-xs text-white/50">
+              Withdrawable balance {inr(summary.withdrawable ?? summary.availableBalance)}.
+              The same amount and reason are written on the restaurant history
+              and on the wallet that receives it.
+            </p>
+            <div className="space-y-1">
+              <Label className="text-xs text-white/50">Amount (₹)</Label>
+              <Input
+                inputMode="decimal"
+                value={transferAmount}
+                onChange={(e) => setTransferAmount(e.target.value)}
+                placeholder="0.00"
+                className="border-white/15 bg-black/20"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs text-white/50">Reason</Label>
+              <Textarea
+                value={transferReason}
+                onChange={(e) => setTransferReason(e.target.value)}
+                placeholder="Why this amount is being deducted"
+                className="min-h-20 border-white/15 bg-black/20"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs text-white/50">Transfer to</Label>
+              <div className="flex gap-2">
+                {(
+                  [
+                    ["platform", "Platform wallet"],
+                    ["partner", "Delivery partner"],
+                  ] as const
+                ).map(([value, label]) => (
+                  <Button
+                    key={value}
+                    type="button"
+                    size="sm"
+                    variant={transferTo === value ? "default" : "outline"}
+                    className={
+                      transferTo === value
+                        ? "bg-[#98E32F] text-[#013644] hover:bg-[#98E32F]"
+                        : "border-white/15 text-white/70"
+                    }
+                    onClick={() => setTransferTo(value)}
+                  >
+                    {label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+            {transferTo === "partner" ? (
+              <div className="space-y-2">
+                <Label className="text-xs text-white/50">
+                  Delivery partner
+                </Label>
+                <Input
+                  value={partnerQuery}
+                  onChange={(e) => {
+                    setPartnerQuery(e.target.value);
+                    setSelectedPartner(null);
+                  }}
+                  placeholder="Search name or phone"
+                  className="border-white/15 bg-black/20"
+                />
+                {selectedPartner ? (
+                  <p className="text-xs text-[#98E32F]">
+                    Selected: {selectedPartner.name}
+                  </p>
+                ) : null}
+                {partnerQuery.trim().length >= 2 && !selectedPartner ? (
+                  <div className="max-h-40 overflow-auto rounded-md border border-white/10">
+                    {(partnerSearch.data?.data ?? []).length === 0 ? (
+                      <p className="px-3 py-2 text-xs text-white/40">
+                        {partnerSearch.isFetching
+                          ? "Searching..."
+                          : "No verified partners found"}
+                      </p>
+                    ) : (
+                      partnerSearch.data?.data.map((partner) =>
+                        partner._id ? (
+                        <button
+                          key={partner._id}
+                          type="button"
+                          className="block w-full px-3 py-2 text-left text-sm hover:bg-white/5"
+                          onClick={() =>
+                            setSelectedPartner({
+                              id: partner._id as string,
+                              name: partner.fullName,
+                            })
+                          }
+                        >
+                          <span className="block">{partner.fullName}</span>
+                          <span className="text-xs text-white/40">
+                            {partner.phone}
+                          </span>
+                        </button>
+                        ) : null,
+                      )
+                    )}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              className="border-white/15"
+              onClick={() => setTransferOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="bg-red-500 text-white hover:bg-red-500/90 font-semibold"
+              disabled={
+                transferMutation.isPending ||
+                !transferReason.trim() ||
+                !(Number(transferAmount) > 0) ||
+                (transferTo === "partner" && !selectedPartner)
+              }
+              onClick={() => transferMutation.mutate()}
+            >
+              {transferMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                "Deduct"
               )}
             </Button>
           </DialogFooter>

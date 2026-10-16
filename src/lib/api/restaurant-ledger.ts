@@ -171,6 +171,32 @@ export async function fetchRestaurantLedgerWithdrawals(
   return data.data ?? [];
 }
 
+export async function transferRestaurantLedger(
+  restaurantId: string,
+  input: {
+    amount: number;
+    reason: string;
+    destination: "partner" | "platform";
+    partnerId?: string;
+  },
+): Promise<{
+  transactionId: string;
+  amount: number;
+  availableBalance: number;
+  notes: string;
+}> {
+  const { data } = await api.post(
+    `/restaurants/${encodeURIComponent(restaurantId)}/ledger/transfers`,
+    {
+      amount: input.amount,
+      reason: input.reason,
+      destination: input.destination,
+      partnerId: input.partnerId,
+    },
+  );
+  return data.data;
+}
+
 export async function downloadRestaurantMonthlyReportPdf(
   restaurantId: string,
   input: { year: number; month: number; restaurantName?: string },

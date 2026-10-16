@@ -5,7 +5,8 @@ export type PlatformLedgerKind =
   | "commission"
   | "restaurant_withdrawal"
   | "partner_payout"
-  | "expense";
+  | "expense"
+  | "wallet_transfer";
 
 export type PlatformLedgerDirection = "credit" | "debit";
 
@@ -105,6 +106,10 @@ export interface PlatformWalletSummary {
   bank?: PlatformBankSettlement | null;
   restaurant: PlatformWalletSide;
   partner: PlatformWalletSide;
+  platform: {
+    retainedBalance: number;
+    transferCount: number;
+  };
 }
 
 export interface PlatformLedgerResponse {
@@ -160,6 +165,7 @@ function emptyWallet(): PlatformWalletSummary {
     bank: emptyBank(),
     restaurant: emptyWalletSide(),
     partner: emptyWalletSide(),
+    platform: { retainedBalance: 0, transferCount: 0 },
   };
 }
 
@@ -230,6 +236,18 @@ function mapWallet(raw: unknown): PlatformWalletSummary {
     bank: mapBank(walletRaw.bank),
     restaurant: mapWalletSide(walletRaw.restaurant),
     partner: mapWalletSide(walletRaw.partner),
+    platform: {
+      retainedBalance:
+        Number(
+          (walletRaw.platform as { retainedBalance?: number } | undefined)
+            ?.retainedBalance,
+        ) || 0,
+      transferCount:
+        Number(
+          (walletRaw.platform as { transferCount?: number } | undefined)
+            ?.transferCount,
+        ) || 0,
+    },
   };
 }
 
