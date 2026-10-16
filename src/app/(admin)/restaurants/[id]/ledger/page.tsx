@@ -25,10 +25,13 @@ import {
   fetchRestaurantLedger,
   fetchRestaurantLedgerTransactions,
   fetchRestaurantLedgerWithdrawals,
+  searchRestaurantLedgerOrders,
   transferRestaurantLedger,
+  type LedgerOrderOption,
   type LedgerTxType,
   type RestaurantLedgerTransaction,
 } from "@/lib/api/restaurant-ledger";
+import { fetchDispatchOrder } from "@/lib/api/orders";
 import { fetchPartners } from "@/lib/api/partners";
 import {
   updateWithdrawalStatus,
@@ -299,6 +302,10 @@ export default function RestaurantLedgerPage() {
     id: string;
     name: string;
   } | null>(null);
+  const [orderQuery, setOrderQuery] = useState("");
+  const [selectedOrder, setSelectedOrder] = useState<LedgerOrderOption | null>(
+    null,
+  );
 
   const pdfMutation = useMutation({
     mutationFn: (restaurantName?: string) =>
@@ -325,12 +332,48 @@ export default function RestaurantLedgerPage() {
     queryFn: () =>
       fetchPartners({
         search: partnerQuery.trim(),
-        status: "verified",
         page: 1,
         limit: 8,
       }),
     enabled:
       transferOpen && transferTo === "partner" && partnerQuery.trim().length >= 2,
+  });
+
+  const orderSearch = useQuery({
+    queryKey: ["ledger-order-search", restaurantId, orderQuery],
+    queryFn: async (): Promise<LedgerOrderOption[]> => {
+      const q = orderQuery.trim();
+      try {
+        return await searchRestaurantLedgerOrders(restaurantId, q);
+      } catch (err) {
+        const status =
+          err && typeof err === "object" && "response" in err
+            ? (err as { response?: { status?: number } }).response?.status
+            : undefined;
+        if (status !== 404) throw err;
+        const order = await fetchDispatchOrder(q);
+        if (order.restaurant?.id && order.restaurant.id !== restaurantId) {
+          return [];
+        }
+        return [
+          {
+            _id: order.id,
+            pickfooId: order.pickfooId ?? null,
+            status: order.status,
+            totalAmount: order.totalAmount ?? null,
+            assignedPartner: order.deliveryPartner?.id
+              ? {
+                  _id: order.deliveryPartner.id,
+                  fullName: order.deliveryPartner.name || "Delivery partner",
+                  phone: order.deliveryPartner.phone || "",
+                }
+              : null,
+          },
+        ];
+      }
+    },
+    enabled: transferOpen && !selectedOrder && orderQuery.trim().length >= 3,
+    retry: false,
   });
 
   const transferMutation = useMutation({
@@ -340,6 +383,7 @@ export default function RestaurantLedgerPage() {
         reason: transferReason.trim(),
         destination: transferTo,
         partnerId: transferTo === "partner" ? selectedPartner?.id : undefined,
+        orderId: selectedOrder?._id || "",
       }),
     onSuccess: (result) => {
       const partnerId = selectedPartner?.id;
@@ -349,6 +393,8 @@ export default function RestaurantLedgerPage() {
       setTransferReason("");
       setPartnerQuery("");
       setSelectedPartner(null);
+      setOrderQuery("");
+      setSelectedOrder(null);
       queryClient.invalidateQueries({
         queryKey: ["restaurant-ledger", restaurantId],
       });
@@ -1330,6 +1376,98 @@ export default function RestaurantLedgerPage() {
               The same amount and reason are written on the restaurant history
               and on the wallet that receives it.
             </p>
+            <div className="space-y-2">
+              <Label className="text-xs text-white/50">Order id</Label>
+              {selectedOrder ? null : (
+              <Input
+                value={orderQuery}
+                onChange={(e) => setOrderQuery(e.target.value)}
+                placeholder="PF-20261016-767CB4"
+                className="border-white/15 bg-black/20"
+              />
+              )}
+              {selectedOrder ? (
+                <div className="flex items-center justify-between gap-2 rounded-md border border-[#98E32F]/30 bg-[#98E32F]/10 px-3 py-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm text-[#98E32F]">
+                      {selectedOrder.pickfooId || selectedOrder._id}
+                    </p>
+                    <p className="text-xs text-white/45">
+                      {selectedOrder.status}
+                      {selectedOrder.totalAmount != null
+                        ? ` · ${inr(selectedOrder.totalAmount)}`
+                        : ""}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="border-white/15 text-white/70"
+                    onClick={() => {
+                      setSelectedOrder(null);
+                      setOrderQuery("");
+                    }}
+                  >
+                    Change
+                  </Button>
+                </div>
+              ) : orderQuery.trim().length >= 3 ? (
+                <div className="max-h-40 overflow-auto rounded-md border border-white/10">
+                  {orderSearch.isFetching ? (
+                    <p className="px-3 py-2 text-xs text-white/40">
+                      Searching orders...
+                    </p>
+                  ) : orderSearch.isError ? (
+                    <p className="px-3 py-2 text-xs text-red-300">
+                      Could not search orders
+                    </p>
+                  ) : (orderSearch.data ?? []).length === 0 ? (
+                    <p className="px-3 py-2 text-xs text-white/40">
+                      No order with that id for this restaurant
+                    </p>
+                  ) : (
+                    orderSearch.data?.map((order) => (
+                      <button
+                        key={order._id}
+                        type="button"
+                        className="block w-full px-3 py-2 text-left text-sm hover:bg-white/5"
+                        onClick={() => {
+                          setSelectedOrder(order);
+                          setOrderQuery("");
+                        }}
+                      >
+                        <span className="block">
+                          {order.pickfooId || order._id}
+                        </span>
+                        <span className="text-xs text-white/40">
+                          {order.status}
+                          {order.assignedPartner
+                            ? ` · ${order.assignedPartner.fullName}`
+                            : ""}
+                        </span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              ) : null}
+              {selectedOrder?.assignedPartner && transferTo === "partner" && !selectedPartner ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="border-white/15 text-white/80"
+                  onClick={() =>
+                    setSelectedPartner({
+                      id: selectedOrder.assignedPartner!._id,
+                      name: selectedOrder.assignedPartner!.fullName,
+                    })
+                  }
+                >
+                  Use assigned partner {selectedOrder.assignedPartner.fullName}
+                </Button>
+              ) : null}
+            </div>
             <div className="space-y-1">
               <Label className="text-xs text-white/50">Amount (₹)</Label>
               <Input
@@ -1400,7 +1538,9 @@ export default function RestaurantLedgerPage() {
                       <p className="px-3 py-2 text-xs text-white/40">
                         {partnerSearch.isFetching
                           ? "Searching..."
-                          : "No verified partners found"}
+                          : partnerSearch.isError
+                            ? "Could not search partners"
+                            : "No partners found"}
                       </p>
                     ) : (
                       partnerSearch.data?.data.map((partner) =>
@@ -1419,6 +1559,7 @@ export default function RestaurantLedgerPage() {
                           <span className="block">{partner.fullName}</span>
                           <span className="text-xs text-white/40">
                             {partner.phone}
+                            {partner.status ? ` · ${partner.status}` : ""}
                           </span>
                         </button>
                         ) : null,
@@ -1442,6 +1583,7 @@ export default function RestaurantLedgerPage() {
               disabled={
                 transferMutation.isPending ||
                 !transferReason.trim() ||
+                !selectedOrder ||
                 !(Number(transferAmount) > 0) ||
                 (transferTo === "partner" && !selectedPartner)
               }

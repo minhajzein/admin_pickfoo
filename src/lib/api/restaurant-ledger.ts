@@ -171,6 +171,29 @@ export async function fetchRestaurantLedgerWithdrawals(
   return data.data ?? [];
 }
 
+export interface LedgerOrderOption {
+  _id: string;
+  pickfooId: string | null;
+  status: string;
+  totalAmount: number | null;
+  assignedPartner: {
+    _id: string;
+    fullName: string;
+    phone?: string;
+  } | null;
+}
+
+export async function searchRestaurantLedgerOrders(
+  restaurantId: string,
+  search: string,
+): Promise<LedgerOrderOption[]> {
+  const { data } = await api.get(
+    `/restaurants/${encodeURIComponent(restaurantId)}/ledger/orders`,
+    { params: { search: search.trim() } },
+  );
+  return data.data ?? [];
+}
+
 export async function transferRestaurantLedger(
   restaurantId: string,
   input: {
@@ -178,6 +201,7 @@ export async function transferRestaurantLedger(
     reason: string;
     destination: "partner" | "platform";
     partnerId?: string;
+    orderId: string;
   },
 ): Promise<{
   transactionId: string;
@@ -192,6 +216,7 @@ export async function transferRestaurantLedger(
       reason: input.reason,
       destination: input.destination,
       partnerId: input.partnerId,
+      orderId: input.orderId,
     },
   );
   return data.data;
