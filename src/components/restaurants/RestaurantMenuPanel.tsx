@@ -85,20 +85,30 @@ const RESTAURANT_TYPE_LABELS: Record<RestaurantType, string> = {
   home_made: "Home Made",
 };
 
-/** Raise partner price by commission % (rounded to nearest rupee). */
+/** Rupees to paise, half-up, so commission round-trips to the partner price. */
+function roundRupees(amount: number): number {
+  if (!Number.isFinite(amount)) return 0;
+  return Math.round((amount + Number.EPSILON) * 100) / 100;
+}
+
+/**
+ * Customer price such that (price × commission%) leaves the partner with
+ * [original]. Multiplying by (1 + %) does not: that keeps only
+ * original × (1 − %²).
+ */
 function raisedPrice(original: number, percent: number): number {
   const base = Number.isFinite(original) && original > 0 ? original : 0;
   const pct = Number.isFinite(percent) ? percent : 0;
-  return Math.round((base * (100 + pct)) / 100);
+  if (pct <= 0 || pct >= 100) return roundRupees(base);
+  return roundRupees((base * 100) / (100 - pct));
 }
 
-/** Back-calculate original from a stored final price. */
+/** Partner amount left after commission on a stored customer price. */
 function originalFromFinal(finalPrice: number, percent: number): number {
   const final = Number.isFinite(finalPrice) && finalPrice > 0 ? finalPrice : 0;
   const pct = Number.isFinite(percent) ? percent : 0;
-  const factor = 100 + pct;
-  if (factor <= 0) return final;
-  return Math.round((final * 100) / factor);
+  if (pct <= 0 || pct >= 100) return roundRupees(final);
+  return roundRupees((final * (100 - pct)) / 100);
 }
 
 const emptyForm = (
@@ -273,11 +283,14 @@ export function RestaurantMenuPanel({
   restaurantId,
   restaurantName,
   restaurantTypes: restaurantTypeDefaults = ["restaurant"],
+  commissionPercent: restaurantCommissionPercent = DEFAULT_COMMISSION_PERCENT,
 }: {
   restaurantId: string;
   restaurantName?: string;
   /** Types configured on this restaurant — used to seed new items. */
   restaurantTypes?: string[];
+  /** Restaurant commission. Customer price is grossed up so the partner still receives the original. */
+  commissionPercent?: number;
 }) {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
@@ -820,13 +833,13 @@ export function RestaurantMenuPanel({
         setIngredientInput("");
         setRelatedItemSearch("");
         setRelatedItemCategories([]);
-        setCommissionPercent(DEFAULT_COMMISSION_PERCENT);
+        setCommissionPercent(restaurantCommissionPercent);
         setOriginalPrice(0);
         setOriginalVariantPrices([]);
         setIsItemModalOpen(true);
       });
     });
-  }, [restaurantTypeDefaults]);
+  }, [restaurantTypeDefaults, restaurantCommissionPercent]);
 
   const openEdit = useCallback(
     (item: AdminMenuItem) => {
@@ -845,7 +858,7 @@ export function RestaurantMenuPanel({
               : item.type
                 ? ([item.type] as MealType[])
                 : ["lunch"];
-          const pct = DEFAULT_COMMISSION_PERCENT;
+          const pct = restaurantCommissionPercent;
           const variants = item.variants?.map((v) => ({ ...v })) ?? [];
           const cats = menuItemCategories(item);
           setForm({
@@ -891,7 +904,7 @@ export function RestaurantMenuPanel({
         });
       });
     },
-    [restaurantTypeDefaults],
+    [restaurantTypeDefaults, restaurantCommissionPercent],
   );
 
   const syncRaisedFromOriginals = (
@@ -907,13 +920,6 @@ export function RestaurantMenuPanel({
         price: raisedPrice(nextVariantOriginals[i] ?? 0, nextPercent),
       })),
     }));
-  };
-
-  const handleCommissionPercentChange = (raw: string) => {
-    const next = Number(raw);
-    const pct = Number.isFinite(next) ? next : 0;
-    setCommissionPercent(pct);
-    syncRaisedFromOriginals(originalPrice, pct, originalVariantPrices);
   };
 
   const handleOriginalPriceChange = (raw: string) => {
@@ -1535,18 +1541,18 @@ export function RestaurantMenuPanel({
                   Pricing (with commission)
                 </label>
                 <p className="text-[10px] text-white/35">
-                  Final = original × (1 + %) · rounded ₹
+                  Customer price = partner price / (1 − commission)
                 </p>
               </div>
               <div className="grid grid-cols-3 gap-2">
                 <div>
                   <label className="text-[10px] font-bold text-white/40 uppercase tracking-wider">
-                    Original (₹) *
+                    Partner receives (₹) *
                   </label>
                   <Input
                     type="number"
                     min={0}
-                    step="1"
+                    step="0.01"
                     required
                     value={originalPrice || ""}
                     onChange={(e) => handleOriginalPriceChange(e.target.value)}
@@ -1562,16 +1568,14 @@ export function RestaurantMenuPanel({
                     type="number"
                     min={0}
                     step="0.1"
+                    readOnly
                     value={commissionPercent}
-                    onChange={(e) =>
-                      handleCommissionPercentChange(e.target.value)
-                    }
-                    className="mt-1 bg-black/20 border-white/10 text-white"
+                    className="mt-1 bg-black/20 border-white/10 text-white/70"
                   />
                 </div>
                 <div>
                   <label className="text-[10px] font-bold text-white/40 uppercase tracking-wider">
-                    Final (₹)
+                    Customer pays (₹)
                   </label>
                   <Input
                     type="number"
@@ -1819,7 +1823,7 @@ export function RestaurantMenuPanel({
                   <Input
                     type="number"
                     min={0}
-                    step="1"
+                    step="0.01"
                     value={originalVariantPrices[index] || ""}
                     placeholder="Orig"
                     onChange={(e) =>
