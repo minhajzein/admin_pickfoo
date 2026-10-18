@@ -211,6 +211,12 @@ export const CustomerStyleMenuCard = memo(function CustomerStyleMenuCard({
         <p className="text-[13px] font-extrabold text-neutral-700 truncate">
           {item.name}
         </p>
+        {item.menuCommission ? (
+          <p className="text-[10px] font-bold text-[#2E7D32] truncate">
+            {item.independentCommission ? "Own rates · " : "Menu rates · "}
+            {item.raisePercent || 0}% up · {item.sacrificePercent || 0}% from price
+          </p>
+        ) : null}
         {restaurantName ? (
           <p className="text-[10px] font-bold text-[#1B5E20] truncate">
             {restaurantName}

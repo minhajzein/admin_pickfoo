@@ -111,10 +111,15 @@ export default function ManageRestaurantMenuPage() {
       <RestaurantMenuPanel
         restaurantId={restaurantId}
         restaurantName={restaurant.name}
-        commissionPercent={
-          typeof restaurant.commissionPercent === "number"
-            ? restaurant.commissionPercent
-            : 12
+        menuRaisePercent={
+          typeof restaurant.menuRaisePercent === "number"
+            ? restaurant.menuRaisePercent
+            : 0
+        }
+        menuSacrificePercent={
+          typeof restaurant.menuSacrificePercent === "number"
+            ? restaurant.menuSacrificePercent
+            : 0
         }
         restaurantTypes={
           Array.isArray(restaurant.restaurantTypes) &&

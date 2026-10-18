@@ -191,6 +191,8 @@ export interface AdminOrderDetail {
   totalAmount?: number | null;
   platformCommission: number;
   commissionPercent: number;
+  /** How the commission was taken when the order used menu-price rates. */
+  commissionNote?: string | null;
   offerFunding?: {
     commission: number;
     menuItem: number;

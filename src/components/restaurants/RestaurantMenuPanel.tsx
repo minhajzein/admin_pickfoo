@@ -36,6 +36,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  applyMenuCommission,
   createCategoryForRestaurant,
   createRestaurantMenuItem,
   deleteCategory,
@@ -64,7 +65,6 @@ import { RESTAURANT_TYPES, type RestaurantType } from "@/types/models";
 
 type MealType = "breakfast" | "lunch" | "dinner";
 
-const DEFAULT_COMMISSION_PERCENT = 12;
 
 const EMPTY_MENU_ITEMS: AdminMenuItem[] = [];
 const EMPTY_RESTAURANTS: RestaurantListItem[] = [];
@@ -85,30 +85,41 @@ const RESTAURANT_TYPE_LABELS: Record<RestaurantType, string> = {
   home_made: "Home Made",
 };
 
-/** Rupees to paise, half-up, so commission round-trips to the partner price. */
+/** Rupees to paise, half-up. */
 function roundRupees(amount: number): number {
   if (!Number.isFinite(amount)) return 0;
   return Math.round((amount + Number.EPSILON) * 100) / 100;
 }
 
-/**
- * Customer price such that (price × commission%) leaves the partner with
- * [original]. Multiplying by (1 + %) does not: that keeps only
- * original × (1 − %²).
- */
-function raisedPrice(original: number, percent: number): number {
-  const base = Number.isFinite(original) && original > 0 ? original : 0;
-  const pct = Number.isFinite(percent) ? percent : 0;
-  if (pct <= 0 || pct >= 100) return roundRupees(base);
-  return roundRupees((base * 100) / (100 - pct));
+function clampPct(value: number): number {
+  if (!Number.isFinite(value) || value < 0) return 0;
+  return Math.min(100, value);
 }
 
-/** Partner amount left after commission on a stored customer price. */
-function originalFromFinal(finalPrice: number, percent: number): number {
-  const final = Number.isFinite(finalPrice) && finalPrice > 0 ? finalPrice : 0;
-  const pct = Number.isFinite(percent) ? percent : 0;
-  if (pct <= 0 || pct >= 100) return roundRupees(final);
-  return roundRupees((final * (100 - pct)) / 100);
+/** Customer pays menu price × (1 + raise%). */
+function customerPrice(menuPrice: number, raisePercent: number): number {
+  const base = Number.isFinite(menuPrice) && menuPrice > 0 ? menuPrice : 0;
+  return roundRupees((base * (100 + clampPct(raisePercent))) / 100);
+}
+
+/** Restaurant receives menu price × (1 − sacrifice%). */
+function restaurantReceives(menuPrice: number, sacrificePercent: number): number {
+  const base = Number.isFinite(menuPrice) && menuPrice > 0 ? menuPrice : 0;
+  return roundRupees((base * (100 - clampPct(sacrificePercent))) / 100);
+}
+
+function menuPriceFromStored(
+  customer: number,
+  raisePercent: number,
+  basePrice?: number | null,
+): number {
+  if (basePrice != null && Number.isFinite(basePrice) && basePrice > 0) {
+    return roundRupees(basePrice);
+  }
+  const price = Number.isFinite(customer) && customer > 0 ? customer : 0;
+  const raise = clampPct(raisePercent);
+  if (raise <= 0) return roundRupees(price);
+  return roundRupees((price * 100) / (100 + raise));
 }
 
 const emptyForm = (
@@ -198,12 +209,12 @@ function validateForm(
     return "Select at least one category";
   }
   if (!Number.isFinite(form.price) || form.price <= 0) {
-    return "Enter an original price so the final raised price is greater than 0";
+    return "Enter a menu price greater than 0";
   }
   for (const variant of form.variants ?? []) {
     if (!variant.name?.trim()) return "Each variant needs a name";
     if (!Number.isFinite(variant.price) || variant.price <= 0) {
-      return `Variant "${variant.name}" needs an original price so final is > 0`;
+      return `Variant "${variant.name}" needs a menu price greater than 0`;
     }
   }
   if (form.offerPrice != null && (form.variants ?? []).length === 0) {
@@ -283,14 +294,17 @@ export function RestaurantMenuPanel({
   restaurantId,
   restaurantName,
   restaurantTypes: restaurantTypeDefaults = ["restaurant"],
-  commissionPercent: restaurantCommissionPercent = DEFAULT_COMMISSION_PERCENT,
+  menuRaisePercent = 0,
+  menuSacrificePercent = 0,
 }: {
   restaurantId: string;
   restaurantName?: string;
   /** Types configured on this restaurant — used to seed new items. */
   restaurantTypes?: string[];
-  /** Restaurant commission. Customer price is grossed up so the partner still receives the original. */
-  commissionPercent?: number;
+  /** Menu-wide percent added onto each dish price. */
+  menuRaisePercent?: number;
+  /** Menu-wide percent of the dish price the restaurant gives up. */
+  menuSacrificePercent?: number;
 }) {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
@@ -305,9 +319,14 @@ export function RestaurantMenuPanel({
   const [relatedItemCategories, setRelatedItemCategories] = useState<string[]>(
     [],
   );
-  const [commissionPercent, setCommissionPercent] = useState(
-    DEFAULT_COMMISSION_PERCENT,
-  );
+  const [menuRaiseDraft, setMenuRaiseDraft] = useState(menuRaisePercent);
+  const [menuSacrificeDraft, setMenuSacrificeDraft] = useState(menuSacrificePercent);
+  const [applyingMenuCommission, setApplyingMenuCommission] = useState(false);
+  const [independentCommission, setIndependentCommission] = useState(false);
+  /** Dish uses the menu-wide raise and sacrifice. */
+  const [followMenu, setFollowMenu] = useState(false);
+  const [itemRaise, setItemRaise] = useState(0);
+  const [itemSacrifice, setItemSacrifice] = useState(0);
   const [originalPrice, setOriginalPrice] = useState(0);
   const [originalVariantPrices, setOriginalVariantPrices] = useState<number[]>(
     [],
@@ -354,6 +373,11 @@ export function RestaurantMenuPanel({
     Set<string>
   >(new Set());
   const [isImporting, setIsImporting] = useState(false);
+
+  useEffect(() => {
+    setMenuRaiseDraft(menuRaisePercent);
+    setMenuSacrificeDraft(menuSacrificePercent);
+  }, [menuRaisePercent, menuSacrificePercent]);
 
   useEffect(() => {
     const t = window.setTimeout(() => {
@@ -833,13 +857,22 @@ export function RestaurantMenuPanel({
         setIngredientInput("");
         setRelatedItemSearch("");
         setRelatedItemCategories([]);
-        setCommissionPercent(restaurantCommissionPercent);
+        const menuActive =
+          menuRaisePercent > 0 ||
+          menuSacrificePercent > 0 ||
+          menuItems.some(
+            (row) => row.menuCommission === true && row.independentCommission !== true,
+          );
+        setIndependentCommission(false);
+        setFollowMenu(menuActive);
+        setItemRaise(menuActive ? menuRaisePercent : 0);
+        setItemSacrifice(menuActive ? menuSacrificePercent : 0);
         setOriginalPrice(0);
         setOriginalVariantPrices([]);
         setIsItemModalOpen(true);
       });
     });
-  }, [restaurantTypeDefaults, restaurantCommissionPercent]);
+  }, [restaurantTypeDefaults, menuRaisePercent, menuSacrificePercent, menuItems]);
 
   const openEdit = useCallback(
     (item: AdminMenuItem) => {
@@ -858,7 +891,10 @@ export function RestaurantMenuPanel({
               : item.type
                 ? ([item.type] as MealType[])
                 : ["lunch"];
-          const pct = restaurantCommissionPercent;
+          const independent = item.independentCommission === true;
+          const follow = !independent && item.menuCommission === true;
+          const raise = follow || independent ? clampPct(item.raisePercent ?? 0) : 0;
+          const sacrifice = follow || independent ? clampPct(item.sacrificePercent ?? 0) : 0;
           const variants = item.variants?.map((v) => ({ ...v })) ?? [];
           const cats = menuItemCategories(item);
           setForm({
@@ -892,10 +928,13 @@ export function RestaurantMenuPanel({
               item.completeMealItemIds,
             ),
           });
-          setCommissionPercent(pct);
-          setOriginalPrice(originalFromFinal(item.price, pct));
+          setIndependentCommission(independent);
+          setFollowMenu(follow);
+          setItemRaise(raise);
+          setItemSacrifice(sacrifice);
+          setOriginalPrice(menuPriceFromStored(item.price, raise, item.basePrice));
           setOriginalVariantPrices(
-            variants.map((v) => originalFromFinal(v.price, pct)),
+            variants.map((v) => menuPriceFromStored(v.price, raise, v.basePrice)),
           );
           setIngredientInput("");
           setRelatedItemSearch("");
@@ -904,29 +943,39 @@ export function RestaurantMenuPanel({
         });
       });
     },
-    [restaurantTypeDefaults, restaurantCommissionPercent],
+    [restaurantTypeDefaults],
   );
 
-  const syncRaisedFromOriginals = (
+  const syncMenuPrices = (
     nextOriginal: number,
-    nextPercent: number,
+    nextRaise: number,
     nextVariantOriginals: number[],
   ) => {
-    setForm((p) => ({
-      ...p,
-      price: raisedPrice(nextOriginal, nextPercent),
-      variants: (p.variants ?? []).map((v, i) => ({
+    setForm((p) => {
+      const variants = (p.variants ?? []).map((v, i) => ({
         ...v,
-        price: raisedPrice(nextVariantOriginals[i] ?? 0, nextPercent),
-      })),
-    }));
+        basePrice: nextVariantOriginals[i] ?? 0,
+        price: customerPrice(nextVariantOriginals[i] ?? 0, nextRaise),
+      }));
+      const variantPrices = variants
+        .map((v) => v.price)
+        .filter((price) => price > 0);
+      return {
+        ...p,
+        price: variantPrices.length
+          ? Math.min(...variantPrices)
+          : customerPrice(nextOriginal, nextRaise),
+        basePrice: nextOriginal,
+        variants,
+      };
+    });
   };
 
   const handleOriginalPriceChange = (raw: string) => {
     const next = Number(raw);
     const orig = Number.isFinite(next) ? next : 0;
     setOriginalPrice(orig);
-    syncRaisedFromOriginals(orig, commissionPercent, originalVariantPrices);
+    syncMenuPrices(orig, itemRaise, originalVariantPrices);
   };
 
   const handleOriginalVariantPriceChange = (index: number, raw: string) => {
@@ -935,7 +984,39 @@ export function RestaurantMenuPanel({
     const nextVariantOriginals = [...originalVariantPrices];
     nextVariantOriginals[index] = orig;
     setOriginalVariantPrices(nextVariantOriginals);
-    syncRaisedFromOriginals(originalPrice, commissionPercent, nextVariantOriginals);
+    syncMenuPrices(originalPrice, itemRaise, nextVariantOriginals);
+  };
+
+  const handleItemRateChange = (kind: "raise" | "sacrifice", raw: string) => {
+    const next = clampPct(raw === "" ? 0 : Number(raw));
+    if (kind === "raise") {
+      setItemRaise(next);
+      syncMenuPrices(originalPrice, next, originalVariantPrices);
+      return;
+    }
+    setItemSacrifice(next >= 100 ? 99 : next);
+  };
+
+  const handleIndependentToggle = (on: boolean) => {
+    setIndependentCommission(on);
+    if (on) {
+      setFollowMenu(false);
+      return;
+    }
+    const menuActive =
+      menuRaisePercent > 0 ||
+      menuSacrificePercent > 0 ||
+      menuItems.some(
+        (row) => row.menuCommission === true && row.independentCommission !== true,
+      );
+    setFollowMenu(menuActive);
+    setItemRaise(menuActive ? menuRaisePercent : 0);
+    setItemSacrifice(menuActive ? menuSacrificePercent : 0);
+    syncMenuPrices(
+      originalPrice,
+      menuActive ? menuRaisePercent : 0,
+      originalVariantPrices,
+    );
   };
 
   const addVariantRow = () => {
@@ -944,7 +1025,7 @@ export function RestaurantMenuPanel({
       ...p,
       variants: [
         ...(p.variants ?? []),
-        { name: "", price: raisedPrice(0, commissionPercent) },
+        { name: "", basePrice: 0, price: customerPrice(0, itemRaise) },
       ],
     }));
   };
@@ -1078,6 +1159,12 @@ export function RestaurantMenuPanel({
     const categories = (form.categories ?? [])
       .map((c) => c.trim())
       .filter(Boolean);
+    const usesMenu = independentCommission || followMenu;
+    const raise = usesMenu ? clampPct(itemRaise) : 0;
+    const sacrifice = usesMenu ? Math.min(99, clampPct(itemSacrifice)) : 0;
+    const namedVariants = (form.variants ?? [])
+      .map((variant, index) => ({ variant, index }))
+      .filter(({ variant }) => variant.name.trim());
     const payload: AdminMenuItemInput = {
       ...form,
       name: form.name.trim(),
@@ -1086,9 +1173,32 @@ export function RestaurantMenuPanel({
       categories,
       type: (form.mealTypes?.[0] as MealType | undefined) ?? form.type ?? "lunch",
       mealTypes: form.mealTypes ?? [form.type ?? "lunch"],
-      variants: (form.variants ?? []).filter((v) => v.name.trim()),
+      price: namedVariants.length
+        ? Math.min(
+            ...namedVariants.map(({ variant, index }) =>
+              customerPrice(
+                originalVariantPrices[index] ?? variant.basePrice ?? variant.price,
+                raise,
+              ),
+            ),
+          )
+        : customerPrice(originalPrice, raise),
+      basePrice: namedVariants.length ? null : originalPrice,
+      menuCommission: usesMenu,
+      independentCommission,
+      raisePercent: raise,
+      sacrificePercent: sacrifice,
+      variants: namedVariants.map(({ variant, index }) => {
+        const menu = originalVariantPrices[index] ?? variant.basePrice ?? 0;
+        return {
+          ...variant,
+          name: variant.name.trim(),
+          basePrice: menu,
+          price: customerPrice(menu, raise),
+        };
+      }),
       offerPrice:
-        (form.variants ?? []).filter((v) => v.name.trim()).length > 0
+        namedVariants.length > 0
           ? null
           : (form.offerPrice ?? null),
       ingredients: form.ingredients ?? [],
@@ -1250,6 +1360,38 @@ export function RestaurantMenuPanel({
     setEditingCategoryParentLabel("");
   };
 
+  const handleApplyMenuRates = async () => {
+    const raise = clampPct(menuRaiseDraft);
+    const sacrifice = Math.min(99, clampPct(menuSacrificeDraft));
+    const previewCustomer = customerPrice(100, raise);
+    const previewRestaurant = restaurantReceives(100, sacrifice);
+    const ok = window.confirm(
+      `Apply ${raise}% raise and ${sacrifice}% sacrifice to every dish that follows the menu?\n\nCurrent prices are treated as the menu price. A ₹100 menu price becomes ₹${previewCustomer.toFixed(2)} for the customer. The restaurant receives ₹${previewRestaurant.toFixed(2)}. Dishes with their own rates are skipped. Updated dishes stop using the restaurant commission field.`,
+    );
+    if (!ok) return;
+    try {
+      setApplyingMenuCommission(true);
+      const result = await applyMenuCommission(restaurantId, {
+        raisePercent: raise,
+        sacrificePercent: sacrifice,
+      });
+      invalidateMenu();
+      queryClient.invalidateQueries({ queryKey: ["restaurant", restaurantId] });
+      toast.success(
+        `Updated ${result.updated} dishes. Skipped ${result.skipped} with their own rates.`,
+      );
+    } catch (err: unknown) {
+      const msg =
+        err && typeof err === "object" && "response" in err
+          ? (err as { response?: { data?: { message?: string } } }).response?.data
+              ?.message
+          : undefined;
+      toast.error(msg || "Failed to apply menu rates");
+    } finally {
+      setApplyingMenuCommission(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -1288,6 +1430,82 @@ export function RestaurantMenuPanel({
             Add menu item
           </Button>
         </div>
+      </div>
+
+      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+          <div>
+            <h3 className="text-sm font-bold text-white">Menu price rates</h3>
+            <p className="text-xs text-white/45 mt-1 max-w-xl">
+              These rates use the menu price. They do not use the restaurant
+              commission field. Raise adds to what the customer pays. Sacrifice
+              is what the restaurant gives up from the menu price. Dishes with
+              their own rates are left as they are.
+            </p>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 items-end">
+          <div>
+            <label className="text-[10px] font-bold text-white/40 uppercase tracking-wider">
+              Raise %
+            </label>
+            <Input
+              type="number"
+              min={0}
+              max={100}
+              step="0.1"
+              value={menuRaiseDraft}
+              onChange={(e) =>
+                setMenuRaiseDraft(clampPct(e.target.value === "" ? 0 : Number(e.target.value)))
+              }
+              className="mt-1 bg-black/20 border-white/10 text-white"
+            />
+          </div>
+          <div>
+            <label className="text-[10px] font-bold text-white/40 uppercase tracking-wider">
+              Sacrifice %
+            </label>
+            <Input
+              type="number"
+              min={0}
+              max={99}
+              step="0.1"
+              value={menuSacrificeDraft}
+              onChange={(e) => {
+                const next = clampPct(e.target.value === "" ? 0 : Number(e.target.value));
+                setMenuSacrificeDraft(next >= 100 ? 99 : next);
+              }}
+              className="mt-1 bg-black/20 border-white/10 text-white"
+            />
+          </div>
+          <div className="col-span-2 text-xs text-white/60">
+            <p>
+              A ₹100 dish → customer pays ₹
+              {customerPrice(100, menuRaiseDraft).toFixed(2)}, restaurant
+              receives ₹{restaurantReceives(100, menuSacrificeDraft).toFixed(2)},
+              platform keeps ₹
+              {roundRupees(
+                customerPrice(100, menuRaiseDraft) -
+                  restaurantReceives(100, menuSacrificeDraft),
+              ).toFixed(2)}
+              .
+            </p>
+            <p className="mt-1 text-white/35">
+              Saved now: {menuRaisePercent}% raised, {menuSacrificePercent}% from the menu price.
+            </p>
+          </div>
+        </div>
+        <Button
+          type="button"
+          disabled={applyingMenuCommission}
+          className="bg-[#98E32F] text-[#013644] hover:bg-[#86c926] font-bold"
+          onClick={() => void handleApplyMenuRates()}
+        >
+          {applyingMenuCommission ? (
+            <Loader2 size={16} className="mr-2 animate-spin" />
+          ) : null}
+          Apply to dishes that follow the menu
+        </Button>
       </div>
 
       <MenuSearchInput onSearch={setSearch} />
@@ -1538,16 +1756,29 @@ export function RestaurantMenuPanel({
             <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
               <div className="flex items-center justify-between gap-2">
                 <label className="text-[10px] font-bold text-white/40 uppercase tracking-wider">
-                  Pricing (with commission)
+                  Menu price
                 </label>
-                <p className="text-[10px] text-white/35">
-                  Customer price = partner price / (1 − commission)
-                </p>
+                <label className="flex items-center gap-2 text-[11px] text-white/70">
+                  <input
+                    type="checkbox"
+                    checked={independentCommission}
+                    onChange={(e) => handleIndependentToggle(e.target.checked)}
+                    className="accent-[#98E32F]"
+                  />
+                  Own rates for this dish
+                </label>
               </div>
-              <div className="grid grid-cols-3 gap-2">
+              <p className="text-[10px] text-white/35">
+                {independentCommission
+                  ? "This dish keeps its own raise and sacrifice. The menu-wide apply skips it."
+                  : followMenu
+                    ? "This dish follows the menu-wide rates. Customer pays menu price plus the raise. The restaurant receives menu price minus the sacrifice."
+                    : "This dish still settles with the restaurant commission. Apply menu rates above, or turn on own rates."}
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <div>
                   <label className="text-[10px] font-bold text-white/40 uppercase tracking-wider">
-                    Partner receives (₹) *
+                    Menu price (₹) *
                   </label>
                   <Input
                     type="number"
@@ -1556,21 +1787,38 @@ export function RestaurantMenuPanel({
                     required
                     value={originalPrice || ""}
                     onChange={(e) => handleOriginalPriceChange(e.target.value)}
-                    placeholder="Partner price"
+                    placeholder="Menu price"
                     className="mt-1 bg-black/20 border-white/10 text-white"
                   />
                 </div>
                 <div>
                   <label className="text-[10px] font-bold text-white/40 uppercase tracking-wider">
-                    Commission %
+                    Raise %
                   </label>
                   <Input
                     type="number"
                     min={0}
+                    max={100}
                     step="0.1"
-                    readOnly
-                    value={commissionPercent}
-                    className="mt-1 bg-black/20 border-white/10 text-white/70"
+                    readOnly={!independentCommission}
+                    value={itemRaise}
+                    onChange={(e) => handleItemRateChange("raise", e.target.value)}
+                    className="mt-1 bg-black/20 border-white/10 text-white"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-white/40 uppercase tracking-wider">
+                    Sacrifice %
+                  </label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={99}
+                    step="0.1"
+                    readOnly={!independentCommission}
+                    value={itemSacrifice}
+                    onChange={(e) => handleItemRateChange("sacrifice", e.target.value)}
+                    className="mt-1 bg-black/20 border-white/10 text-white"
                   />
                 </div>
                 <div>
@@ -1581,12 +1829,29 @@ export function RestaurantMenuPanel({
                     type="number"
                     min={0}
                     readOnly
-                    value={form.price || ""}
-                    placeholder="—"
+                    value={
+                      (form.variants ?? []).some((v) => v.name.trim())
+                        ? ""
+                        : customerPrice(originalPrice, itemRaise) || ""
+                    }
+                    placeholder={(form.variants ?? []).length > 0 ? "See variants" : "—"}
                     className="mt-1 bg-[#98E32F]/10 border-[#98E32F]/30 text-[#98E32F] font-semibold"
                   />
                 </div>
               </div>
+              <p className="text-[11px] text-white/55">
+                Restaurant receives ₹
+                {restaurantReceives(
+                  originalPrice,
+                  independentCommission || followMenu ? itemSacrifice : 0,
+                ).toFixed(2)}
+                {independentCommission || followMenu
+                  ? ` · platform keeps ₹${roundRupees(
+                      customerPrice(originalPrice, itemRaise) -
+                        restaurantReceives(originalPrice, itemSacrifice),
+                    ).toFixed(2)}`
+                  : " · the restaurant commission still applies to this dish"}
+              </p>
               <div className="border-t border-white/10 pt-3">
                 <div className="flex items-end gap-3">
                   <div className="w-40">
@@ -1792,10 +2057,10 @@ export function RestaurantMenuPanel({
                     Name
                   </span>
                   <span className="text-[9px] font-bold text-white/30 uppercase">
-                    Original
+                    Menu
                   </span>
                   <span className="text-[9px] font-bold text-white/30 uppercase">
-                    Final
+                    Customer
                   </span>
                   <span />
                 </div>
@@ -1825,7 +2090,7 @@ export function RestaurantMenuPanel({
                     min={0}
                     step="0.01"
                     value={originalVariantPrices[index] || ""}
-                    placeholder="Orig"
+                    placeholder="Menu"
                     onChange={(e) =>
                       handleOriginalVariantPriceChange(index, e.target.value)
                     }
@@ -1850,8 +2115,7 @@ export function RestaurantMenuPanel({
               ))}
               {(form.variants ?? []).length === 0 && (
                 <p className="text-[10px] text-white/30 italic">
-                  Standard pricing (base price only). Same commission % applies
-                  to variants.
+                  Standard pricing (menu price only). Variants use the same raise and sacrifice.
                 </p>
               )}
             </div>

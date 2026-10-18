@@ -2,7 +2,10 @@ import api, { getApiErrorMessage } from "@/lib/axios";
 
 export interface AdminMenuVariant {
   name: string;
+  /** Customer-facing price. */
   price: number;
+  /** Menu price before the raise. */
+  basePrice?: number | null;
 }
 
 export interface AdminMenuItem {
@@ -39,6 +42,14 @@ export interface AdminMenuItem {
   numReviews?: number;
   /** Optional sale / offer unit price when lower than [price]. */
   offerPrice?: number | null;
+  /** Menu price before the raise. Customer price is stored in [price]. */
+  basePrice?: number | null;
+  /** This dish settles from its menu price instead of the restaurant commission. */
+  menuCommission?: boolean;
+  /** Own raise and sacrifice; skipped by the menu-wide apply. */
+  independentCommission?: boolean;
+  raisePercent?: number;
+  sacrificePercent?: number;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -81,6 +92,11 @@ export interface AdminMenuItemInput {
   ingredients?: string[];
   restaurantTypes?: string[];
   completeMealItemIds?: string[];
+  basePrice?: number | null;
+  menuCommission?: boolean;
+  independentCommission?: boolean;
+  raisePercent?: number;
+  sacrificePercent?: number;
 }
 
 export async function fetchRestaurantMenu(
@@ -108,6 +124,27 @@ export async function updateRestaurantMenuItem(
     payload,
   );
   return data.data as AdminMenuItem;
+}
+
+export async function applyMenuCommission(
+  restaurantId: string,
+  payload: { raisePercent: number; sacrificePercent: number },
+): Promise<{
+  raisePercent: number;
+  sacrificePercent: number;
+  updated: number;
+  skipped: number;
+}> {
+  const { data } = await api.post(
+    `/restaurants/${restaurantId}/menu/commission`,
+    payload,
+  );
+  return data.data as {
+    raisePercent: number;
+    sacrificePercent: number;
+    updated: number;
+    skipped: number;
+  };
 }
 
 export async function deleteRestaurantMenuItem(

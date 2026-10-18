@@ -137,6 +137,10 @@ export interface Restaurant {
   zone?: string | DeliveryZoneSummary | null;
   /** Platform commission on orders (%). Set via admin only. */
   commissionPercent?: number;
+  /** Menu-wide percent added onto each dish that follows the menu price. */
+  menuRaisePercent?: number;
+  /** Menu-wide percent of the dish price the restaurant gives up. */
+  menuSacrificePercent?: number;
   createdAt?: string;
   updatedAt?: string;
 }

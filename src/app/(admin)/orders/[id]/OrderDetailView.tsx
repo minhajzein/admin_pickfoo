@@ -903,9 +903,11 @@ export default function OrderDetailPage() {
           </p>
           <p className="text-xs text-[#98E32F]">
             Commission {formatMoney(order.platformCommission)}
-            {order.commissionPercent > 0
-              ? ` (${order.commissionPercent}% on offer food)`
-              : ""}
+            {order.commissionNote
+              ? ` (${order.commissionNote})`
+              : order.commissionPercent > 0
+                ? ` (${order.commissionPercent}% on offer food)`
+                : ""}
           </p>
           {(order.offerFunding?.commission ?? 0) > 0.009 ||
           (order.offerFunding?.menuItem ?? 0) > 0.009 ? (
@@ -1385,9 +1387,11 @@ export default function OrderDetailPage() {
               value={
                 <span className="text-[#98E32F]">
                   {formatMoney(order.platformCommission)}
-                  {order.commissionPercent > 0
-                    ? ` (${order.commissionPercent}% on offer food)`
-                    : ""}
+                  {order.commissionNote
+                    ? ` (${order.commissionNote})`
+                    : order.commissionPercent > 0
+                      ? ` (${order.commissionPercent}% on offer food)`
+                      : ""}
                 </span>
               }
             />
