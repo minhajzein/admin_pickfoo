@@ -137,7 +137,7 @@ export default function VerifyRestaurantPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [notes, setNotes] = useState("");
-  const [commissionInput, setCommissionInput] = useState("0");
+  const [commissionInput, setCommissionInput] = useState("12");
 
   const { data: restaurant, isLoading } = useQuery({
     queryKey: ["restaurant", id],
@@ -152,7 +152,7 @@ export default function VerifyRestaurantPage() {
     const v =
       typeof restaurant.commissionPercent === "number"
         ? restaurant.commissionPercent
-        : 0;
+        : 12;
     setCommissionInput(String(v));
   }, [restaurant]);
 
