@@ -1,6 +1,6 @@
 "use client";
 
-import { memo } from "react";
+import { memo, useState } from "react";
 import { CdnImage } from "@/lib/cdn-image";
 import { Clock, Edit2, ImageIcon, Loader2, Star, Trash2 } from "lucide-react";
 import type { AdminMenuItem } from "@/lib/api/menu";
@@ -59,6 +59,7 @@ export const CustomerStyleMenuCard = memo(function CustomerStyleMenuCard({
   onToggleFeatured?: (next: boolean) => void;
   isTogglingFeatured?: boolean;
 }) {
+  const [mountedAt] = useState(Date.now);
   const prep = item.preparationTime ?? 0;
   const slots =
     item.availableSlots && item.availableSlots.length > 0
@@ -85,7 +86,7 @@ export const CustomerStyleMenuCard = memo(function CustomerStyleMenuCard({
   const isOffToday =
     !item.isActive &&
     !!item.inactiveUntil &&
-    new Date(item.inactiveUntil).getTime() > Date.now();
+    new Date(item.inactiveUntil).getTime() > mountedAt;
   const statusLabel = item.isActive
     ? "Active"
     : isOffToday
@@ -94,9 +95,9 @@ export const CustomerStyleMenuCard = memo(function CustomerStyleMenuCard({
 
   return (
     <div className="group flex flex-col rounded-menu-card bg-[#F5FFE5] overflow-hidden shadow-sm border border-black/5">
-      <div className="relative aspect-[4/5] min-h-[140px]">
+      <div className="relative aspect-4/5 min-h-35">
         <div
-          className={`absolute inset-0 overflow-hidden rounded-tr-[20px] rounded-tl-[20px] rounded-br-[20px] ${
+          className={`absolute inset-0 overflow-hidden rounded-tr-menu-card rounded-tl-menu-card rounded-br-menu-card ${
             grayscale ? "grayscale" : ""
           }`}
         >
@@ -172,7 +173,7 @@ export const CustomerStyleMenuCard = memo(function CustomerStyleMenuCard({
         </div>
 
         {!item.isActive && (
-          <div className="absolute inset-0 z-[5] bg-black/45 flex items-center justify-center rounded-tr-[20px] rounded-tl-[20px] rounded-br-[20px]">
+          <div className="absolute inset-0 z-5 bg-black/45 flex items-center justify-center rounded-tr-menu-card rounded-tl-menu-card rounded-br-menu-card">
             <span className="text-[10px] font-bold uppercase tracking-wider bg-black/60 text-white px-2 py-1 rounded">
               {isOffToday ? "Off today" : "Inactive"}
             </span>
@@ -180,7 +181,7 @@ export const CustomerStyleMenuCard = memo(function CustomerStyleMenuCard({
         )}
 
         {(rating || item.isVeg !== undefined) && (
-          <div className="absolute bottom-0 left-0 right-0 z-10 bg-gradient-to-t from-black/70 to-transparent px-2.5 py-2 rounded-br-[20px]">
+          <div className="absolute bottom-0 left-0 right-0 z-10 bg-linear-to-t from-black/70 to-transparent px-2.5 py-2 rounded-br-menu-card">
             <div className="flex items-center justify-between gap-2">
               {rating ? (
                 <span className="inline-flex items-center gap-1 text-[10px] font-black text-white">
