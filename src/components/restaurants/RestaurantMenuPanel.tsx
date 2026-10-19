@@ -1432,7 +1432,7 @@ export function RestaurantMenuPanel({
         </div>
       </div>
 
-      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 space-y-3">
+      <div className="rounded-2xl border border-white/10 bg-white/3 p-4 space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
           <div>
             <h3 className="text-sm font-bold text-white">Menu price rates</h3>
@@ -1515,12 +1515,12 @@ export function RestaurantMenuPanel({
           {[1, 2, 3, 4, 5, 6].map((i) => (
             <div
               key={i}
-              className="aspect-[2/3] rounded-[20px] bg-white/10 animate-pulse"
+              className="aspect-2/3 rounded-menu-card bg-white/10 animate-pulse"
             />
           ))}
         </div>
       ) : filteredItems.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-10 text-center text-white/40">
+        <div className="rounded-2xl border border-dashed border-white/10 bg-white/2 p-10 text-center text-white/40">
           <UtensilsCrossed className="mx-auto mb-3 opacity-40" size={32} />
           <p className="font-medium text-white/60">No menu items yet</p>
           <p className="text-sm mt-1">
@@ -2185,7 +2185,7 @@ export function RestaurantMenuPanel({
                       onClick={() => toggleRelatedItem(item._id)}
                       className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-[#98E32F]/15 border border-[#98E32F]/40 text-[11px] text-[#98E32F] font-semibold"
                     >
-                      <span className="truncate max-w-[140px]">{item.name}</span>
+                      <span className="truncate max-w-35">{item.name}</span>
                       <X size={12} />
                     </button>
                   ))}
@@ -2216,7 +2216,7 @@ export function RestaurantMenuPanel({
                           key={category}
                           type="button"
                           onClick={() => toggleRelatedItemCategory(category)}
-                          className={`px-2.5 py-1 rounded-full text-[11px] font-semibold border transition-colors truncate max-w-[180px] ${
+                          className={`px-2.5 py-1 rounded-full text-[11px] font-semibold border transition-colors truncate max-w-45 ${
                             selected
                               ? "bg-[#98E32F] text-[#013644] border-[#98E32F]"
                               : "bg-white/5 text-white/55 border-white/10 hover:text-white hover:border-white/20"
@@ -2748,7 +2748,7 @@ export function RestaurantMenuPanel({
                   )}
                 </div>
 
-                <label className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5 cursor-pointer">
+                <label className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/3 px-3 py-2.5 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={skipExistingNames}

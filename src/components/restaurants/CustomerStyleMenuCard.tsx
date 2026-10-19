@@ -93,7 +93,7 @@ export const CustomerStyleMenuCard = memo(function CustomerStyleMenuCard({
       : "Off";
 
   return (
-    <div className="group flex flex-col rounded-[20px] bg-[#F5FFE5] overflow-hidden shadow-sm border border-black/5">
+    <div className="group flex flex-col rounded-menu-card bg-[#F5FFE5] overflow-hidden shadow-sm border border-black/5">
       <div className="relative aspect-[4/5] min-h-[140px]">
         <div
           className={`absolute inset-0 overflow-hidden rounded-tr-[20px] rounded-tl-[20px] rounded-br-[20px] ${
