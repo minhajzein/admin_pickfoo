@@ -43,6 +43,7 @@ import {
   Loader2,
   BarChart3,
   Radio,
+  Newspaper,
 } from "lucide-react";
 import { io } from "socket.io-client";
 import type { LiveMapFeed } from "@/lib/api/map";
@@ -64,6 +65,7 @@ const NAV_ITEMS: Array<{
   { name: "Restaurants", icon: Store, href: "/restaurants" },
   { name: "Banners", icon: ImageIcon, href: "/banners" },
   { name: "Home Videos", icon: Clapperboard, href: "/home-videos" },
+  { name: "Blog", icon: Newspaper, href: "/blog" },
   { name: "Zones", icon: MapPinned, href: "/zones" },
   { name: "Live map", icon: Map, href: "/map" },
   { name: "Partners", icon: Bike, href: "/partners" },
