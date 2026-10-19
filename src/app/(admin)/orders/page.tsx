@@ -764,7 +764,7 @@ export default function OrdersPage() {
                             </Badge>
                           ) : null}
                           {row.batch ? (
-                            <div className="flex flex-wrap items-center gap-1">
+                            <div className="flex flex-col items-start gap-1">
                               <Badge
                                 variant="outline"
                                 className="w-fit border-[#98E32F]/40 bg-[#98E32F]/10 text-[10px] uppercase tracking-wide text-[#98E32F]"
