@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { MarkdownContentField } from "@/components/blog/MarkdownContentField";
 import { getApiErrorMessage } from "@/lib/axios";
 import {
   createBlogPost,
@@ -258,14 +259,12 @@ export function BlogPostEditor({ post }: { post?: AdminBlogPost }) {
             <Field
               label="Content"
               htmlFor="blog-content"
-              hint="Markdown supported: ## Heading, **bold**, *italic*, [link](https://…), - lists, > quotes, ![alt](image-url)."
+              hint="Use the toolbar, or paste from Google Docs / Word and the formatting is converted for you. Check the Preview tab before publishing."
             >
-              <Textarea
+              <MarkdownContentField
                 id="blog-content"
                 value={form.content}
-                rows={24}
-                className="font-mono text-sm"
-                onChange={(e) => set("content", e.target.value)}
+                onChange={(next) => set("content", next)}
               />
             </Field>
           </CardContent>
@@ -344,7 +343,11 @@ export function BlogPostEditor({ post }: { post?: AdminBlogPost }) {
                   onChange={(e) => set("author", e.target.value)}
                 />
               </Field>
-              <Field label="Tags" htmlFor="blog-tags" hint="Comma separated, up to 10.">
+              <Field
+                label="SEO keywords"
+                htmlFor="blog-tags"
+                hint="Comma separated, up to 10. Used for search engines only; not shown on the page."
+              >
                 <Input
                   id="blog-tags"
                   value={form.tagsText}
