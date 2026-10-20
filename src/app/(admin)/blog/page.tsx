@@ -9,7 +9,14 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Loader2, Newspaper, Pencil, Plus, Trash2 } from "lucide-react";
+import {
+  ImageIcon,
+  Loader2,
+  Newspaper,
+  Pencil,
+  Plus,
+  Trash2,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,14 +29,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { ListPagination } from "@/components/ui/list-pagination";
 import { getApiErrorMessage } from "@/lib/axios";
 import {
@@ -165,35 +164,42 @@ export default function BlogPage() {
               <strong className="text-white/80">New post</strong> to write one.
             </p>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Title</TableHead>
-                  <TableHead>Tags</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Published</TableHead>
-                  <TableHead>Updated</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {posts.map((post) => (
-                  <TableRow key={post.id}>
-                    <TableCell className="max-w-sm">
-                      <Link
-                        href={`/blog/${post.id}`}
-                        className="font-medium hover:text-[#98E32F]"
-                      >
-                        {post.title}
-                      </Link>
-                      <div className="truncate text-xs text-white/50">
-                        /blog/{post.slug}
+            <ul className="divide-y divide-white/10 rounded-xl border border-white/10">
+              {posts.map((post) => (
+                <li
+                  key={post.id}
+                  className="flex flex-col gap-4 p-4 transition-colors hover:bg-white/2 sm:flex-row sm:items-center"
+                >
+                  <Link
+                    href={`/blog/${post.id}`}
+                    className="relative aspect-video w-full shrink-0 overflow-hidden rounded-lg bg-white/5 sm:w-36"
+                  >
+                    {post.coverImageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={post.coverImageUrl}
+                        alt={post.coverImageAlt || post.title}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-white/30">
+                        <ImageIcon className="h-6 w-6" />
                       </div>
-                    </TableCell>
-                    <TableCell className="text-xs text-white/60">
-                      {post.tags.length ? post.tags.join(", ") : "—"}
-                    </TableCell>
-                    <TableCell>
+                    )}
+                  </Link>
+
+                  <div className="min-w-0 flex-1 space-y-1.5">
+                    <Link
+                      href={`/blog/${post.id}`}
+                      className="line-clamp-2 font-semibold leading-snug hover:text-[#98E32F]"
+                    >
+                      {post.title}
+                    </Link>
+                    <p className="truncate text-xs text-white/40">/blog/{post.slug}</p>
+                    {post.excerpt ? (
+                      <p className="line-clamp-1 text-sm text-white/60">{post.excerpt}</p>
+                    ) : null}
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-1 text-xs text-white/50">
                       {isScheduled(post) ? (
                         <Badge variant="secondary">Scheduled</Badge>
                       ) : (
@@ -203,38 +209,42 @@ export default function BlogPage() {
                           {post.status === "published" ? "Published" : "Draft"}
                         </Badge>
                       )}
-                    </TableCell>
-                    <TableCell className="text-xs text-white/60">
-                      {formatDate(post.publishedAt)}
-                    </TableCell>
-                    <TableCell className="text-xs text-white/60">
-                      {formatDate(post.updatedAt)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button asChild size="sm" variant="outline">
-                          <Link href={`/blog/${post.id}`}>
-                            <Pencil className="mr-1 h-4 w-4" />
-                            Edit
-                          </Link>
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          className="text-red-400 hover:text-red-300"
-                          disabled={deleteMutation.isPending}
-                          onClick={() => setDeleteTarget(post)}
-                          aria-label={`Delete ${post.title}`}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                      <span>Published {formatDate(post.publishedAt)}</span>
+                      <span aria-hidden>·</span>
+                      <span>Updated {formatDate(post.updatedAt)}</span>
+                      {post.tags.length ? (
+                        <>
+                          <span aria-hidden>·</span>
+                          <span title={post.tags.join(", ")}>
+                            {post.tags.length} keyword{post.tags.length === 1 ? "" : "s"}
+                          </span>
+                        </>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="flex shrink-0 gap-2 sm:self-center">
+                    <Button asChild size="sm" variant="outline">
+                      <Link href={`/blog/${post.id}`}>
+                        <Pencil className="mr-1 h-4 w-4" />
+                        Edit
+                      </Link>
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="text-red-400 hover:text-red-300"
+                      disabled={deleteMutation.isPending}
+                      onClick={() => setDeleteTarget(post)}
+                      aria-label={`Delete ${post.title}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
           )}
           <ListPagination
             page={page}
@@ -242,7 +252,7 @@ export default function BlogPage() {
             total={data?.total ?? 0}
             totalPages={data?.totalPages ?? 1}
             onPageChange={(next) => startTransition(() => setPage(next))}
-            className="mt-2"
+            className="mt-4"
           />
         </CardContent>
       </Card>
