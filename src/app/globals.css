@@ -144,6 +144,19 @@
     @apply bg-background text-foreground;
   }
 
+  /* Native <select> popups otherwise render light with the inherited white text. */
+  select {
+    color-scheme: dark;
+  }
+  select option,
+  select optgroup {
+    background-color: #002833;
+    color: #ffffff;
+  }
+  select option:disabled {
+    color: rgba(255, 255, 255, 0.4);
+  }
+
   /* Themed scrollbars: page, sidebars, dialogs ([data-slot=dialog-content]), overflow panels */
   html {
     scrollbar-width: thin;
