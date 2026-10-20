@@ -7,12 +7,15 @@ import {
 
 export type BlogPostStatus = "draft" | "published";
 
+export type BlogFaq = { question: string; answer: string };
+
 export interface AdminBlogPost {
   id: string;
   title: string;
   slug: string;
   excerpt: string;
   content?: string;
+  faqs?: BlogFaq[];
   coverImageUrl: string;
   coverImageAlt: string;
   author: string;
@@ -30,6 +33,7 @@ export type BlogPostInput = {
   slug?: string;
   excerpt: string;
   content: string;
+  faqs: BlogFaq[];
   coverImageUrl: string;
   coverImageAlt: string;
   author: string;

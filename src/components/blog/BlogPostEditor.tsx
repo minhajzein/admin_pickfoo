@@ -5,13 +5,20 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowLeft, ExternalLink, ImagePlus, Loader2, Trash2 } from "lucide-react";
+import {
+  ArrowLeft,
+  ExternalLink,
+  ImagePlus,
+  Loader2,
+  Trash2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { MarkdownContentField } from "@/components/blog/MarkdownContentField";
+import { BlogFaqEditor } from "@/components/blog/BlogFaqEditor";
 import { getApiErrorMessage } from "@/lib/axios";
 import {
   createBlogPost,
@@ -22,7 +29,8 @@ import {
   type BlogPostStatus,
 } from "@/lib/api/blog";
 
-const WEBSITE_URL = process.env.NEXT_PUBLIC_WEBSITE_URL || "https://www.pickfoo.in";
+const WEBSITE_URL =
+  process.env.NEXT_PUBLIC_WEBSITE_URL || "https://www.pickfoo.in";
 
 function slugify(input: string): string {
   return input
@@ -46,7 +54,10 @@ function fromLocalInput(value: string): string | null {
   return value ? new Date(value).toISOString() : null;
 }
 
-type FormState = Omit<BlogPostInput, "tags" | "slug"> & { slug: string; tagsText: string };
+type FormState = Omit<BlogPostInput, "tags" | "slug"> & {
+  slug: string;
+  tagsText: string;
+};
 
 function initialState(post?: AdminBlogPost): FormState {
   return {
@@ -54,6 +65,7 @@ function initialState(post?: AdminBlogPost): FormState {
     slug: post?.slug ?? "",
     excerpt: post?.excerpt ?? "",
     content: post?.content ?? "",
+    faqs: post?.faqs ?? [],
     coverImageUrl: post?.coverImageUrl ?? "",
     coverImageAlt: post?.coverImageAlt ?? "",
     author: post?.author ?? "Pickfoo Team",
@@ -100,11 +112,18 @@ export function BlogPostEditor({ post }: { post?: AdminBlogPost }) {
 
   const saveMutation = useMutation({
     mutationFn: async (statusOverride?: BlogPostStatus) => {
+      const faqs = form.faqs
+        .map((f) => ({ question: f.question.trim(), answer: f.answer.trim() }))
+        .filter((f) => f.question || f.answer);
+      if (faqs.some((f) => !f.question || !f.answer)) {
+        throw new Error("Every FAQ needs both a question and an answer");
+      }
       const payload: BlogPostInput = {
         title: form.title.trim(),
         slug: form.slug.trim() || undefined,
         excerpt: form.excerpt.trim(),
         content: form.content,
+        faqs,
         coverImageUrl: form.coverImageUrl,
         coverImageAlt: form.coverImageAlt.trim(),
         author: form.author.trim(),
@@ -123,7 +142,9 @@ export function BlogPostEditor({ post }: { post?: AdminBlogPost }) {
       void queryClient.invalidateQueries({ queryKey: ["admin-blog"] });
       queryClient.setQueryData(["admin-blog-post", saved.id], saved);
       setForm(initialState(saved));
-      toast.success(saved.status === "published" ? "Post published" : "Draft saved");
+      toast.success(
+        saved.status === "published" ? "Post published" : "Draft saved"
+      );
       if (!post) router.replace(`/blog/${saved.id}`);
     },
     onError: (error: unknown) => {
@@ -169,7 +190,11 @@ export function BlogPostEditor({ post }: { post?: AdminBlogPost }) {
         <div className="flex flex-wrap gap-2">
           {isLive ? (
             <Button asChild variant="outline">
-              <a href={`${WEBSITE_URL}/blog/${post.slug}`} target="_blank" rel="noreferrer">
+              <a
+                href={`${WEBSITE_URL}/blog/${post.slug}`}
+                target="_blank"
+                rel="noreferrer"
+              >
                 <ExternalLink className="mr-2 h-4 w-4" />
                 View on website
               </a>
@@ -185,8 +210,14 @@ export function BlogPostEditor({ post }: { post?: AdminBlogPost }) {
               >
                 Unpublish
               </Button>
-              <Button type="button" disabled={!canSave} onClick={() => saveMutation.mutate(undefined)}>
-                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              <Button
+                type="button"
+                disabled={!canSave}
+                onClick={() => saveMutation.mutate(undefined)}
+              >
+                {saving ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : null}
                 Save changes
               </Button>
             </>
@@ -200,8 +231,14 @@ export function BlogPostEditor({ post }: { post?: AdminBlogPost }) {
               >
                 Save draft
               </Button>
-              <Button type="button" disabled={!canSave} onClick={() => saveMutation.mutate("published")}>
-                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              <Button
+                type="button"
+                disabled={!canSave}
+                onClick={() => saveMutation.mutate("published")}
+              >
+                {saving ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : null}
                 Publish
               </Button>
             </>
@@ -210,65 +247,79 @@ export function BlogPostEditor({ post }: { post?: AdminBlogPost }) {
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <Card className="border-white/10 bg-[#002833] lg:col-span-2">
-          <CardContent className="space-y-5 pt-6">
-            <Field label="Title" htmlFor="blog-title">
-              <Input
-                id="blog-title"
-                value={form.title}
-                maxLength={200}
-                onChange={(e) => {
-                  const title = e.target.value;
-                  setForm((cur) => ({
-                    ...cur,
-                    title,
-                    slug: slugTouched ? cur.slug : slugify(title),
-                  }));
-                }}
-                placeholder="The best biriyani spots in Mananthavady"
+        <div className="space-y-6 lg:col-span-2">
+          <Card className="border-white/10 bg-[#002833]">
+            <CardContent className="space-y-5 pt-6">
+              <Field label="Title" htmlFor="blog-title">
+                <Input
+                  id="blog-title"
+                  value={form.title}
+                  maxLength={200}
+                  onChange={(e) => {
+                    const title = e.target.value;
+                    setForm((cur) => ({
+                      ...cur,
+                      title,
+                      slug: slugTouched ? cur.slug : slugify(title),
+                    }));
+                  }}
+                  placeholder="The best biriyani spots in Mananthavady"
+                />
+              </Field>
+              <Field
+                label="URL slug"
+                htmlFor="blog-slug"
+                hint={`${WEBSITE_URL}/blog/${form.slug || "your-post-slug"}`}
+              >
+                <Input
+                  id="blog-slug"
+                  value={form.slug}
+                  maxLength={120}
+                  onChange={(e) => {
+                    setSlugTouched(true);
+                    set("slug", slugify(e.target.value));
+                  }}
+                />
+              </Field>
+              <Field
+                label="Excerpt"
+                htmlFor="blog-excerpt"
+                hint="Short summary shown on the blog list and in search results."
+              >
+                <Textarea
+                  id="blog-excerpt"
+                  value={form.excerpt}
+                  maxLength={500}
+                  rows={3}
+                  onChange={(e) => set("excerpt", e.target.value)}
+                />
+              </Field>
+              <Field
+                label="Content"
+                htmlFor="blog-content"
+                hint="Use the toolbar, or paste from Google Docs / Word and the formatting is converted for you. Check the Preview tab before publishing."
+              >
+                <MarkdownContentField
+                  id="blog-content"
+                  value={form.content}
+                  onChange={(next) => set("content", next)}
+                />
+              </Field>
+            </CardContent>
+          </Card>
+
+          <Card className="border-white/10 bg-[#002833]">
+            <CardHeader>
+              <CardTitle className="text-base">FAQs</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <BlogFaqEditor
+                value={form.faqs}
+                onChange={(next) => set("faqs", next)}
               />
-            </Field>
-            <Field
-              label="URL slug"
-              htmlFor="blog-slug"
-              hint={`${WEBSITE_URL}/blog/${form.slug || "your-post-slug"}`}
-            >
-              <Input
-                id="blog-slug"
-                value={form.slug}
-                maxLength={120}
-                onChange={(e) => {
-                  setSlugTouched(true);
-                  set("slug", slugify(e.target.value));
-                }}
-              />
-            </Field>
-            <Field
-              label="Excerpt"
-              htmlFor="blog-excerpt"
-              hint="Short summary shown on the blog list and in search results."
-            >
-              <Textarea
-                id="blog-excerpt"
-                value={form.excerpt}
-                maxLength={500}
-                rows={3}
-                onChange={(e) => set("excerpt", e.target.value)}
-              />
-            </Field>
-            <Field
-              label="Content"
-              htmlFor="blog-content"
-              hint="Use the toolbar, or paste from Google Docs / Word and the formatting is converted for you. Check the Preview tab before publishing."
-            >
-              <MarkdownContentField
-                id="blog-content"
-                value={form.content}
-                onChange={(next) => set("content", next)}
-              />
-            </Field>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </div>
 
         <div className="space-y-6">
           <Card className="border-white/10 bg-[#002833]">
@@ -364,7 +415,9 @@ export function BlogPostEditor({ post }: { post?: AdminBlogPost }) {
                   id="blog-published-at"
                   type="datetime-local"
                   value={toLocalInput(form.publishedAt)}
-                  onChange={(e) => set("publishedAt", fromLocalInput(e.target.value))}
+                  onChange={(e) =>
+                    set("publishedAt", fromLocalInput(e.target.value))
+                  }
                 />
               </Field>
             </CardContent>
@@ -375,7 +428,11 @@ export function BlogPostEditor({ post }: { post?: AdminBlogPost }) {
               <CardTitle className="text-base">SEO</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <Field label="Meta title" htmlFor="blog-meta-title" hint="Defaults to the post title.">
+              <Field
+                label="Meta title"
+                htmlFor="blog-meta-title"
+                hint="Defaults to the post title."
+              >
                 <Input
                   id="blog-meta-title"
                   value={form.metaTitle}
