@@ -68,13 +68,50 @@ function getTurndown(): TurndownService {
     },
   });
 
+  // GFM tables: first row becomes the header; cells must stay on one line.
+  td.addRule("table", {
+    filter: "table",
+    replacement: (_content, node) => {
+      const rows = Array.from((node as HTMLTableElement).querySelectorAll("tr")).filter(
+        (tr) => tr.closest("table") === node,
+      );
+      const grid = rows
+        .map((tr) =>
+          Array.from(tr.children)
+            .filter((c) => c.nodeName === "TD" || c.nodeName === "TH")
+            .map((cell) =>
+              td
+                .turndown((cell as HTMLElement).innerHTML)
+                .replace(/\n+/g, " ")
+                .replace(/\|/g, "\\|")
+                .trim(),
+            ),
+        )
+        .filter((cells) => cells.length > 0);
+      if (!grid.length) return "";
+      const cols = Math.max(...grid.map((r) => r.length));
+      const line = (cells: string[]) =>
+        `| ${Array.from({ length: cols }, (_, i) => cells[i] ?? "").join(" | ")} |`;
+      const [head, ...body] = grid;
+      return `\n\n${[line(head), line(Array(cols).fill("---")), ...body.map(line)].join("\n")}\n\n`;
+    },
+  });
+
   turndown = td;
   return td;
 }
 
 /** True when clipboard HTML carries formatting worth converting (not just plain text). */
 export function hasRichFormatting(html: string): boolean {
-  return /<(h[1-6]|p|li|ul|ol|strong|b|em|i|a|blockquote|img)\b/i.test(html);
+  return /<(h[1-6]|p|li|ul|ol|strong|b|em|i|a|blockquote|img|table)\b/i.test(html);
+}
+
+/** Empty GFM table with a header row plus `rows` body rows. */
+export function tableMarkdown(rows: number, cols: number): string {
+  const line = (cells: string[]) => `| ${cells.join(" | ")} |`;
+  const header = Array.from({ length: cols }, (_, i) => `Column ${i + 1}`);
+  const body = Array.from({ length: rows }, () => line(Array(cols).fill("Cell")));
+  return [line(header), line(Array(cols).fill("---")), ...body].join("\n");
 }
 
 export function htmlToMarkdown(html: string): string {

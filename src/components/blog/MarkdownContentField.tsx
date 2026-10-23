@@ -15,6 +15,7 @@ import {
   ListOrdered,
   Loader2,
   Quote,
+  Table,
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { uploadBlogImage } from "@/lib/api/blog";
@@ -22,7 +23,16 @@ import {
   hasRichFormatting,
   htmlToMarkdown,
   normalizePostMarkdown,
+  tableMarkdown,
 } from "@/lib/blog-markdown";
+
+const markdownComponents = {
+  table: (props: React.ComponentProps<"table">) => (
+    <div className="overflow-x-auto">
+      <table {...props} />
+    </div>
+  ),
+};
 
 type Edit = { text: string; selStart: number; selEnd: number };
 
@@ -99,6 +109,7 @@ export function MarkdownContentField({
   const imageInputRef = useRef<HTMLInputElement>(null);
   const [tab, setTab] = useState<"write" | "preview">("write");
   const [uploading, setUploading] = useState(false);
+  const [tablePicker, setTablePicker] = useState<{ rows: number; cols: number } | null>(null);
 
   const apply = (edit: (v: string, s: number, e: number) => Edit) => {
     const el = textareaRef.current;
@@ -211,6 +222,62 @@ export function MarkdownContentField({
             disabled={tab === "preview"}
             onClick={() => apply((v, s, e) => prefixLines(v, s, e, () => "> ", /^>\s?/))}
           />
+          <div className="relative">
+            <ToolbarButton
+              label="Insert table"
+              icon={Table}
+              disabled={tab === "preview"}
+              onClick={() => setTablePicker((cur) => (cur ? null : { rows: 3, cols: 3 }))}
+            />
+            {tablePicker ? (
+              <div className="absolute left-0 top-full z-20 mt-1 w-52 space-y-3 rounded-md border border-white/10 bg-[#002833] p-3 shadow-lg">
+                {(["rows", "cols"] as const).map((key) => (
+                  <label key={key} className="flex items-center justify-between gap-2 text-xs text-white/70">
+                    {key === "rows" ? "Rows (excl. header)" : "Columns"}
+                    <input
+                      type="number"
+                      min={1}
+                      max={key === "rows" ? 30 : 8}
+                      value={tablePicker[key]}
+                      onChange={(e) =>
+                        setTablePicker((cur) =>
+                          cur
+                            ? {
+                                ...cur,
+                                [key]: Math.min(
+                                  key === "rows" ? 30 : 8,
+                                  Math.max(1, Number(e.target.value) || 1),
+                                ),
+                              }
+                            : cur,
+                        )
+                      }
+                      className="w-14 rounded border border-white/10 bg-transparent px-2 py-1 text-white"
+                    />
+                  </label>
+                ))}
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setTablePicker(null)}
+                    className="rounded px-2 py-1 text-xs text-white/60 hover:text-white"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      insertBlock(tableMarkdown(tablePicker.rows, tablePicker.cols));
+                      setTablePicker(null);
+                    }}
+                    className="rounded bg-[#98E32F] px-3 py-1 text-xs font-semibold text-[#013644]"
+                  >
+                    Insert
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </div>
           <ToolbarButton
             label="Insert image"
             icon={uploading ? Loader2 : ImagePlus}
@@ -252,14 +319,14 @@ export function MarkdownContentField({
           rows={24}
           onChange={(e) => onChange(e.target.value)}
           onPaste={handlePaste}
-          placeholder="Write your post, or paste it from Google Docs / Word. Headings, bold, lists and links are kept."
+          placeholder="Write your post, or paste it from Google Docs / Word. Headings, bold, lists, links and tables are kept."
           className="rounded-none border-0 font-mono text-sm focus-visible:ring-0"
         />
       ) : (
         <div className="min-h-135 px-5 py-4">
           {value.trim() ? (
             <div className="prose prose-invert max-w-none prose-p:text-white/85 prose-li:text-white/85 prose-strong:text-current prose-a:text-[#98E32F] prose-img:rounded-xl">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
                 {normalizePostMarkdown(value)}
               </ReactMarkdown>
             </div>
