@@ -32,8 +32,6 @@ export interface AdminOrderRow {
   /** Company commission only (not restaurant item totals). */
   platformCommission?: number | null;
   commissionPercent?: number | null;
-  /** Set when commission comes from the dish raise/sacrifice, not the restaurant %. */
-  commissionNote?: string | null;
   preparingStartedAt?: string | null;
   restaurantId?: string | null;
   restaurantName?: string | null;

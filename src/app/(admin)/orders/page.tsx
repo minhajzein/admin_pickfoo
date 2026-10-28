@@ -196,18 +196,7 @@ function AmountBreakdown({ row }: { row: AdminOrderRow }) {
         <span>{formatMoney(row.gstAmount)}</span>
       </div>
       <div className="flex justify-between gap-3 border-t border-white/10 pt-0.5 font-medium text-[#98E32F]">
-        <span className="text-white/50">
-          Commission
-          {row.commissionNote ? (
-            <span className="ml-1 text-[10px] font-normal text-white/35">
-              ({row.commissionNote})
-            </span>
-          ) : row.commissionPercent != null && row.commissionPercent > 0 ? (
-            <span className="ml-1 text-[10px] font-normal text-white/35">
-              ({row.commissionPercent}% on offer)
-            </span>
-          ) : null}
-        </span>
+        <span className="text-white/50">Commission</span>
         <span>{formatMoney(row.platformCommission)}</span>
       </div>
       {(row.offerFundingCommission ?? 0) > 0.009 ||
